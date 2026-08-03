@@ -1,6 +1,6 @@
 import satori from "satori";
 import { Resvg } from "@resvg/resvg-js";
-import type { ReportDocument } from "@/domain/types";
+import type { NameDetail, ReportDocument } from "@/domain/types";
 
 /** Minimal latin fallback font via system is not available in satori; use built-in load */
 async function loadFont(): Promise<ArrayBuffer> {
@@ -22,266 +22,280 @@ async function loadFont(): Promise<ArrayBuffer> {
   return await res3.arrayBuffer();
 }
 
-export async function renderSummaryCardPng(report: ReportDocument): Promise<Buffer> {
-  const fontData = await loadFont();
+/** 卡片逻辑宽度（px）；导出 PNG 按 PNG_SCALE 矢量放大，文字保持清晰 */
+const CARD_WIDTH = 720;
+/** 导出 PNG 相对逻辑宽度的缩放倍数 */
+const PNG_SCALE = 2;
+
+const C = {
+  bg: "#0e1714",
+  paper: "#f2ede3",
+  dim: "#a8a29a",
+  gold: "#c9a227",
+  goldSoft: "rgba(201,162,39,0.45)",
+  text: "#c6bfb2",
+};
+
+export interface SummaryDetailRow {
+  term: string;
+  def: string;
+}
+
+/** 逐名详情行：空字段过滤；八字契合仅在开启八字且有值时保留 */
+export function detailRows(n: NameDetail, showBazi: boolean): SummaryDetailRow[] {
+  const rows: SummaryDetailRow[] = [
+    { term: "音韵", def: n.phonology },
+    { term: "字形", def: n.glyph },
+    { term: "寓意", def: n.meaning },
+    { term: "出处", def: n.origin },
+    { term: "避坑", def: n.pitfalls },
+    { term: "风格", def: n.styleFit },
+  ].filter((r) => r.def && r.def.trim());
+  if (showBazi && n.baziFit && n.baziFit.trim()) {
+    rows.push({ term: "八字契合", def: n.baziFit.trim() });
+  }
+  return rows;
+}
+
+interface CardNode {
+  type: string;
+  props: {
+    style?: Record<string, unknown>;
+    children?: unknown;
+  };
+}
+
+function text(children: unknown, style: Record<string, unknown>): CardNode {
+  return { type: "div", props: { style, children } };
+}
+
+function detailBlock(rows: SummaryDetailRow[]): CardNode {
+  return {
+    type: "div",
+    props: {
+      style: {
+        marginTop: 10,
+        display: "flex",
+        flexDirection: "column",
+        gap: 6,
+      },
+      children: rows.map((r) => ({
+        type: "div",
+        props: {
+          style: {
+            display: "flex",
+            gap: 14,
+            alignItems: "flex-start",
+            fontSize: 14,
+            lineHeight: 1.65,
+            color: C.text,
+          },
+          children: [
+            text(r.term, {
+              flexShrink: 0,
+              width: 64,
+              fontSize: 13,
+              color: C.gold,
+              letterSpacing: 2,
+            }),
+            text(r.def, { flex: 1, letterSpacing: 0.4 }),
+          ],
+        },
+      })),
+    },
+  };
+}
+
+/** 单个名字块：首推用更大的金字 + 金色左边线，备选稍小 */
+function nameBlock(
+  n: NameDetail,
+  opts: { isPrimary: boolean; showBazi: boolean; oneLiner?: string },
+): CardNode {
+  const { isPrimary, showBazi, oneLiner } = opts;
+  const children: unknown[] = [
+    {
+      type: "div",
+      props: {
+        style: { display: "flex", alignItems: "baseline", gap: 10 },
+        children: [
+          text(n.fullName, {
+            fontSize: isPrimary ? 44 : 24,
+            color: isPrimary ? C.gold : C.paper,
+            letterSpacing: isPrimary ? 14 : 6,
+            fontWeight: 700,
+            lineHeight: 1.2,
+            textIndent: isPrimary ? "0.14em" : "0.06em",
+          }),
+          isPrimary
+            ? text("首推", { fontSize: 13, color: C.gold, letterSpacing: 6, fontWeight: 500 })
+            : null,
+        ],
+      },
+    },
+  ];
+  if (isPrimary && oneLiner) {
+    children.push(
+      text(oneLiner, {
+        marginTop: 10,
+        fontSize: 15,
+        color: C.dim,
+        lineHeight: 1.55,
+        letterSpacing: 1,
+      }),
+    );
+  }
+  children.push(detailBlock(detailRows(n, showBazi)));
+  return {
+    type: "div",
+    props: {
+      style: {
+        display: "flex",
+        flexDirection: "column",
+        borderLeft: isPrimary ? "3px solid #c9a227" : `2px solid ${C.goldSoft}`,
+        paddingLeft: isPrimary ? 18 : 14,
+      },
+      children,
+    },
+  };
+}
+
+export function buildSummaryCardElement(report: ReportDocument): CardNode {
   const primary = report.overview.primaryName;
   const primaryEntry = report.names.find((n) => n.fullName === primary) ?? report.names[0];
   const alts = report.names.filter((n) => n.fullName !== primary).slice(0, 4);
+  const showBazi = Boolean(report.bazi);
+  const oneLiner = oneLine(report.overview.oneLiner || primaryEntry?.meaning || "", 60);
   const gender =
     report.request.gender === "male"
       ? "男"
       : report.request.gender === "female"
         ? "女"
         : "未知";
-  const meta = `${report.request.surname} · ${gender}`;
-  const oneLiner = oneLine(report.overview.oneLiner || primaryEntry?.meaning || "", 42);
+  const meta = `${report.request.surname} · ${gender} · ${new Date(report.createdAt).toLocaleString("zh-CN")}`;
 
-  const element = {
+  const children: unknown[] = [
+    // inner paper frame
+    {
+      type: "div",
+      props: {
+        style: {
+          position: "absolute",
+          top: 24,
+          left: 24,
+          right: 24,
+          bottom: 24,
+          border: "1px solid rgba(201,162,39,0.35)",
+        },
+        children: "",
+      },
+    },
+    {
+      type: "div",
+      props: {
+        style: {
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-end",
+        },
+        children: [
+          text("瑾瑜", { fontSize: 22, color: C.gold, letterSpacing: 10, fontWeight: 700 }),
+          text("精选摘要", { fontSize: 14, color: C.gold, letterSpacing: 6, fontWeight: 500 }),
+        ],
+      },
+    },
+    {
+      type: "div",
+      props: {
+        style: {
+          marginTop: 18,
+          height: 1,
+          background:
+            "linear-gradient(90deg, transparent 0%, rgba(201,162,39,0.5) 20%, rgba(201,162,39,0.5) 80%, transparent 100%)",
+        },
+        children: "",
+      },
+    },
+    text(meta, { marginTop: 16, fontSize: 13, color: C.dim, letterSpacing: 3 }),
+  ];
+
+  if (report.request.gender === "unknown") {
+    const male = (report.overview.maleNames ?? []).join("、") || "—";
+    const female = (report.overview.femaleNames ?? []).join("、") || "—";
+    children.push(
+      text(`男向：${male}　女向：${female}`, {
+        marginTop: 12,
+        fontSize: 13,
+        color: C.dim,
+        letterSpacing: 1,
+        lineHeight: 1.6,
+      }),
+    );
+  }
+
+  children.push(
+    {
+      type: "div",
+      props: {
+        style: { marginTop: 24, display: "flex", flexDirection: "column", gap: 26 },
+        children: [
+          nameBlock(primaryEntry, { isPrimary: true, showBazi, oneLiner }),
+          ...alts.map((n) => nameBlock(n, { isPrimary: false, showBazi })),
+        ],
+      },
+    },
+    {
+      type: "div",
+      props: {
+        style: {
+          marginTop: 32,
+          paddingTop: 18,
+          borderTop: "1px solid rgba(201,162,39,0.4)",
+          display: "flex",
+          flexDirection: "column",
+          gap: 8,
+        },
+        children: [
+          text("以上为精选摘要，完整命理与候选对比见在线报告与历史快照", {
+            fontSize: 13,
+            color: C.dim,
+            lineHeight: 1.5,
+          }),
+          text("瑾瑜 · 一次正式命名报告", {
+            fontSize: 13,
+            color: C.gold,
+            letterSpacing: 4,
+            fontWeight: 500,
+          }),
+        ],
+      },
+    },
+  );
+
+  return {
     type: "div",
     props: {
       style: {
         width: "100%",
-        height: "100%",
         display: "flex",
         flexDirection: "column",
-        backgroundColor: "#0e1714",
-        color: "#f2ede3",
+        backgroundColor: C.bg,
+        color: C.paper,
         padding: "56px 52px 48px",
         fontFamily: "Noto Serif SC",
         position: "relative",
       },
-      children: [
-        // inner paper frame
-        {
-          type: "div",
-          props: {
-            style: {
-              position: "absolute",
-              top: 24,
-              left: 24,
-              right: 24,
-              bottom: 24,
-              border: "1px solid rgba(201,162,39,0.35)",
-            },
-            children: "",
-          },
-        },
-        {
-          type: "div",
-          props: {
-            style: {
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "flex-end",
-            },
-            children: [
-              {
-                type: "div",
-                props: {
-                  style: {
-                    fontSize: 22,
-                    color: "#c9a227",
-                    letterSpacing: 10,
-                    fontWeight: 700,
-                  },
-                  children: "瑾瑜",
-                },
-              },
-              {
-                type: "div",
-                props: {
-                  style: {
-                    fontSize: 14,
-                    color: "#c9a227",
-                    letterSpacing: 6,
-                    fontWeight: 500,
-                  },
-                  children: "精选摘要",
-                },
-              },
-            ],
-          },
-        },
-        {
-          type: "div",
-          props: {
-            style: {
-              marginTop: 18,
-              height: 1,
-              background:
-                "linear-gradient(90deg, transparent 0%, rgba(201,162,39,0.5) 20%, rgba(201,162,39,0.5) 80%, transparent 100%)",
-            },
-            children: "",
-          },
-        },
-        {
-          type: "div",
-          props: {
-            style: {
-              marginTop: 16,
-              fontSize: 13,
-              color: "#a8a29a",
-              letterSpacing: 3,
-            },
-            children: meta,
-          },
-        },
-        // primary hero
-        {
-          type: "div",
-          props: {
-            style: {
-              marginTop: 28,
-              display: "flex",
-              flexDirection: "column",
-              borderLeft: "3px solid #c9a227",
-              paddingLeft: 18,
-            },
-            children: [
-              {
-                type: "div",
-                props: {
-                  style: {
-                    fontSize: 13,
-                    color: "#c9a227",
-                    letterSpacing: 6,
-                    fontWeight: 500,
-                  },
-                  children: "首推",
-                },
-              },
-              {
-                type: "div",
-                props: {
-                  style: {
-                    marginTop: 8,
-                    fontSize: 44,
-                    color: "#c9a227",
-                    letterSpacing: 14,
-                    fontWeight: 700,
-                    lineHeight: 1.15,
-                  },
-                  children: primary,
-                },
-              },
-              {
-                type: "div",
-                props: {
-                  style: {
-                    marginTop: 12,
-                    fontSize: 16,
-                    color: "#c6bfb2",
-                    lineHeight: 1.55,
-                    letterSpacing: 1,
-                  },
-                  children: oneLiner,
-                },
-              },
-            ],
-          },
-        },
-        {
-          type: "div",
-          props: {
-            style: {
-              marginTop: 36,
-              fontSize: 12,
-              color: "#a8a29a",
-              letterSpacing: 5,
-            },
-            children: "备选",
-          },
-        },
-        {
-          type: "div",
-          props: {
-            style: {
-              marginTop: 14,
-              display: "flex",
-              flexDirection: "column",
-              gap: 16,
-              flex: 1,
-            },
-            children: alts.map((n) => ({
-              type: "div",
-              props: {
-                style: {
-                  display: "flex",
-                  flexDirection: "column",
-                  borderLeft: "2px solid rgba(201,162,39,0.45)",
-                  paddingLeft: 14,
-                },
-                children: [
-                  {
-                    type: "div",
-                    props: {
-                      style: {
-                        fontSize: 22,
-                        color: "#f2ede3",
-                        letterSpacing: 6,
-                        fontWeight: 500,
-                      },
-                      children: n.fullName,
-                    },
-                  },
-                  {
-                    type: "div",
-                    props: {
-                      style: {
-                        marginTop: 4,
-                        fontSize: 14,
-                        color: "#a8a29a",
-                        lineHeight: 1.45,
-                      },
-                      children: oneLine(n.meaning, 28),
-                    },
-                  },
-                ],
-              },
-            })),
-          },
-        },
-        {
-          type: "div",
-          props: {
-            style: {
-              marginTop: "auto",
-              paddingTop: 20,
-              borderTop: "1px solid rgba(201,162,39,0.4)",
-              display: "flex",
-              flexDirection: "column",
-              gap: 8,
-            },
-            children: [
-              {
-                type: "div",
-                props: {
-                  style: { fontSize: 13, color: "#a8a29a", lineHeight: 1.5 },
-                  children: "完整音韵、出处与避坑见在线报告与历史快照",
-                },
-              },
-              {
-                type: "div",
-                props: {
-                  style: {
-                    fontSize: 13,
-                    color: "#c9a227",
-                    letterSpacing: 4,
-                    fontWeight: 500,
-                  },
-                  children: "瑾瑜 · 一次正式命名报告",
-                },
-              },
-            ],
-          },
-        },
-      ],
+      children,
     },
   };
+}
 
+export async function renderSummaryCardPng(report: ReportDocument): Promise<Buffer> {
+  const fontData = await loadFont();
+  const element = buildSummaryCardElement(report);
+
+  // 只传 width，高度由内容自动撑开
   const svg = await satori(element as never, {
-    width: 720,
-    height: 960,
+    width: CARD_WIDTH,
     fonts: [
       {
         name: "Noto Serif SC",
@@ -293,7 +307,7 @@ export async function renderSummaryCardPng(report: ReportDocument): Promise<Buff
   });
 
   const resvg = new Resvg(svg, {
-    fitTo: { mode: "width", value: 720 },
+    fitTo: { mode: "width", value: CARD_WIDTH * PNG_SCALE },
   });
   const png = resvg.render().asPng();
   return Buffer.from(png);
