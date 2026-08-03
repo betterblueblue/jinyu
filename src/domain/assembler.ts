@@ -72,11 +72,13 @@ function pickNames(
     }
   }
   const selected = [...mPick, ...fPick];
+  // 去重：未知性别时同一 neutral 候选可能同时进入男/女分组，合并后会产生重复
+  const deduped = Array.from(new Map(selected.map((c) => [c.givenName, c])).values());
   const primary =
-    selected.find((s) => !s.l2Hot) ??
-    selected[Math.min(primaryIndex, Math.max(0, selected.length - 1))] ??
-    selected[0]!;
-  const rest = selected.filter((s) => s.givenName !== primary.givenName);
+    deduped.find((s) => !s.l2Hot) ??
+    deduped[Math.min(primaryIndex, Math.max(0, deduped.length - 1))] ??
+    deduped[0]!;
+  const rest = deduped.filter((s) => s.givenName !== primary.givenName);
   return { selected: [primary, ...rest], primary };
 }
 

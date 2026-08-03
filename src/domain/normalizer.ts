@@ -91,6 +91,19 @@ export function normalizeRequest(input: NamingFormInput): NormalizeResult {
     };
   }
 
+  const tabooChars = splitTaboo(data.tabooChars);
+  // 死局防护：辈分字必须出现，又要求避开同一字 → 永远无候选。提前拦截并提示。
+  if (generationChar && tabooChars.includes(generationChar)) {
+    return {
+      ok: false,
+      message: `避讳字不能包含辈分字「${generationChar}」`,
+      fieldErrors: {
+        tabooChars: `避讳字「${generationChar}」与辈分字重复`,
+        generationChar: `辈分字「${generationChar}」与避讳字重复`,
+      },
+    };
+  }
+
   const stylePrototypeId = (data.stylePrototypeId || "default_dignified") as StylePrototypeId;
 
   const value: NormalizedRequest = {
@@ -104,7 +117,7 @@ export function normalizeRequest(input: NamingFormInput): NormalizeResult {
     birthHour: data.birthHour?.trim() || undefined,
     generationChar,
     generationPosition: data.generationPosition ?? "first",
-    tabooChars: splitTaboo(data.tabooChars),
+    tabooChars,
     stylePrototypeId,
     styleNotes: data.styleNotes?.trim() || undefined,
     avoidPopular,

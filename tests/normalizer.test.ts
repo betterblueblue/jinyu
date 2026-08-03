@@ -49,4 +49,31 @@ describe("normalizeRequest", () => {
     expect(r.ok).toBe(true);
     if (r.ok) expect(r.value.tabooChars).toEqual(["明", "强", "海"]);
   });
+
+  it("rejects taboo that contains the generation char (deadlock)", () => {
+    const r = normalizeRequest({
+      surname: "沈",
+      gender: "female",
+      generationChar: "书",
+      generationPosition: "second",
+      tabooChars: "书",
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.message).toMatch(/避讳字不能包含辈分字/);
+  });
+
+  it("allows taboo and generation that do not overlap", () => {
+    const r = normalizeRequest({
+      surname: "沈",
+      gender: "female",
+      generationChar: "书",
+      generationPosition: "second",
+      tabooChars: "轩,梓",
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.value.generationChar).toBe("书");
+      expect(r.value.tabooChars).toEqual(["轩", "梓"]);
+    }
+  });
 });

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { normalizeRequest } from "@/domain/normalizer";
 import { runGeneration } from "@/domain/orchestrator";
 import { FakeProvider } from "@/providers/fake-provider";
+import type { CandidateProvider } from "@/providers/types";
 
 describe("runGeneration", () => {
   it("happy path produces report with overview", async () => {
@@ -68,5 +69,35 @@ describe("runGeneration", () => {
     expect(progress.some((t) => t.includes("思考"))).toBe(true);
     expect(stages).toContain("filter");
     expect(stages).toContain("assemble");
+  });
+
+  it("unknown gender: 全 neutral 候选不产生重复推荐", async () => {
+    const n = normalizeRequest({ surname: "林", gender: "unknown" });
+    expect(n.ok).toBe(true);
+    if (!n.ok) return;
+
+    const neutralProvider: CandidateProvider = {
+      name: "all-neutral",
+      async generateCandidates() {
+        return ["子衿", "清和", "知微", "云帆", "望舒", "既明"].map((givenName) => ({
+          givenName,
+          genderLean: "neutral",
+          phonology: "p",
+          glyph: "g",
+          meaning: "m",
+          origin: "o",
+          pitfalls: "p",
+          styleFit: "s",
+        }));
+      },
+    };
+
+    const result = await runGeneration(n.value, neutralProvider);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const gs = result.report.names.map((x) => x.givenName);
+    const dupes = gs.filter((x, i, arr) => arr.indexOf(x) !== i);
+    expect(dupes).toEqual([]);
+    expect(gs.length).toBeGreaterThanOrEqual(2);
   });
 });
