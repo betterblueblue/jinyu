@@ -12,9 +12,20 @@ export class FakeProvider implements CandidateProvider {
     private readonly scenario: "default" | "insufficient" | "all_l1" | "with_taboo" = "default",
   ) {}
 
-  async generateCandidates(req: NormalizedRequest, attempt: number): Promise<RawCandidate[]> {
+  async generateCandidates(
+    req: NormalizedRequest,
+    attempt: number,
+    onThinking?: (chunk: string) => void,
+  ): Promise<RawCandidate[]> {
     const g = req.generationChar ?? "";
     const two = req.nameLength !== "one";
+
+    onThinking?.(
+      `（模拟思考）为「${req.surname}」${
+        req.gender === "unknown" ? "性别未定" : req.gender === "male" ? "男宝" : "女宝"
+      }起名，${req.generationChar ? `辈分字「${req.generationChar}」` : "辈分无要求"}，优先常用字、避生僻。`,
+    );
+    onThinking?.("（模拟思考）初步倾向「清」「明」「怀」等清朗字眼，避免网红模板。");
 
     const mk = (
       a: string,

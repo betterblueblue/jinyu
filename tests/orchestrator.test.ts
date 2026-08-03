@@ -53,4 +53,20 @@ describe("runGeneration", () => {
     expect(result.report.bazi?.enabled).toBe(true);
     expect(result.report.bazi?.restrainedAdvice).not.toMatch(/必然用神|铁口/);
   });
+
+  it("forwards thinking and stage events via onProgress", async () => {
+    const n = normalizeRequest({ surname: "王", gender: "male" });
+    expect(n.ok).toBe(true);
+    if (!n.ok) return;
+    const progress: string[] = [];
+    const stages: string[] = [];
+    const result = await runGeneration(n.value, new FakeProvider("default"), (evt) => {
+      if (evt.type === "thinking") progress.push(evt.text);
+      else if (evt.type === "stage") stages.push(evt.stage);
+    });
+    expect(result.ok).toBe(true);
+    expect(progress.some((t) => t.includes("思考"))).toBe(true);
+    expect(stages).toContain("filter");
+    expect(stages).toContain("assemble");
+  });
 });

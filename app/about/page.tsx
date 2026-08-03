@@ -16,7 +16,7 @@ export default async function AboutPage() {
         </h1>
         <div className="ink-divider my-7" />
         <p className="reveal max-w-[28ch] text-lg leading-relaxed tracking-wide text-gold sm:text-xl">
-          名字是父母写给孩子的第一封信。
+          名字，是相伴一生的称呼。
         </p>
         <div className="mt-6 max-w-[42ch] space-y-4 text-base leading-8 text-on-surface-variant">
           <p>

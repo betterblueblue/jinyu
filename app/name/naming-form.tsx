@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { NamingFormInput } from "@/domain/types";
 
 const STAGES = ["斟酌名字", "核对约束", "整理成文"] as const;
@@ -10,7 +10,7 @@ export function NamingForm() {
   const router = useRouter();
   const [surname, setSurname] = useState("");
   const [gender, setGender] = useState<"male" | "female" | "unknown">("unknown");
-  const [birthStatus, setBirthStatus] = useState<"born" | "unborn" | "uncertain">("uncertain");
+  const [birthStatus, setBirthStatus] = useState<"born" | "unborn" | "uncertain">("born");
   const [dueDate, setDueDate] = useState("");
   const [nameLength, setNameLength] = useState<"two" | "one">("two");
   const [baziEnabled, setBaziEnabled] = useState(false);
@@ -25,6 +25,14 @@ export function NamingForm() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [stageIdx, setStageIdx] = useState(0);
+  const [thinking, setThinking] = useState("");
+  const [thinkingOpen, setThinkingOpen] = useState(true);
+  const thinkingBoxRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = thinkingBoxRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [thinking]);
 
   const baziBlockedByUnborn = birthStatus === "unborn";
 
@@ -68,33 +76,96 @@ export function NamingForm() {
     setError("");
     setLoading(true);
     setStageIdx(0);
+    setThinking("");
+    setThinkingOpen(true);
 
-    const timers = [
-      window.setTimeout(() => setStageIdx(1), 400),
-      window.setTimeout(() => setStageIdx(2), 900),
-    ];
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 300_000);
 
     try {
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
+        signal: controller.signal,
       });
-      const data = (await res.json()) as {
-        ok?: boolean;
-        message?: string;
-        reportId?: string;
-      };
-      if (!res.ok || !data.ok || !data.reportId) {
-        setError(data.message || "生成失败，请检查表单后重试");
+
+      // 流开启前的错误（400/401）仍是普通 JSON
+      if (!res.ok || !res.body) {
+        const data = (await res.json().catch(() => ({}))) as { message?: string };
+        setError(data.message || `生成失败（HTTP ${res.status}），请重试`);
         return;
       }
-      router.push(`/reports/${data.reportId}`);
-      router.refresh();
-    } catch {
-      setError("网络异常或超时，请重试");
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let eventName = "";
+      let dataLines: string[] = [];
+      let sawDoneOrError = false;
+
+      const flushEvent = () => {
+        if (!eventName) return;
+        const raw = dataLines.join("\n");
+        let data: Record<string, unknown> = {};
+        try {
+          data = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
+        } catch {
+          /* 忽略坏帧 */
+        }
+        if (eventName === "thinking" && typeof data.text === "string") {
+          setThinking((prev) => prev + data.text);
+        } else if (eventName === "stage") {
+          if (data.stage === "filter") setStageIdx(1);
+          else if (data.stage === "assemble") setStageIdx(2);
+        } else if (eventName === "done" && typeof data.reportId === "string") {
+          sawDoneOrError = true;
+          router.push(`/reports/${data.reportId}`);
+          router.refresh();
+        } else if (eventName === "error") {
+          sawDoneOrError = true;
+          setError((data.message as string) || "生成失败，请稍后重试");
+        }
+        eventName = "";
+        dataLines = [];
+      };
+
+      while (!sawDoneOrError) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let idx;
+        while ((idx = buffer.indexOf("\n\n")) >= 0) {
+          const frame = buffer.slice(0, idx);
+          buffer = buffer.slice(idx + 2);
+          for (const line of frame.split("\n")) {
+            if (line.startsWith("event:")) eventName = line.slice(6).trim();
+            else if (line.startsWith("data:")) dataLines.push(line.slice(5).trim());
+          }
+          flushEvent();
+          if (sawDoneOrError) break;
+        }
+      }
+      // 处理流结束但无 \n\n 收尾的残留帧
+      if (!sawDoneOrError && buffer.trim()) {
+        for (const line of buffer.split("\n")) {
+          if (line.startsWith("event:")) eventName = line.slice(6).trim();
+          else if (line.startsWith("data:")) dataLines.push(line.slice(5).trim());
+        }
+        flushEvent();
+      }
+
+      if (!sawDoneOrError) {
+        setError("生成中断，请重试");
+      }
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        setError("生成超时，请重试");
+      } else {
+        setError("网络异常，请重试");
+      }
     } finally {
-      timers.forEach(clearTimeout);
+      clearTimeout(timeout);
       setLoading(false);
     }
   }
@@ -102,7 +173,7 @@ export function NamingForm() {
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-2" data-testid="naming-form">
       <section className="mt-0 rounded-sm border border-outline-variant/50 bg-surface/40 p-4 sm:p-5">
-        <h2 className="text-sm font-semibold tracking-[0.16em] text-paper">宝宝信息 · 必填</h2>
+        <h2 className="text-sm font-semibold tracking-[0.16em] text-paper">基本信息 · 必填</h2>
         <p className="mb-4 mt-1 text-sm text-outline">本区填妥后即可生成报告。</p>
         <div className="grid gap-5 sm:grid-cols-2">
           <Field label="姓氏">
@@ -262,7 +333,9 @@ export function NamingForm() {
           data-testid="generating"
         >
           <p className="text-base font-semibold tracking-[0.18em] text-gold">正在落笔</p>
-          <p className="mt-2 text-sm text-outline">请稍候。正在为你斟酌名字、核对约束并整理报告。</p>
+          <p className="mt-2 text-sm text-outline">
+            首次生成可能要等一会儿（几十秒到 2 分钟），请勿关闭页面。思考过程实时更新中。
+          </p>
           <ul className="mx-auto mt-6 max-w-[14rem] space-y-3 text-left text-sm">
             {STAGES.map((s, i) => (
               <li
@@ -281,6 +354,24 @@ export function NamingForm() {
               </li>
             ))}
           </ul>
+          <div className="mt-6 rounded-sm border border-outline-variant/50 bg-surface/40 text-left">
+            <button
+              type="button"
+              onClick={() => setThinkingOpen((o) => !o)}
+              className="flex w-full items-center justify-between px-4 py-2 text-sm text-outline hover:text-paper"
+            >
+              <span>思考过程（实时）</span>
+              <span>{thinkingOpen ? "收起" : "展开"}</span>
+            </button>
+            {thinkingOpen ? (
+              <div
+                ref={thinkingBoxRef}
+                className="max-h-48 overflow-y-auto whitespace-pre-wrap border-t border-outline-variant/30 px-4 py-3 text-xs leading-relaxed text-outline"
+              >
+                {thinking || "正在思考…"}
+              </div>
+            ) : null}
+          </div>
         </div>
       ) : null}
 

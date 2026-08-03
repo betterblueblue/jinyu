@@ -69,7 +69,7 @@ export function applyHardGate(candidates: RawCandidate[], req: NormalizedRequest
       reasons.push(`字数不符（需要${wantLen}字名）`);
     }
     if (isL1(givenName)) {
-      reasons.push("L1 网红模板硬拦");
+      reasons.push("常见网红组合，已排除");
     }
     if (hasTaboo(givenName, req.tabooChars)) {
       reasons.push("含避讳字");

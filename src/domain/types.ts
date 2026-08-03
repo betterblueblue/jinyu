@@ -55,6 +55,8 @@ export interface RawCandidate {
   origin?: string;
   pitfalls?: string;
   styleFit?: string;
+  /** 开启八字时模型输出的与生辰气质的呼应（克制表述），未开启时为 undefined */
+  baziFit?: string;
 }
 
 export interface GatedCandidate extends RawCandidate {
@@ -88,6 +90,7 @@ export interface NameDetail {
   origin: string;
   pitfalls: string;
   styleFit: string;
+  baziFit?: string;
   l2Hot: boolean;
 }
 

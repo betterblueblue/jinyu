@@ -12,7 +12,8 @@ test("golden path: login → form → report → summary → history", async ({ 
   await page.getByTestId("gender").selectOption("male");
   await page.getByTestId("submit-generate").click();
 
-  await expect(page.getByTestId("report-page")).toBeVisible({ timeout: 30_000 });
+  // xhigh 推理 + 流式生成慢，真 LLM 可达 1~3 分钟
+  await expect(page.getByTestId("report-page")).toBeVisible({ timeout: 180_000 });
   await expect(page.getByTestId("primary-name")).toBeVisible();
   await expect(page.getByTestId("report-overview")).toBeVisible();
 

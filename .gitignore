@@ -25,6 +25,11 @@ coverage/
 playwright-report/
 test-results/
 .turbo/
+.playwright-mcp/
+tsconfig.tsbuildinfo
+
+# local debug screenshots
+login-page.png
 
 # OS / IDE
 .DS_Store

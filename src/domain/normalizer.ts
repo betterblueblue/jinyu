@@ -61,7 +61,7 @@ export function normalizeRequest(input: NamingFormInput): NormalizeResult {
     return { ok: false, message: "姓氏请填写 1～2 个汉字", fieldErrors: { surname: "姓氏请填写 1～2 个汉字" } };
   }
 
-  const birthStatus = data.birthStatus ?? "uncertain";
+  const birthStatus = data.birthStatus ?? "born";
   const baziEnabled = Boolean(data.baziEnabled);
   const nameLength = data.nameLength ?? "two";
   const avoidPopular = data.avoidPopular !== false;

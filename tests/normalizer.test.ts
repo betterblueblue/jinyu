@@ -29,13 +29,14 @@ describe("normalizeRequest", () => {
     if (!r.ok) expect(r.message).toMatch(/未出生/);
   });
 
-  it("defaults name length two and avoid popular on", () => {
+  it("defaults name length two, avoid popular on, and birth status born", () => {
     const r = normalizeRequest({ surname: "李", gender: "unknown" });
     expect(r.ok).toBe(true);
     if (r.ok) {
       expect(r.value.nameLength).toBe("two");
       expect(r.value.avoidPopular).toBe(true);
       expect(r.value.stylePrototypeId).toBe("default_dignified");
+      expect(r.value.birthStatus).toBe("born");
     }
   });
 

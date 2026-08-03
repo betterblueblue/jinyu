@@ -129,6 +129,7 @@ export default async function ReportPage({
                   <Item term="出处" def={n.origin} />
                   <Item term="避坑" def={n.pitfalls} />
                   <Item term="风格" def={n.styleFit} />
+                  {report.bazi && n.baziFit ? <Item term="八字契合" def={n.baziFit} /> : null}
                 </dl>
               </div>
             ))}

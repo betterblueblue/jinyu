@@ -95,6 +95,7 @@ export function assembleReport(input: AssembleInput): ReportDocument {
     origin: c.origin || "出处为提示生成，请自行核验。",
     pitfalls: c.pitfalls || "未见明显硬伤记录；仍建议家人试念。",
     styleFit: c.styleFit || styleNotes[0] || "默认端庄耐看方向。",
+    baziFit: c.baziFit || undefined,
     l2Hot: Boolean(c.l2Hot),
   }));
 
@@ -123,7 +124,7 @@ export function assembleReport(input: AssembleInput): ReportDocument {
           .join("、")} 可作为备选：可按辈分习惯、书写便利与家人试念再定。`
       : "",
     request.gender === "unknown"
-      ? "性别未知时男向与女向均有备选；孩子出生后建议按实际性别从对应分组收窄。"
+      ? "性别未知时男向与女向均有备选；出生后建议按实际性别从对应分组收窄。"
       : "",
     ...styleNotes,
   ]
@@ -134,7 +135,7 @@ export function assembleReport(input: AssembleInput): ReportDocument {
   if (!notRecommended.length) {
     notRecommended.push({
       givenName: "常见网红模板",
-      reasons: ["L1 硬拦名单中的高同质化组合不会进入推荐，避免「名字太网红」问题。"],
+      reasons: ["为避免过于同质化的热门组合，这类名字已默认排除。"],
     });
   }
 
@@ -156,7 +157,7 @@ export function assembleReport(input: AssembleInput): ReportDocument {
     bazi: bazi ?? undefined,
     decisionAdvice,
     preparationNote: request.isPreparationName
-      ? "本报告为未出生/备名语境：不写精确四柱定名结论，名字可作孕期备选。"
+      ? "本报告为未出生/备名语境：不写精确四柱定名结论，名字可作备选。"
       : undefined,
     originDisclaimer: ORIGIN_DISCLAIMER,
   };

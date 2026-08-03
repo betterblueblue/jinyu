@@ -9,26 +9,34 @@ const MAX_ATTEMPTS = 2;
 const MIN_KNOWN = 3;
 const MIN_UNKNOWN = 4;
 
+export type ProgressEvent =
+  | { type: "thinking"; text: string }
+  | { type: "stage"; stage: string };
+
 export async function runGeneration(
   req: NormalizedRequest,
   provider: CandidateProvider,
+  onProgress?: (evt: ProgressEvent) => void,
 ): Promise<GenerationResult> {
   const stages: string[] = [];
   const relaxations: string[] = [];
   let stage: GenerationResult["stage"] = "candidates";
 
+  const emitThinking = (chunk: string) => onProgress?.({ type: "thinking", text: chunk });
+
   try {
     stages.push("candidates");
-    let allRaw = await provider.generateCandidates(req, 0);
+    let allRaw = await provider.generateCandidates(req, 0, emitThinking);
 
     stage = "filter";
     stages.push("filter");
+    onProgress?.({ type: "stage", stage: "filter" });
     let gate = applyHardGate(allRaw, req);
     let allowL2Primary = false;
 
     if (countOk(gate.passed, req) < minNeeded(req)) {
       // limited retry
-      const more = await provider.generateCandidates(req, 1);
+      const more = await provider.generateCandidates(req, 1, emitThinking);
       allRaw = [...allRaw, ...more];
       gate = applyHardGate(allRaw, req);
     }
@@ -56,6 +64,7 @@ export async function runGeneration(
 
     stage = "assemble";
     stages.push("assemble");
+    onProgress?.({ type: "stage", stage: "assemble" });
 
     const baziResult = buildBaziSummary(req);
     if (!baziResult.ok) {
@@ -104,10 +113,10 @@ function buildInsufficientMessage(req: NormalizedRequest, reasons: string[]): st
   const hints: string[] = [];
   if (req.generationChar) hints.push(`辈分字「${req.generationChar}」过严时可改位置或调整用字`);
   if (req.tabooChars.length) hints.push("避讳字过多会大幅减少可用名");
-  if (req.avoidPopular) hints.push("可暂时关闭「尽量避开热门名」（仍会拦截最烂大街 L1 模板）");
-  if (reasons.some((r) => r.includes("L1"))) hints.push("许多常见网红名已被硬拦，属预期行为");
+  if (req.avoidPopular) hints.push("可暂时关闭「尽量避开热门名」（仍会拦截最烂大街的网红模板）");
+  if (reasons.some((r) => r.includes("网红"))) hints.push("许多过于常见的网红名已被排除，属预期行为");
   const extra = hints.length ? `建议：${hints.join("；")}。` : "请回表单放宽条件后重试。";
-  return `可用候选不足，无法凑满精选推荐。硬规则（L1/避讳/辈分/字数）不会放宽。${extra}`;
+  return `可用候选不足，无法凑满精选推荐。硬规则（网红模板/避讳/辈分/字数）不会放宽。${extra}`;
 }
 
 export { MAX_ATTEMPTS };
