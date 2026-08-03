@@ -1,0 +1,34 @@
+# deps
+node_modules/
+.pnpm-store/
+
+# next
+.next/
+out/
+
+# env & secrets — never commit real keys
+.env
+.env.local
+.env.*.local
+
+# data
+data/
+*.db
+*.sqlite
+*.sqlite3
+
+# env test overrides
+.env.test.local
+
+# test / tooling
+coverage/
+playwright-report/
+test-results/
+.turbo/
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
