@@ -65,7 +65,7 @@ export function LoginForm() {
         </p>
       ) : null}
       <button type="submit" disabled={loading} className="btn-primary mt-1 w-full disabled:cursor-not-allowed">
-        {loading ? "登录中…" : "进入"}
+        {loading ? "登录中…" : "登录"}
       </button>
       <p className="text-center text-xs tracking-wide text-outline">固定账号 · 不开放注册</p>
     </form>

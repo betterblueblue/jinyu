@@ -3,14 +3,15 @@
 @tailwind utilities;
 
 :root {
-  color-scheme: light;
-  --color-primary: #00362a;
-  --color-secondary: #775a19;
-  --color-surface: #fbf9f5;
-  --color-bg: #f7f5f0;
-  --color-on-surface: #1b1c1a;
-  --color-outline: #5c6561;
-  --color-outline-variant: #c0c8c4;
+  color-scheme: dark;
+  --color-primary: #F2EDE3;
+  --color-secondary: #C9A227;
+  --color-surface: #16211D;
+  --color-bg: #0E1714;
+  --color-on-surface: #F2EDE3;
+  --color-outline: #A8A29A;
+  --color-outline-variant: #3A4540;
+  --color-cinnabar: #E0483E;
 }
 
 html,
@@ -18,13 +19,13 @@ body {
   margin: 0;
   padding: 0;
   min-height: 100%;
-  background-color: #f7f5f0;
+  background-color: #0e1714;
   background-image:
-    radial-gradient(circle at 12% 28%, rgba(0, 54, 42, 0.04) 0%, transparent 42%),
-    radial-gradient(circle at 88% 12%, rgba(119, 90, 25, 0.035) 0%, transparent 38%),
-    radial-gradient(circle at 50% 100%, rgba(0, 54, 42, 0.02) 0%, transparent 40%);
+    radial-gradient(circle at 15% 20%, rgba(201, 162, 39, 0.07) 0%, transparent 45%),
+    radial-gradient(circle at 85% 90%, rgba(224, 72, 62, 0.05) 0%, transparent 50%),
+    radial-gradient(circle at 50% 100%, rgba(201, 162, 39, 0.03) 0%, transparent 40%);
   background-attachment: fixed;
-  color: #1b1c1a;
+  color: #f2ede3;
   font-family: "Noto Serif SC", "Source Han Serif SC", "Songti SC", serif;
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
@@ -44,8 +45,8 @@ a {
   background: linear-gradient(
     90deg,
     transparent 0%,
-    rgba(192, 200, 196, 0.55) 18%,
-    rgba(192, 200, 196, 0.55) 82%,
+    rgba(201, 162, 39, 0.4) 18%,
+    rgba(201, 162, 39, 0.4) 82%,
     transparent 100%
   );
 }
@@ -56,27 +57,92 @@ a {
   input:focus-visible,
   select:focus-visible,
   textarea:focus-visible {
-    @apply outline-none ring-2 ring-secondary/40 ring-offset-2 ring-offset-[color:var(--color-bg)];
+    @apply outline-none ring-2 ring-gold/50 ring-offset-2 ring-offset-[color:var(--color-bg)];
   }
 }
 
 @layer components {
   .field-input {
-    @apply min-h-[2.85rem] w-full rounded-sm border border-outline-variant bg-surface/70 px-3 py-2 text-on-surface transition;
+    @apply min-h-[2.85rem] w-full rounded-sm border border-outline-variant bg-surface/70 px-3 py-2 text-paper transition;
+  }
+  .field-input::placeholder {
+    @apply text-paper-dim/60;
   }
   .field-input:hover {
-    @apply border-primary/30;
+    @apply border-gold/40;
   }
   .field-input:focus {
-    @apply border-primary/45 bg-surface;
+    @apply border-gold/60 bg-surface;
   }
   .btn-primary {
-    @apply inline-flex min-h-12 items-center justify-center border border-primary bg-primary px-5 py-2.5 tracking-widest text-surface transition hover:bg-primary/90 disabled:opacity-50;
+    @apply inline-flex min-h-12 items-center justify-center border border-cinnabar/60 bg-cinnabar px-5 py-2.5 tracking-widest text-paper transition hover:bg-cinnabar/85 disabled:opacity-50;
   }
   .btn-ghost {
-    @apply inline-flex min-h-11 items-center justify-center border border-outline-variant bg-transparent px-4 py-2 tracking-wide text-primary transition hover:bg-primary/[0.06];
+    @apply inline-flex min-h-11 items-center justify-center border border-outline-variant bg-transparent px-4 py-2 tracking-wide text-paper transition hover:bg-paper/[0.06] hover:border-gold/50;
   }
   .btn-gold {
-    @apply inline-flex min-h-11 items-center justify-center border border-secondary bg-transparent px-4 py-2 tracking-wide text-secondary transition hover:bg-secondary/[0.08];
+    @apply inline-flex min-h-11 items-center justify-center border border-gold/55 bg-transparent px-4 py-2 tracking-wide text-gold transition hover:bg-gold/10;
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes glow-pulse {
+  0%,
+  100% {
+    text-shadow:
+      0 0 24px rgba(201, 162, 39, 0.35),
+      0 0 48px rgba(201, 162, 39, 0.15);
+  }
+  50% {
+    text-shadow:
+      0 0 44px rgba(201, 162, 39, 0.55),
+      0 0 88px rgba(201, 162, 39, 0.25);
+  }
+}
+
+@keyframes ink-drop {
+  from {
+    opacity: 0;
+    transform: scaleY(0);
+  }
+  to {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+}
+
+.reveal {
+  animation: fade-up 0.7s ease-out both;
+}
+
+.name-hero {
+  animation:
+    fade-up 0.8s ease-out both,
+    glow-pulse 4s ease-in-out 0.8s infinite;
+}
+
+.ink-drop {
+  transform-origin: top;
+  animation: ink-drop 0.5s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal,
+  .name-hero,
+  .ink-drop {
+    animation: none;
+  }
+  .name-hero {
+    text-shadow: none;
   }
 }

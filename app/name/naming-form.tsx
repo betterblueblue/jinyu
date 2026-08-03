@@ -101,8 +101,8 @@ export function NamingForm() {
 
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-2" data-testid="naming-form">
-      <section className="mt-0">
-        <h2 className="text-sm font-semibold tracking-[0.16em] text-primary">宝宝信息 · 必填</h2>
+      <section className="mt-0 rounded-sm border border-outline-variant/50 bg-surface/40 p-4 sm:p-5">
+        <h2 className="text-sm font-semibold tracking-[0.16em] text-paper">宝宝信息 · 必填</h2>
         <p className="mb-4 mt-1 text-sm text-outline">本区填妥后即可生成报告。</p>
         <div className="grid gap-5 sm:grid-cols-2">
           <Field label="姓氏">
@@ -164,13 +164,13 @@ export function NamingForm() {
         </div>
       </section>
 
-      <section className="mt-8 border-l-2 border-outline-variant pl-4">
-        <h2 className="text-sm font-semibold tracking-[0.16em] text-primary">命理 · 可选</h2>
+      <section className="mt-6 rounded-sm border border-outline-variant/50 bg-surface/40 p-4 sm:p-5">
+        <h2 className="text-sm font-semibold tracking-[0.16em] text-paper">命理 · 可选</h2>
         <p className="mb-3 mt-1 text-sm text-outline">默认关闭。未出生时不可开精确八字。</p>
         <label className="flex items-start gap-2 text-sm text-on-surface-variant">
           <input
             type="checkbox"
-            className="mt-1 accent-primary"
+            className="mt-1 accent-cinnabar"
             checked={baziEnabled && !baziBlockedByUnborn}
             disabled={baziBlockedByUnborn}
             onChange={(e) => setBaziEnabled(e.target.checked)}
@@ -207,8 +207,8 @@ export function NamingForm() {
         ) : null}
       </section>
 
-      <section className="mt-8 border-l-2 border-outline-variant pl-4">
-        <h2 className="text-sm font-semibold tracking-[0.16em] text-primary">家族与禁忌 · 可选</h2>
+      <section className="mt-6 rounded-sm border border-outline-variant/50 bg-surface/40 p-4 sm:p-5">
+        <h2 className="text-sm font-semibold tracking-[0.16em] text-paper">家族与禁忌 · 可选</h2>
         <p className="mb-4 mt-1 text-sm text-outline">
           避讳字不会进入推荐；辈分字会强制出现在每个推荐名中。
         </p>
@@ -247,7 +247,7 @@ export function NamingForm() {
         <label className="mt-4 flex items-start gap-2 text-sm text-on-surface-variant">
           <input
             type="checkbox"
-            className="mt-1 accent-primary"
+            className="mt-1 accent-cinnabar"
             checked={avoidPopular}
             onChange={(e) => setAvoidPopular(e.target.checked)}
             data-testid="avoid-popular"
@@ -258,22 +258,23 @@ export function NamingForm() {
 
       {loading ? (
         <div
-          className="mt-8 border border-outline-variant/50 bg-surface px-5 py-6 text-center"
+          className="mt-8 rounded-sm border border-outline-variant/50 bg-surface/40 px-5 py-6 text-center"
           data-testid="generating"
         >
-          <p className="text-base font-semibold tracking-[0.18em] text-primary">正在落笔</p>
+          <p className="text-base font-semibold tracking-[0.18em] text-gold">正在落笔</p>
           <p className="mt-2 text-sm text-outline">请稍候。正在为你斟酌名字、核对约束并整理报告。</p>
           <ul className="mx-auto mt-6 max-w-[14rem] space-y-3 text-left text-sm">
             {STAGES.map((s, i) => (
               <li
                 key={s}
-                className={
+                className={`ink-drop ${
                   i < stageIdx
-                    ? "text-secondary"
+                    ? "text-gold"
                     : i === stageIdx
-                      ? "font-semibold text-primary"
+                      ? "font-semibold text-paper"
                       : "text-outline/50"
-                }
+                }`}
+                style={{ animationDelay: `${i * 0.12}s` }}
               >
                 <span className="mr-2 inline-block h-2 w-2 rounded-full border border-current align-middle" />
                 {s}

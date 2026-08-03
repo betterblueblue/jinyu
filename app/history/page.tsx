@@ -14,11 +14,11 @@ export default async function HistoryPage() {
   return (
     <AppShell authed>
       <main data-testid="history-page">
-        <p className="text-xs font-medium tracking-[0.22em] text-outline">历史</p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-[0.14em] text-primary sm:text-4xl">
+        <p className="reveal text-xs font-medium tracking-[0.22em] text-gold">历史</p>
+        <h1 className="reveal mt-2 text-3xl font-bold tracking-[0.14em] text-paper sm:text-4xl">
           历史快照
         </h1>
-        <p className="mt-3 text-base text-outline">
+        <p className="reveal mt-3 text-base text-outline">
           {items.length
             ? `共 ${items.length} 份快照 · 打开为生成时的全文，不重新跑模型。`
             : "打开为生成时的全文快照，不重新跑模型。"}
@@ -39,16 +39,16 @@ export default async function HistoryPage() {
               <li key={item.id}>
                 <Link
                   href={`/reports/${item.id}`}
-                  className="flex items-center justify-between gap-4 py-4 transition hover:bg-primary/[0.03]"
+                  className="flex items-center justify-between gap-4 py-4 transition hover:bg-gold/[0.04]"
                 >
                   <div>
                     <div className="text-xs tracking-wide text-outline">
                       {new Date(item.createdAt).toLocaleString("zh-CN")} · {item.surname} ·{" "}
                       {item.gender === "male" ? "男" : item.gender === "female" ? "女" : "未知"}
                     </div>
-                    <div className="mt-1 text-lg tracking-wider text-primary">{item.nameSummary}</div>
+                    <div className="mt-1 text-lg tracking-wider text-paper">{item.nameSummary}</div>
                   </div>
-                  <span className="shrink-0 border border-secondary/45 px-3 py-1.5 text-xs tracking-widest text-secondary">
+                  <span className="shrink-0 border border-gold/50 px-3 py-1.5 text-xs tracking-widest text-gold">
                     打开
                   </span>
                 </Link>

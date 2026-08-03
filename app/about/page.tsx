@@ -10,12 +10,12 @@ export default async function AboutPage() {
   return (
     <AppShell authed>
       <article className="max-w-2xl">
-        <p className="text-xs font-medium tracking-[0.22em] text-outline">理念</p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-[0.14em] text-primary sm:text-4xl">
+        <p className="reveal text-xs font-medium tracking-[0.22em] text-gold">理念</p>
+        <h1 className="reveal mt-2 text-3xl font-bold tracking-[0.14em] text-paper sm:text-4xl">
           命名理念
         </h1>
         <div className="ink-divider my-7" />
-        <p className="max-w-[28ch] text-lg leading-relaxed tracking-wide text-primary sm:text-xl">
+        <p className="reveal max-w-[28ch] text-lg leading-relaxed tracking-wide text-gold sm:text-xl">
           名字是父母写给孩子的第一封信。
         </p>
         <div className="mt-6 max-w-[42ch] space-y-4 text-base leading-8 text-on-surface-variant">

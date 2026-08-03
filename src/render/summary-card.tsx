@@ -5,7 +5,7 @@ import type { ReportDocument } from "@/domain/types";
 /** Minimal latin fallback font via system is not available in satori; use built-in load */
 async function loadFont(): Promise<ArrayBuffer> {
   const url =
-    "https://cdn.jsdelivr.net/npm/@fontsource/noto-serif-sc@5.0.0/files/noto-serif-sc-chinese-simplified-400-normal.woff";
+    "https://cdn.jsdelivr.net/npm/@fontsource/noto-serif-sc@5.0.0/files/noto-serif-sc-chinese-simplified-900-normal.woff";
   try {
     const res = await fetch(url);
     if (res.ok) return await res.arrayBuffer();
@@ -13,9 +13,13 @@ async function loadFont(): Promise<ArrayBuffer> {
     // ignore
   }
   const res2 = await fetch(
-    "https://cdn.jsdelivr.net/npm/@fontsource/noto-sans-sc@5.0.0/files/noto-sans-sc-chinese-simplified-400-normal.woff",
+    "https://cdn.jsdelivr.net/npm/@fontsource/noto-serif-sc@5.0.0/files/noto-serif-sc-chinese-simplified-700-normal.woff",
   );
-  return await res2.arrayBuffer();
+  if (res2.ok) return await res2.arrayBuffer();
+  const res3 = await fetch(
+    "https://cdn.jsdelivr.net/npm/@fontsource/noto-serif-sc@5.0.0/files/noto-serif-sc-chinese-simplified-400-normal.woff",
+  );
+  return await res3.arrayBuffer();
 }
 
 export async function renderSummaryCardPng(report: ReportDocument): Promise<Buffer> {
@@ -40,8 +44,8 @@ export async function renderSummaryCardPng(report: ReportDocument): Promise<Buff
         height: "100%",
         display: "flex",
         flexDirection: "column",
-        backgroundColor: "#fbf9f5",
-        color: "#1b1c1a",
+        backgroundColor: "#0e1714",
+        color: "#f2ede3",
         padding: "56px 52px 48px",
         fontFamily: "Noto Serif SC",
         position: "relative",
@@ -57,7 +61,7 @@ export async function renderSummaryCardPng(report: ReportDocument): Promise<Buff
               left: 24,
               right: 24,
               bottom: 24,
-              border: "1px solid rgba(0,54,42,0.08)",
+              border: "1px solid rgba(201,162,39,0.35)",
             },
             children: "",
           },
@@ -76,9 +80,9 @@ export async function renderSummaryCardPng(report: ReportDocument): Promise<Buff
                 props: {
                   style: {
                     fontSize: 22,
-                    color: "#00362a",
+                    color: "#c9a227",
                     letterSpacing: 10,
-                    fontWeight: 600,
+                    fontWeight: 700,
                   },
                   children: "瑾瑜",
                 },
@@ -88,7 +92,7 @@ export async function renderSummaryCardPng(report: ReportDocument): Promise<Buff
                 props: {
                   style: {
                     fontSize: 14,
-                    color: "#775a19",
+                    color: "#c9a227",
                     letterSpacing: 6,
                     fontWeight: 500,
                   },
@@ -105,7 +109,7 @@ export async function renderSummaryCardPng(report: ReportDocument): Promise<Buff
               marginTop: 18,
               height: 1,
               background:
-                "linear-gradient(90deg, transparent 0%, rgba(192,200,196,0.8) 20%, rgba(192,200,196,0.8) 80%, transparent 100%)",
+                "linear-gradient(90deg, transparent 0%, rgba(201,162,39,0.5) 20%, rgba(201,162,39,0.5) 80%, transparent 100%)",
             },
             children: "",
           },
@@ -116,7 +120,7 @@ export async function renderSummaryCardPng(report: ReportDocument): Promise<Buff
             style: {
               marginTop: 16,
               fontSize: 13,
-              color: "#5c6561",
+              color: "#a8a29a",
               letterSpacing: 3,
             },
             children: meta,
@@ -130,7 +134,7 @@ export async function renderSummaryCardPng(report: ReportDocument): Promise<Buff
               marginTop: 28,
               display: "flex",
               flexDirection: "column",
-              borderLeft: "3px solid #775a19",
+              borderLeft: "3px solid #c9a227",
               paddingLeft: 18,
             },
             children: [
@@ -139,7 +143,7 @@ export async function renderSummaryCardPng(report: ReportDocument): Promise<Buff
                 props: {
                   style: {
                     fontSize: 13,
-                    color: "#775a19",
+                    color: "#c9a227",
                     letterSpacing: 6,
                     fontWeight: 500,
                   },
@@ -152,9 +156,9 @@ export async function renderSummaryCardPng(report: ReportDocument): Promise<Buff
                   style: {
                     marginTop: 8,
                     fontSize: 44,
-                    color: "#00362a",
+                    color: "#c9a227",
                     letterSpacing: 14,
-                    fontWeight: 600,
+                    fontWeight: 700,
                     lineHeight: 1.15,
                   },
                   children: primary,
@@ -166,7 +170,7 @@ export async function renderSummaryCardPng(report: ReportDocument): Promise<Buff
                   style: {
                     marginTop: 12,
                     fontSize: 16,
-                    color: "#1a4a3c",
+                    color: "#c6bfb2",
                     lineHeight: 1.55,
                     letterSpacing: 1,
                   },
@@ -182,7 +186,7 @@ export async function renderSummaryCardPng(report: ReportDocument): Promise<Buff
             style: {
               marginTop: 36,
               fontSize: 12,
-              color: "#5c6561",
+              color: "#a8a29a",
               letterSpacing: 5,
             },
             children: "备选",
@@ -204,7 +208,7 @@ export async function renderSummaryCardPng(report: ReportDocument): Promise<Buff
                 style: {
                   display: "flex",
                   flexDirection: "column",
-                  borderLeft: "2px solid rgba(192,200,196,0.7)",
+                  borderLeft: "2px solid rgba(201,162,39,0.45)",
                   paddingLeft: 14,
                 },
                 children: [
@@ -213,7 +217,7 @@ export async function renderSummaryCardPng(report: ReportDocument): Promise<Buff
                     props: {
                       style: {
                         fontSize: 22,
-                        color: "#00362a",
+                        color: "#f2ede3",
                         letterSpacing: 6,
                         fontWeight: 500,
                       },
@@ -226,7 +230,7 @@ export async function renderSummaryCardPng(report: ReportDocument): Promise<Buff
                       style: {
                         marginTop: 4,
                         fontSize: 14,
-                        color: "#5c6561",
+                        color: "#a8a29a",
                         lineHeight: 1.45,
                       },
                       children: oneLine(n.meaning, 28),
@@ -243,7 +247,7 @@ export async function renderSummaryCardPng(report: ReportDocument): Promise<Buff
             style: {
               marginTop: "auto",
               paddingTop: 20,
-              borderTop: "1px solid rgba(192,200,196,0.65)",
+              borderTop: "1px solid rgba(201,162,39,0.4)",
               display: "flex",
               flexDirection: "column",
               gap: 8,
@@ -252,7 +256,7 @@ export async function renderSummaryCardPng(report: ReportDocument): Promise<Buff
               {
                 type: "div",
                 props: {
-                  style: { fontSize: 13, color: "#5c6561", lineHeight: 1.5 },
+                  style: { fontSize: 13, color: "#a8a29a", lineHeight: 1.5 },
                   children: "完整音韵、出处与避坑见在线报告与历史快照",
                 },
               },
@@ -261,7 +265,7 @@ export async function renderSummaryCardPng(report: ReportDocument): Promise<Buff
                 props: {
                   style: {
                     fontSize: 13,
-                    color: "#00362a",
+                    color: "#c9a227",
                     letterSpacing: 4,
                     fontWeight: 500,
                   },
@@ -282,7 +286,7 @@ export async function renderSummaryCardPng(report: ReportDocument): Promise<Buff
       {
         name: "Noto Serif SC",
         data: fontData,
-        weight: 400,
+        weight: 900,
         style: "normal",
       },
     ],

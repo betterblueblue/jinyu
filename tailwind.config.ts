@@ -8,17 +8,22 @@ const config: Config = {
         serif: ['"Noto Serif SC"', '"Source Han Serif SC"', '"Songti SC"', "serif"],
       },
       colors: {
-        primary: "#00362a",
-        secondary: "#775a19",
-        tertiary: "#65000a",
-        cinnabar: "#c84646",
-        surface: "#fbf9f5",
-        "surface-low": "#f0ede6",
-        bg: "#f7f5f0",
-        outline: "#5c6561",
-        "outline-variant": "#c0c8c4",
-        "on-surface": "#1b1c1a",
-        "on-surface-variant": "#404945",
+        primary: "#F2EDE3", // 米白：标题/正文/首推名/导航字
+        secondary: "#C9A227", // 金：下划线/描边/小标记/hover
+        tertiary: "#E0483E", // 朱砂红：强调
+        cinnabar: "#E0483E", // 朱砂红：错误/CTA/主按钮
+        surface: "#16211D", // 卡片/表单分组底
+        "surface-low": "#1B2722", // hover/浅区
+        bg: "#0E1714", // 页面底
+        outline: "#A8A29A", // 次要文字
+        "outline-variant": "#3A4540", // 边框
+        "on-surface": "#F2EDE3", // 正文主字
+        "on-surface-variant": "#C6BFB2", // 次要正文
+        ink: "#0E1714", // 深墨底（别名）
+        "ink-card": "#16211D", // 卡片底（别名）
+        paper: "#F2EDE3", // 米白（别名）
+        "paper-dim": "#A8A29A", // 暖灰（别名）
+        gold: "#C9A227", // 金（别名）
       },
     },
   },
