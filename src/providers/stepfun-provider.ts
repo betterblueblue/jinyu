@@ -43,6 +43,7 @@ export class StepFunProvider implements CandidateProvider {
     const candidateFields = [
       '"givenName":"名不含姓"',
       '"genderLean":"male|female|neutral"',
+      '"pinyin":"标准拼音，含声调，如 shū yǎo"',
       '"phonology":""',
       '"glyph":""',
       '"meaning":""',
@@ -253,6 +254,7 @@ function parseCandidates(content: string): RawCandidate[] {
       .map((c) => ({
         givenName: String(c.givenName).trim(),
         genderLean: c.genderLean,
+        pinyin: c.pinyin,
         phonology: c.phonology,
         glyph: c.glyph,
         meaning: c.meaning,

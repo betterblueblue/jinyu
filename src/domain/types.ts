@@ -49,6 +49,8 @@ export interface NormalizedRequest {
 export interface RawCandidate {
   givenName: string;
   genderLean?: "male" | "female" | "neutral";
+  /** 标准拼音（如「舒窈」→ shū yǎo），生僻字也能读 */
+  pinyin?: string;
   phonology?: string;
   glyph?: string;
   meaning?: string;
@@ -84,6 +86,8 @@ export interface NameDetail {
   givenName: string;
   isPrimary: boolean;
   genderLean?: "male" | "female" | "neutral";
+  /** 标准拼音（如「舒窈」→ shū yǎo） */
+  pinyin?: string;
   phonology: string;
   glyph: string;
   meaning: string;

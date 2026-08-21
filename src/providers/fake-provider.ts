@@ -50,6 +50,7 @@ export class FakeProvider implements CandidateProvider {
       return {
         givenName: name,
         genderLean: lean,
+        pinyin: `${name} 拼音示例`,
         phonology: `${name} 读音顺口，声调宜试念。`,
         glyph: `${name} 字形端正，笔画适中。`,
         meaning: `${name} 寓意端庄耐看，具体可结合家风理解。`,

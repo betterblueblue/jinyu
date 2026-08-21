@@ -55,6 +55,14 @@ export default async function ReportPage({
             >
               {report.overview.primaryName}
             </p>
+            {(() => {
+              const p = report.names.find((x) => x.fullName === report.overview.primaryName);
+              return p?.pinyin ? (
+                <p className="mt-3 text-base tracking-[0.2em] text-outline" data-testid="primary-pinyin">
+                  {p.pinyin}
+                </p>
+              ) : null;
+            })()}
             <p
               className="mt-4 inline-flex items-center px-2 py-1 text-xs font-medium tracking-[0.24em] text-on-stamp"
               style={{ backgroundColor: "var(--stamp)", borderRadius: "2px" }}
@@ -69,17 +77,23 @@ export default async function ReportPage({
           <div className="mt-6 flex flex-wrap gap-2">
             {report.overview.names.map((n) => {
               const isPrimary = n === report.overview.primaryName;
+              const py = report.names.find((x) => x.fullName === n)?.pinyin;
               return (
                 <span
                   key={n}
                   className={
                     isPrimary
-                      ? "inline-flex min-h-10 items-center border border-gold/70 bg-gold/10 px-3.5 py-1.5 text-base tracking-wider text-gold shadow-[inset_3px_0_0_0_var(--accent)]"
-                      : "inline-flex min-h-10 items-center border border-outline-variant bg-surface/60 px-3.5 py-1.5 text-base tracking-wider text-paper-dim"
+                      ? "inline-flex flex-col items-start border border-gold/70 bg-gold/10 px-3.5 py-1.5 text-base tracking-wider text-gold shadow-[inset_3px_0_0_0_var(--accent)]"
+                      : "inline-flex flex-col items-start border border-outline-variant bg-surface/60 px-3.5 py-1.5 text-base tracking-wider text-paper-dim"
                   }
                 >
-                  {n}
-                  {isPrimary ? " · 首推" : ""}
+                  <span>
+                    {n}
+                    {isPrimary ? " · 首推" : ""}
+                  </span>
+                  {py ? (
+                    <span className="mt-0.5 text-[0.7rem] tracking-wide text-outline">{py}</span>
+                  ) : null}
                 </span>
               );
             })}
@@ -125,6 +139,11 @@ export default async function ReportPage({
                     <span className="ml-2 text-sm tracking-normal text-outline">偏热门</span>
                   ) : null}
                 </h3>
+                {n.pinyin ? (
+                  <p className="mt-1.5 text-sm tracking-[0.18em] text-outline" data-testid="name-pinyin">
+                    {n.pinyin}
+                  </p>
+                ) : null}
                 <dl className="mt-4 grid gap-3 text-sm leading-relaxed">
                   <Item term="音韵" def={n.phonology} />
                   <Item term="字形" def={n.glyph} />

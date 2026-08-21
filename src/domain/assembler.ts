@@ -91,6 +91,7 @@ export function assembleReport(input: AssembleInput): ReportDocument {
     givenName: c.givenName,
     isPrimary: c.givenName === primary.givenName,
     genderLean: c.genderLean,
+    pinyin: c.pinyin || undefined,
     phonology: c.phonology || "读音与声调宜在家庭内试叫确认。",
     glyph: c.glyph || "字形宜工整好写，避免生僻难认。",
     meaning: c.meaning || "寓意宜具体，忌空话套话。",

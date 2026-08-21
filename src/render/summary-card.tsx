@@ -143,6 +143,16 @@ function nameBlock(
         ],
       },
     },
+    ...(n.pinyin
+      ? [
+          text(n.pinyin, {
+            marginTop: isPrimary ? 8 : 4,
+            fontSize: isPrimary ? 14 : 12,
+            color: C.dim,
+            letterSpacing: 2,
+          }),
+        ]
+      : []),
   ];
   if (isPrimary && oneLiner) {
     children.push(
