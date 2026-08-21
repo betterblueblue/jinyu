@@ -16,7 +16,7 @@ export const namingFormSchema = z.object({
   gender: z.enum(["male", "female", "unknown"], {
     errorMap: () => ({ message: "请选择性别状态（男/女/未知）" }),
   }),
-  birthStatus: z.enum(["born", "unborn", "uncertain"]).optional(),
+  birthStatus: z.enum(["born", "unborn"]).optional(),
   dueDate: z.string().optional(),
   nameLength: z.enum(["two", "one"]).optional(),
   baziEnabled: z.boolean().optional(),

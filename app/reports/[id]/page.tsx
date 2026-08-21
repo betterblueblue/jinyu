@@ -56,8 +56,8 @@ export default async function ReportPage({
               {report.overview.primaryName}
             </p>
             <p
-              className="mt-4 inline-flex items-center px-2 py-1 text-xs font-medium tracking-[0.24em] text-on-seal"
-              style={{ backgroundColor: "var(--seal)", borderRadius: "2px" }}
+              className="mt-4 inline-flex items-center px-2 py-1 text-xs font-medium tracking-[0.24em] text-on-stamp"
+              style={{ backgroundColor: "var(--stamp)", borderRadius: "2px" }}
             >
               首推
             </p>

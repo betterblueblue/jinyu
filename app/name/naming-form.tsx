@@ -10,7 +10,7 @@ export function NamingForm() {
   const router = useRouter();
   const [surname, setSurname] = useState("");
   const [gender, setGender] = useState<"male" | "female" | "unknown">("unknown");
-  const [birthStatus, setBirthStatus] = useState<"born" | "unborn" | "uncertain">("born");
+  const [birthStatus, setBirthStatus] = useState<"born" | "unborn">("born");
   const [dueDate, setDueDate] = useState("");
   const [nameLength, setNameLength] = useState<"two" | "one">("two");
   const [baziEnabled, setBaziEnabled] = useState(false);
@@ -219,7 +219,6 @@ export function NamingForm() {
             >
               <option value="born">已出生</option>
               <option value="unborn">未出生</option>
-              <option value="uncertain">不确定</option>
             </select>
           </Field>
           {birthStatus === "unborn" ? (
@@ -241,7 +240,7 @@ export function NamingForm() {
         <label className="flex items-start gap-2 text-sm text-on-surface-variant">
           <input
             type="checkbox"
-            className="mt-1 accent-cinnabar"
+            className="mt-1 accent-gold"
             checked={baziEnabled && !baziBlockedByUnborn}
             disabled={baziBlockedByUnborn}
             onChange={(e) => setBaziEnabled(e.target.checked)}
@@ -318,7 +317,7 @@ export function NamingForm() {
         <label className="mt-4 flex items-start gap-2 text-sm text-on-surface-variant">
           <input
             type="checkbox"
-            className="mt-1 accent-cinnabar"
+            className="mt-1 accent-gold"
             checked={avoidPopular}
             onChange={(e) => setAvoidPopular(e.target.checked)}
             data-testid="avoid-popular"

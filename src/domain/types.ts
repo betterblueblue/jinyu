@@ -1,5 +1,5 @@
 export type Gender = "male" | "female" | "unknown";
-export type BirthStatus = "born" | "unborn" | "uncertain";
+export type BirthStatus = "born" | "unborn";
 export type NameLengthMode = "two" | "one";
 export type GenerationCharPosition = "first" | "second" | "any";
 

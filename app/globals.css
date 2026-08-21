@@ -15,6 +15,7 @@
   --surface-mid: oklch(0.95 0.007 174.4);
   /* 青墨三阶：浓墨青黑 / 正文青灰 / 辅助淡青灰 */
   --fg: oklch(0.326 0.033 171.1);
+  --on-fg: oklch(0.985 0.004 157.2);
   --body: oklch(0.432 0.019 171.8);
   --muted: oklch(0.535 0.019 168);
   --faint: oklch(0.647 0.019 164.3);
@@ -37,6 +38,9 @@
   --seal-strong: oklch(0.512 0.153 30.1);
   --seal-soft: oklch(0.946 0.018 30.3);
   --on-seal: oklch(0.995 0.003 150);
+  /* 印章色：浅色用朱砂（点睛），深色用亮青玉（与深底协调） */
+  --stamp: var(--seal);
+  --on-stamp: var(--on-seal);
   /* 阴影：近无，仅极淡浮起 */
   --shadow: 0 1px 2px oklch(0.18 0.03 170 / 0.06), 0 12px 32px oklch(0.18 0.03 170 / 0.07);
   --shadow-glow: 0 0 0 4px var(--seal-soft), 0 12px 28px oklch(0.581 0.161 30.1 / 0.22);
@@ -54,6 +58,7 @@
   --surface-mid: oklch(0.276 0.024 174.1);
   /* 青墨三阶反向 */
   --fg: oklch(0.954 0.01 164.9);
+  --on-fg: oklch(0.16 0.02 174);
   --body: oklch(0.847 0.015 164.7);
   --muted: oklch(0.75 0.026 166.7);
   --faint: oklch(0.647 0.024 167);
@@ -74,6 +79,9 @@
   --seal-strong: oklch(0.75 0.12 30);
   --seal-soft: oklch(0.292 0.031 31.6);
   --on-seal: oklch(0.16 0.02 174);
+  /* 深色下印章用亮青玉，与深底协调 */
+  --stamp: var(--accent);
+  --on-stamp: var(--on-accent);
   --shadow: 0 1px 2px oklch(0 0 0 / 0.4), 0 16px 40px oklch(0 0 0 / 0.35);
   --shadow-glow: 0 0 0 4px var(--seal-soft), 0 12px 28px oklch(0.69 0.13 30.1 / 0.25);
   --grain-opacity: 0.05;
@@ -174,13 +182,17 @@ a {
   }
   .btn-primary {
     @apply inline-flex min-h-12 items-center justify-center border px-5 py-2.5 tracking-widest transition disabled:opacity-50;
-    border-color: var(--seal);
-    background-color: var(--seal);
-    color: var(--on-seal);
+    border-color: var(--fg);
+    background-color: var(--fg);
+    color: var(--on-fg);
   }
   .btn-primary:hover {
-    background-color: var(--seal-strong);
-    border-color: var(--seal-strong);
+    opacity: 0.88;
+  }
+  [data-theme="dark"] .btn-primary {
+    border-color: var(--accent);
+    background-color: var(--accent);
+    color: var(--on-accent);
   }
   .btn-ghost {
     @apply inline-flex min-h-11 items-center justify-center border bg-transparent px-4 py-2 tracking-wide transition;
