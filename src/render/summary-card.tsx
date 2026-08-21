@@ -27,13 +27,16 @@ const CARD_WIDTH = 720;
 /** 导出 PNG 相对逻辑宽度的缩放倍数 */
 const PNG_SCALE = 2;
 
+/** 青玉冷调浅色卡（可转发 PNG，固定浅色，不随主题切换） */
 const C = {
-  bg: "#0e1714",
-  paper: "#f2ede3",
-  dim: "#a8a29a",
-  gold: "#c9a227",
-  goldSoft: "rgba(201,162,39,0.45)",
-  text: "#c6bfb2",
+  bg: "#F4F7F5",
+  paper: "#223A32",
+  dim: "#7A8781",
+  gold: "#3D6B5E",
+  goldSoft: "rgba(61,107,94,0.45)",
+  text: "#46544F",
+  seal: "#C84C3C",
+  onSeal: "#FDFDF8",
 };
 
 export interface SummaryDetailRow {
@@ -127,7 +130,15 @@ function nameBlock(
             textIndent: isPrimary ? "0.14em" : "0.06em",
           }),
           isPrimary
-            ? text("首推", { fontSize: 13, color: C.gold, letterSpacing: 6, fontWeight: 500 })
+            ? text("首推", {
+                fontSize: 13,
+                color: C.onSeal,
+                backgroundColor: C.seal,
+                letterSpacing: 6,
+                fontWeight: 500,
+                padding: "3px 8px 3px 12px",
+                borderRadius: 2,
+              })
             : null,
         ],
       },
@@ -151,7 +162,7 @@ function nameBlock(
       style: {
         display: "flex",
         flexDirection: "column",
-        borderLeft: isPrimary ? "3px solid #c9a227" : `2px solid ${C.goldSoft}`,
+        borderLeft: isPrimary ? "3px solid #3D6B5E" : `2px solid ${C.goldSoft}`,
         paddingLeft: isPrimary ? 18 : 14,
       },
       children,
@@ -184,7 +195,7 @@ export function buildSummaryCardElement(report: ReportDocument): CardNode {
           left: 24,
           right: 24,
           bottom: 24,
-          border: "1px solid rgba(201,162,39,0.35)",
+          border: "1px solid rgba(61,107,94,0.35)",
         },
         children: "",
       },
@@ -210,7 +221,7 @@ export function buildSummaryCardElement(report: ReportDocument): CardNode {
           marginTop: 18,
           height: 1,
           background:
-            "linear-gradient(90deg, transparent 0%, rgba(201,162,39,0.5) 20%, rgba(201,162,39,0.5) 80%, transparent 100%)",
+            "linear-gradient(90deg, transparent 0%, rgba(61,107,94,0.5) 20%, rgba(61,107,94,0.5) 80%, transparent 100%)",
         },
         children: "",
       },
@@ -249,7 +260,7 @@ export function buildSummaryCardElement(report: ReportDocument): CardNode {
         style: {
           marginTop: 32,
           paddingTop: 18,
-          borderTop: "1px solid rgba(201,162,39,0.4)",
+          borderTop: "1px solid rgba(61,107,94,0.4)",
           display: "flex",
           flexDirection: "column",
           gap: 8,

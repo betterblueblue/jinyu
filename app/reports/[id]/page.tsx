@@ -55,7 +55,10 @@ export default async function ReportPage({
             >
               {report.overview.primaryName}
             </p>
-            <p className="mt-4 border-l-2 border-gold pl-3 text-sm font-semibold tracking-[0.24em] text-gold">
+            <p
+              className="mt-4 inline-flex items-center px-2 py-1 text-xs font-medium tracking-[0.24em] text-on-seal"
+              style={{ backgroundColor: "var(--seal)", borderRadius: "2px" }}
+            >
               首推
             </p>
           </div>
@@ -71,7 +74,7 @@ export default async function ReportPage({
                   key={n}
                   className={
                     isPrimary
-                      ? "inline-flex min-h-10 items-center border border-gold/70 bg-gold/10 px-3.5 py-1.5 text-base tracking-wider text-gold shadow-[inset_3px_0_0_0_#C9A227]"
+                      ? "inline-flex min-h-10 items-center border border-gold/70 bg-gold/10 px-3.5 py-1.5 text-base tracking-wider text-gold shadow-[inset_3px_0_0_0_var(--accent)]"
                       : "inline-flex min-h-10 items-center border border-outline-variant bg-surface/60 px-3.5 py-1.5 text-base tracking-wider text-paper-dim"
                   }
                 >
