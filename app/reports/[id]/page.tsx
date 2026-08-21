@@ -86,7 +86,7 @@ export default async function ReportPage({
             <div className="mt-5 border-l-2 border-outline-variant pl-4 text-sm text-outline">
               <p>男向：{(report.overview.maleNames ?? []).join("、") || "—"}</p>
               <p className="mt-1">女向：{(report.overview.femaleNames ?? []).join("、") || "—"}</p>
-              <p className="mt-2">性别未知：出生后可按实际性别从对应分组收窄。</p>
+              <p className="mt-2">性别未知：得知实际性别后可从对应分组收窄。</p>
             </div>
           ) : null}
           {report.preparationNote ? (

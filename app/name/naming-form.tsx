@@ -237,7 +237,7 @@ export function NamingForm() {
 
       <section className="mt-6 rounded-sm border border-outline-variant/50 bg-surface/40 p-4 sm:p-5">
         <h2 className="text-sm font-semibold tracking-[0.16em] text-paper">命理 · 可选</h2>
-        <p className="mb-3 mt-1 text-sm text-outline">默认关闭。未出生时不可开精确八字。</p>
+        <p className="mb-3 mt-1 text-sm text-outline">默认关闭。已出生且填生日即可排盘；未出生（预产期）场景不可开精确八字。</p>
         <label className="flex items-start gap-2 text-sm text-on-surface-variant">
           <input
             type="checkbox"

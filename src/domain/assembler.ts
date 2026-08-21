@@ -112,7 +112,7 @@ export function assembleReport(input: AssembleInput): ReportDocument {
 
   const oneLinerParts = [
     `首推 ${primary.fullName}`,
-    request.gender === "unknown" ? "含男向与女向备选，出生后可按性别收窄" : "精选少量备选便于比较",
+    request.gender === "unknown" ? "含男向与女向备选，得知实际性别后可收窄" : "精选少量备选便于比较",
     request.isPreparationName ? "备名语境" : null,
     relaxations.length ? `已放宽：${relaxations.join("、")}` : null,
   ].filter(Boolean);
@@ -126,7 +126,7 @@ export function assembleReport(input: AssembleInput): ReportDocument {
           .join("、")} 可作为备选：可按辈分习惯、书写便利与家人试念再定。`
       : "",
     request.gender === "unknown"
-      ? "性别未知时男向与女向均有备选；出生后建议按实际性别从对应分组收窄。"
+      ? "性别未知时男向与女向均有备选；得知实际性别后建议从对应分组收窄。"
       : "",
     ...styleNotes,
   ]
