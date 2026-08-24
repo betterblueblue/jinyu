@@ -62,6 +62,7 @@ export class StepFunProvider implements CandidateProvider {
         "最终回复的 content 必须是且仅是一个 JSON 对象（response_format 为 json_object），不要 markdown、解释或前后缀。",
         "请简短思考，优先完成最终 JSON；思考过程不要出现在 content 里。",
         "优先使用现代常用汉字，避免生僻字、多音字和笔画过多的字；避免烂大街网红模板（如子轩/梓涵/浩宇等）。",
+        "候选之间避免重复用字与高度相似的意象；同名字（清/砚/书/望 等百搭好字）不要多个候选共用，确保每个候选用字有区分度。",
         jsonFormatLine,
         "givenName 不要包含姓氏；字数严格符合用户要求。",
       ].join(""),
