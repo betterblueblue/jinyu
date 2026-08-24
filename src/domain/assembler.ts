@@ -33,58 +33,88 @@ function pickNames(
   ranked: GatedCandidate[],
   req: NormalizedRequest,
   primaryIndex: number,
-): { selected: GatedCandidate[]; primary: GatedCandidate } {
+): {
+  selected: GatedCandidate[];
+  primary: GatedCandidate;
+  maleNames?: string[];
+  femaleNames?: string[];
+} {
   const { total, male, female } = targetCounts(req);
 
+  // 统一去重：模型可能重复输出同一 givenName 的候选（不同 genderLean/pitfalls），
+  // 全部路径（男/女/未知）按 givenName 只保留最先出现的那个，杜绝重复进报告
+  const seen = new Set<string>();
+  const uniqueRanked = ranked.filter((c) => {
+    if (seen.has(c.givenName)) return false;
+    seen.add(c.givenName);
+    return true;
+  });
+
   if (req.gender !== "unknown") {
-    const selected = ranked.slice(0, Math.min(total, ranked.length));
+    const selected = uniqueRanked.slice(0, Math.min(total, uniqueRanked.length));
     // ensure primary is in selected
     let primary = selected[Math.min(primaryIndex, selected.length - 1)] ?? selected[0]!;
-    if (!selected.includes(ranked[primaryIndex]!)) {
-      const p = ranked[primaryIndex]!;
+    if (!selected.includes(uniqueRanked[primaryIndex]!)) {
+      const p = uniqueRanked[primaryIndex]!;
       if (p && !selected.find((s) => s.givenName === p.givenName)) {
         selected[0] = p;
         primary = p;
       }
     } else {
-      primary = ranked[primaryIndex]!;
+      primary = uniqueRanked[primaryIndex]!;
     }
     // reorder: primary first
     const rest = selected.filter((s) => s.givenName !== primary.givenName);
     return { selected: [primary, ...rest], primary };
   }
 
-  const males = ranked.filter((c) => c.genderLean !== "female");
-  const females = ranked.filter((c) => c.genderLean !== "male");
-  const mPick = males.slice(0, male ?? 2);
-  const fPick = females.slice(0, female ?? 2);
-  // fill if one side short
-  const used = new Set([...mPick, ...fPick].map((c) => c.givenName));
-  for (const c of ranked) {
-    if (mPick.length + fPick.length >= (total ?? 4)) break;
-    if (used.has(c.givenName)) continue;
-    if (mPick.length < (male ?? 2)) {
+  // 未知性别：男向/女向严格分拣，neutral 只作补齐且不跨组重复，
+  // 保证 maleNames 与 femaleNames 完全不重叠
+  const needMale = male ?? 2;
+  const needFemale = female ?? 2;
+  const maleLean = uniqueRanked.filter((c) => c.genderLean === "male");
+  const femaleLean = uniqueRanked.filter((c) => c.genderLean === "female");
+  const neutralPool = uniqueRanked.filter((c) => c.genderLean !== "male" && c.genderLean !== "female");
+
+  // 男向/女向全量倾向都保留，缺口用 neutral 补齐，每个 neutral 只进一组
+  const mPick: GatedCandidate[] = [...maleLean];
+  const fPick: GatedCandidate[] = [...femaleLean];
+  if (mPick.length < needMale) {
+    for (const c of neutralPool) {
+      if (mPick.length >= needMale) break;
       mPick.push(c);
-      used.add(c.givenName);
-    } else if (fPick.length < (female ?? 2)) {
-      fPick.push(c);
-      used.add(c.givenName);
     }
   }
+  if (fPick.length < needFemale) {
+    for (const c of neutralPool) {
+      if (fPick.length >= needFemale) break;
+      if (mPick.includes(c)) continue; // neutral 已入男向则不再进女向
+      fPick.push(c);
+    }
+  }
+
   const selected = [...mPick, ...fPick];
-  // 去重：未知性别时同一 neutral 候选可能同时进入男/女分组，合并后会产生重复
   const deduped = Array.from(new Map(selected.map((c) => [c.givenName, c])).values());
   const primary =
     deduped.find((s) => !s.l2Hot) ??
     deduped[Math.min(primaryIndex, Math.max(0, deduped.length - 1))] ??
     deduped[0]!;
   const rest = deduped.filter((s) => s.givenName !== primary.givenName);
-  return { selected: [primary, ...rest], primary };
+  return {
+    selected: [primary, ...rest],
+    primary,
+    maleNames: mPick.map((c) => c.fullName),
+    femaleNames: fPick.map((c) => c.fullName),
+  };
 }
 
 export function assembleReport(input: AssembleInput): ReportDocument {
   const { request, ranked, primaryIndex, eliminated, styleNotes, relaxations, stages, bazi } = input;
-  const { selected, primary } = pickNames(ranked, request, primaryIndex);
+  const { selected, primary, maleNames: groupMale, femaleNames: groupFemale } = pickNames(
+    ranked,
+    request,
+    primaryIndex,
+  );
 
   const names: NameDetail[] = selected.map((c) => ({
     fullName: c.fullName,
@@ -102,18 +132,18 @@ export function assembleReport(input: AssembleInput): ReportDocument {
     l2Hot: Boolean(c.l2Hot),
   }));
 
-  const maleNames =
-    request.gender === "unknown"
-      ? names.filter((n) => n.genderLean !== "female").map((n) => n.fullName)
-      : undefined;
-  const femaleNames =
-    request.gender === "unknown"
-      ? names.filter((n) => n.genderLean !== "male").map((n) => n.fullName)
-      : undefined;
+  const maleNames = request.gender === "unknown" ? groupMale : undefined;
+  const femaleNames = request.gender === "unknown" ? groupFemale : undefined;
+  // 未知性别时按实际分组情况措辞：两侧都有名字才说「均有备选」
+  const bothSides = Boolean(maleNames?.length && femaleNames?.length);
 
   const oneLinerParts = [
     `首推 ${primary.fullName}`,
-    request.gender === "unknown" ? "含男向与女向备选，得知实际性别后可收窄" : "精选少量备选便于比较",
+    request.gender === "unknown"
+      ? bothSides
+        ? "含男向与女向备选，得知实际性别后可收窄"
+        : "备选较少，得知实际性别后可按向补充"
+      : "精选少量备选便于比较",
     request.isPreparationName ? "备名语境" : null,
     relaxations.length ? `已放宽：${relaxations.join("、")}` : null,
   ].filter(Boolean);
@@ -127,7 +157,9 @@ export function assembleReport(input: AssembleInput): ReportDocument {
           .join("、")} 可作为备选：可按辈分习惯、书写便利与家人试念再定。`
       : "",
     request.gender === "unknown"
-      ? "性别未知时男向与女向均有备选；得知实际性别后建议从对应分组收窄。"
+      ? bothSides
+        ? "性别未知时男向与女向均有备选；得知实际性别后建议从对应分组收窄。"
+        : "性别未知，当前备选较少；得知实际性别后建议针对性再取一两个名字。"
       : "",
     ...styleNotes,
   ]

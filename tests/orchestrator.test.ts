@@ -99,5 +99,97 @@ describe("runGeneration", () => {
     const dupes = gs.filter((x, i, arr) => arr.indexOf(x) !== i);
     expect(dupes).toEqual([]);
     expect(gs.length).toBeGreaterThanOrEqual(2);
+    // 男向/女向必须零重叠（回归：全 neutral 时曾完全重合）
+    const male = result.report.overview.maleNames ?? [];
+    const female = result.report.overview.femaleNames ?? [];
+    expect(male).not.toEqual([]);
+    expect(female).not.toEqual([]);
+    expect(male.filter((x) => female.includes(x))).toEqual([]);
+  });
+
+  it("unknown gender: 重复候选只保留一个，不产生重复名、男向女向零重叠", async () => {
+    const n = normalizeRequest({ surname: "林", gender: "unknown" });
+    expect(n.ok).toBe(true);
+    if (!n.ok) return;
+
+    const dupProvider: CandidateProvider = {
+      name: "dup-neutral",
+      async generateCandidates() {
+        // 模型可能重复输出同一 givenName（历史报告曾出现），应按 givenName 去重
+        const mk = (givenName: string, genderLean: "male" | "female" | "neutral") => ({
+          givenName,
+          genderLean,
+          phonology: "p",
+          glyph: "g",
+          meaning: "m",
+          origin: "o",
+          pitfalls: "p",
+          styleFit: "s",
+        });
+        return [
+          mk("清和", "neutral"),
+          mk("知微", "neutral"),
+          mk("知微", "neutral"),
+          mk("子衿", "neutral"),
+          mk("云帆", "neutral"),
+        ];
+      },
+    };
+
+    const result = await runGeneration(n.value, dupProvider);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const gs = result.report.names.map((x) => x.givenName);
+    expect(new Set(gs).size).toBe(gs.length); // report.names 无重复
+    expect(result.report.overview.names.length).toBe(
+      new Set(result.report.overview.names).size,
+    ); // overview 无重复
+    const male = result.report.overview.maleNames ?? [];
+    const female = result.report.overview.femaleNames ?? [];
+    expect(new Set(male).size).toBe(male.length); // 男向组内无重复
+    expect(new Set(female).size).toBe(female.length); // 女向组内无重复
+    expect(male.filter((x) => female.includes(x))).toEqual([]); // 男向女向零重叠
+  });
+
+  it("unknown gender: 男向/女向按倾向分拣，neutral 补齐且不跨组重复", async () => {
+    const n = normalizeRequest({ surname: "周", gender: "unknown" });
+    expect(n.ok).toBe(true);
+    if (!n.ok) return;
+
+    const mixedProvider: CandidateProvider = {
+      name: "mixed-lean",
+      async generateCandidates() {
+        const mk = (givenName: string, genderLean: "male" | "female" | "neutral") => ({
+          givenName,
+          genderLean,
+          phonology: "p",
+          glyph: "g",
+          meaning: "m",
+          origin: "o",
+          pitfalls: "p",
+          styleFit: "s",
+        });
+        return [
+          mk("景行", "male"),
+          mk("怀瑾", "female"),
+          mk("书白", "neutral"),
+          mk("明澈", "male"),
+          mk("清和", "female"),
+          mk("安然", "neutral"),
+        ];
+      },
+    };
+
+    const result = await runGeneration(n.value, mixedProvider);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const male = result.report.overview.maleNames ?? [];
+    const female = result.report.overview.femaleNames ?? [];
+    expect(male).toHaveLength(2);
+    expect(female).toHaveLength(2);
+    expect(male).toContain("周景行"); // 男倾向进男向
+    expect(female).toContain("周怀瑾"); // 女倾向进女向
+    expect(male.filter((x) => female.includes(x))).toEqual([]); // 不跨组重复
+    expect(result.report.overview.names).toHaveLength(4);
   });
 });
