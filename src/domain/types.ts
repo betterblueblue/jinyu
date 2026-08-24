@@ -6,9 +6,7 @@ export type GenerationCharPosition = "first" | "second" | "any";
 export type StylePrototypeId =
   | "classical_elegant"
   | "warm_clear"
-  | "scholarly_restrained"
   | "modern_clean"
-  | "neutral_restrained"
   | "default_dignified";
 
 export interface NamingFormInput {

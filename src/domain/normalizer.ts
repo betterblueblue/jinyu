@@ -4,9 +4,7 @@ import type { NamingFormInput, NormalizedRequest, StylePrototypeId } from "./typ
 const styleIds = [
   "classical_elegant",
   "warm_clear",
-  "scholarly_restrained",
   "modern_clean",
-  "neutral_restrained",
   "default_dignified",
   "",
 ] as const;
