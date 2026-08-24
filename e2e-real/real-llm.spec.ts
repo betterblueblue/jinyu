@@ -49,9 +49,10 @@ test("真人操作：登录 → unknown 取名 → 真实 LLM 生成 → 报告�
   await page.getByRole("button", { name: "登录" }).click();
   await expect(page).toHaveURL(/\/name/, { timeout: 15_000 });
 
-  // 2. 填表单：unknown 性别，覆盖本次修复路径
+  // 2. 填表单：unknown 性别，覆盖本次修复路径；选「书卷自持」风格，验证风格真正生效
   await page.getByTestId("surname").fill("陈");
   await page.getByTestId("gender").selectOption("unknown");
+  await page.getByTestId("style-prototype").selectOption("scholarly_restrained");
   await page.getByTestId("submit-generate").click();
 
   // 3. 等待真实 LLM 生成（30~90s，最坏放宽到 240s）
@@ -75,6 +76,17 @@ test("真人操作：登录 → unknown 取名 → 真实 LLM 生成 → 报告�
   const nameHeadings = await page.getByTestId("report-names").locator("h3").allTextContents();
   const given = nameHeadings.map((h) => h.replace(/首推|偏热门/g, "").trim());
   expect(new Set(given).size).toBe(given.length);
+
+  // 6b. 风格选择生效：选了「书卷自持」，逐名风格行应体现书卷气（真实模型按风格生成）
+  const styleRows = await page
+    .getByTestId("report-names")
+    .locator("dl dt", { hasText: "风格" })
+    .locator("..")
+    .locator("dd")
+    .allTextContents();
+  expect(styleRows.length).toBeGreaterThan(0);
+  const allStyle = styleRows.join(" ");
+  expect(allStyle).toContain("书卷"); // 「书卷自持」风格在模型输出中的体现
 
   // 7. 下载摘要图（真实报告渲染 PNG）
   const downloadPromise = page.waitForEvent("download");

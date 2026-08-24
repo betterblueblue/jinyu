@@ -10,6 +10,12 @@ test("golden path: login → form → report → summary → history", async ({ 
 
   await page.getByTestId("surname").fill("王");
   await page.getByTestId("gender").selectOption("male");
+
+  // 命名风格选择：下拉可渲染 6 种风格，选「书卷自持」应能提交
+  await expect(page.getByTestId("style-prototype")).toBeVisible();
+  await expect(page.getByTestId("style-prototype").locator("option")).toHaveCount(6);
+  await page.getByTestId("style-prototype").selectOption("scholarly_restrained");
+
   await page.getByTestId("submit-generate").click();
 
   // xhigh 推理 + 流式生成慢，真 LLM 可达 1~3 分钟
