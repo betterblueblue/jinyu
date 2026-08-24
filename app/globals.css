@@ -38,9 +38,9 @@
   --seal-strong: oklch(0.42 0.055 62);
   --seal-soft: oklch(0.95 0.015 65);
   --on-seal: oklch(0.985 0.008 165);
-  /* 印章色：浅色用铁足（点睛），深色用亮天青（与深底协调） */
-  --stamp: var(--seal);
-  --on-stamp: var(--on-seal);
+  /* 印章色：统一用天青釉强调（与整体主调协调，不再用铁足棕） */
+  --stamp: var(--accent);
+  --on-stamp: var(--on-accent);
   /* 阴影：近无，仅极淡浮起（釉面柔光） */
   --shadow: 0 1px 2px oklch(0.2 0.03 175 / 0.06), 0 12px 32px oklch(0.2 0.03 175 / 0.08);
   --shadow-glow: 0 0 0 4px var(--seal-soft), 0 12px 28px oklch(0.5 0.06 62 / 0.2);
