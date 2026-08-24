@@ -84,7 +84,7 @@ test("正常输入矩阵（真实 LLM）报告结构健康", async ({ request })
     },
     {
       name: "正常-林-unknown",
-      payload: { surname: "林", gender: "unknown", birthStatus: "born", nameLength: "two", baziEnabled: false, avoidPopular: true, stylePrototypeId: "classical_elegant" },
+      payload: { surname: "林", gender: "unknown", birthStatus: "born", nameLength: "two", baziEnabled: false, avoidPopular: true, stylePrototypeId: "natural_clear" },
       check: (r, n) => {
         const male = r.overview.maleNames ?? [];
         const female = r.overview.femaleNames ?? [];

@@ -11,9 +11,9 @@ test("golden path: login → form → report → summary → history", async ({ 
   await page.getByTestId("surname").fill("王");
   await page.getByTestId("gender").selectOption("male");
 
-  // 命名风格选择：下拉可渲染 3 种可选风格，选「现代简洁」应能提交
+  // 命名风格选择：下拉可渲染 4 种可选风格，选「现代简洁」应能提交
   await expect(page.getByTestId("style-prototype")).toBeVisible();
-  await expect(page.getByTestId("style-prototype").locator("option")).toHaveCount(3);
+  await expect(page.getByTestId("style-prototype").locator("option")).toHaveCount(4);
   await page.getByTestId("style-prototype").selectOption("modern_clean");
 
   await page.getByTestId("submit-generate").click();
