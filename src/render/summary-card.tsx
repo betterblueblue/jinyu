@@ -1,25 +1,17 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import satori from "satori";
 import { Resvg } from "@resvg/resvg-js";
 import type { NameDetail, ReportDocument } from "@/domain/types";
 
-/** Minimal latin fallback font via system is not available in satori; use built-in load */
-async function loadFont(): Promise<ArrayBuffer> {
-  const url =
-    "https://cdn.jsdelivr.net/npm/@fontsource/noto-serif-sc@5.0.0/files/noto-serif-sc-chinese-simplified-900-normal.woff";
-  try {
-    const res = await fetch(url);
-    if (res.ok) return await res.arrayBuffer();
-  } catch {
-    // ignore
+/** 本地字体文件（避免每次渲染摘要图都拉 CDN，慢/不稳定） */
+let fontData: ArrayBuffer | null = null;
+function loadFont(): ArrayBuffer {
+  if (!fontData) {
+    const buf = readFileSync(join(process.cwd(), "src", "render", "fonts", "noto-serif-sc-900.woff"));
+    fontData = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
   }
-  const res2 = await fetch(
-    "https://cdn.jsdelivr.net/npm/@fontsource/noto-serif-sc@5.0.0/files/noto-serif-sc-chinese-simplified-700-normal.woff",
-  );
-  if (res2.ok) return await res2.arrayBuffer();
-  const res3 = await fetch(
-    "https://cdn.jsdelivr.net/npm/@fontsource/noto-serif-sc@5.0.0/files/noto-serif-sc-chinese-simplified-400-normal.woff",
-  );
-  return await res3.arrayBuffer();
+  return fontData;
 }
 
 /** 卡片逻辑宽度（px）；导出 PNG 按 PNG_SCALE 矢量放大，文字保持清晰 */
@@ -311,7 +303,7 @@ export function buildSummaryCardElement(report: ReportDocument): CardNode {
 }
 
 export async function renderSummaryCardPng(report: ReportDocument): Promise<Buffer> {
-  const fontData = await loadFont();
+  const fontData = loadFont();
   const element = buildSummaryCardElement(report);
 
   // 只传 width，高度由内容自动撑开

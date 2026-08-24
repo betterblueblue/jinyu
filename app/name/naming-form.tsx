@@ -292,7 +292,7 @@ export function NamingForm() {
             name="stylePrototypeId"
             data-testid="style-prototype"
           >
-            {STYLE_PROTOTYPES.map((p) => (
+            {STYLE_PROTOTYPES.filter((p) => p.id !== "default_dignified").map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name} — {p.subtitle}
               </option>
