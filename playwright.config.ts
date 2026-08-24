@@ -8,13 +8,13 @@ export default defineConfig({
   workers: 1,
   reporter: "list",
   use: {
-    baseURL: "http://127.0.0.1:3000",
+    baseURL: "http://127.0.0.1:9000",
     trace: "on-first-retry",
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
     command: "pnpm dev",
-    url: "http://127.0.0.1:3000",
+    url: "http://127.0.0.1:9000",
     reuseExistingServer: !process.env.CI,
     env: {
       ...process.env,

@@ -29,7 +29,7 @@ cp .env.example .env.local
 
 ```bash
 pnpm install
-pnpm dev          # http://localhost:3000
+pnpm dev          # http://localhost:9000
 pnpm test         # 单元测试（Fake LLM）
 pnpm e2e          # Playwright 金路径（自动起 dev server，强制 Fake）
 ```

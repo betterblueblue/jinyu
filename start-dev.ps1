@@ -1,6 +1,6 @@
 # 瑾瑜（jinyu）一键启动脚本
 # 用法：在项目目录运行  .\start-dev.ps1
-# 流程：检查依赖 -> 检查 3000 端口占用（可选清理旧进程）-> 启动 dev server
+# 流程：检查依赖 -> 检查 9000 端口占用（可选清理旧进程）-> 启动 dev server
 # 登录账号见 .env.local（默认 jinyu / change-me）
 
 $ErrorActionPreference = "Stop"
@@ -21,8 +21,8 @@ if (-not (Test-Path ".env.local")) {
     Write-Host "提示：未找到 .env.local，LLM 将回退 Fake。首次配置请复制 .env.example 并填入 LLM_API_KEY。" -ForegroundColor Yellow
 }
 
-# 3. 端口检查：3000 被占用时提示清理（旧 dev server 不会加载新配置/新代码）
-$port = 3000
+# 3. 端口检查：9000 被占用时提示清理（旧 dev server 不会加载新配置/新代码）
+$port = 9000
 $listeners = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
 if ($listeners) {
     $pids = $listeners | Select-Object -ExpandProperty OwningProcess -Unique

@@ -3,10 +3,10 @@
  * login → generate (StepFun) → fetch report snapshot → summary image
  *
  * Usage: node scripts/e2e-real-llm.mjs
- * Requires: pnpm dev running on :3000 with LLM_USE_FAKE=false, or this script starts nothing —
+ * Requires: pnpm dev running on :9000 with LLM_USE_FAKE=false, or this script starts nothing —
  * we call domain path if server not up... Actually we need the server for cookie session.
  *
- * This script starts nothing; expects BASE_URL (default http://127.0.0.1:3000).
+ * This script starts nothing; expects BASE_URL (default http://127.0.0.1:9000).
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -30,7 +30,7 @@ function loadEnvLocal() {
 
 loadEnvLocal();
 
-const BASE = process.env.BASE_URL || "http://127.0.0.1:3000";
+const BASE = process.env.BASE_URL || "http://127.0.0.1:9000";
 const user = process.env.JINYU_AUTH_USERNAME || "jinyu";
 const pass = process.env.JINYU_AUTH_PASSWORD || "change-me";
 

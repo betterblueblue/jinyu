@@ -160,7 +160,7 @@ Without this fix, generate can “succeed” with **zero candidates**.
 1. **Boot app**  
    - `pnpm install` (if needed)  
    - `pnpm dev`  
-   - Open `http://127.0.0.1:3000/login`  
+   - Open `http://127.0.0.1:9000/login`  
    - Credentials: see `.env.local` keys `JINYU_AUTH_*` (defaults documented in `.env.example`: username `jinyu`)  
    - Verify: login OK; submit form; wait ~20–40s for real LLM; report + download image.
 
