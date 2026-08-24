@@ -143,10 +143,10 @@ Source: PRD 文化层复用 + jinyutreasury 实装对照；用户确认写入本
 
 ## 风格（表单可选）
 
-- 用户侧：**表单提供风格下拉**（6 种：古典雅致/温润清朗/书卷自持/现代简洁/中性克制/端庄耐看），选项带副标题说明  
+- 用户侧：**表单提供风格下拉**（4 种：古典雅致/自然清灵/大气端庄/现代简洁），选项带副标题说明  
 - 不选时默认 `default_dignified`（端庄耐看 soft-prompt），仍走软偏好逻辑、不硬失败  
 - 报告逐名「风格」展示模型原文描述（保留具体气质，不再套用统一模板句）  
-- `src/config/style-prototypes.ts` 为风格原型的唯一数据源（id/name/subtitle/softPrompt/keywords）  
+- `src/config/style-prototypes.ts` 为风格原型的唯一数据源（id/name/subtitle/softPrompt/keywords），每个风格用「要什么 + 排除什么」的用字特征式 softPrompt  
 
 ## 技术落点
 

@@ -5,7 +5,8 @@ export type GenerationCharPosition = "first" | "second" | "any";
 
 export type StylePrototypeId =
   | "classical_elegant"
-  | "warm_clear"
+  | "natural_clear"
+  | "grand_dignified"
   | "modern_clean"
   | "default_dignified";
 

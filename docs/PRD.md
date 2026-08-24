@@ -119,7 +119,7 @@ MVP 成功口径（不纠结细指标）：**能看完整在线报告 + 能下�
 2. **品牌：瑾瑜**：所有用户可见文案、导航标题、关于页、摘要图角标、浏览器标题等统一使用 **「瑾瑜」**；英文 slug 仅用 `jinyu`，与品牌对应。
 3. **文化层主动复用 jinyutreasury（鼓励）**：下列内容应优先从 `jinyutreasury` **移植并改编**进新应用 `jinyu/`，品牌保持瑾瑜：
    - **命名介绍 / 关于页**：如「名字是父母写给孩子的第一封信」、使用说明、隐私说明等（须按本产品改写：一次报告、摘要图、固定单账号、无多轮精修主推等）。
-   - **风格原型（style prototypes）**：如古典端正、温润清朗、书卷自持、现代简洁、中性克制等原型的名称、意象、说明卡片与 soft-prompt 方向（可迁 `formal/style-prototypes`、StyleProfile 类交互）。
+   - **风格原型（style prototypes）**：当前实现为 4 个用字特征型风格（古典雅致/自然清灵/大气端庄/现代简洁），每个含名称、意象、soft-prompt 与关键词（见 `src/config/style-prototypes.ts`；原计划可迁 jinyutreasury 的风格卡片，现以表单下拉落地）。
    - **视觉文化**：墨色/留白、字距、标题气质、divider 等设计语言；迁 design tokens 与关键展示组件即可。
    - 迁入方式：复制进新应用后维护；**不** `import` 旧 jinyutreasury 包。
 4. **领域与 skill**：`baby-name-skill` / `skills-baby-name` 仍作规则与闸门思路参考；与 jinyutreasury 的规则引擎若有可抄算法，同样**迁入后独立维护**。
