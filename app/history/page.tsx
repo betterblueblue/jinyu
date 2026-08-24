@@ -46,7 +46,14 @@ export default async function HistoryPage() {
                       {new Date(item.createdAt).toLocaleString("zh-CN")} · {item.surname} ·{" "}
                       {item.gender === "male" ? "男" : item.gender === "female" ? "女" : "未知"}
                     </div>
-                    <div className="mt-1 text-lg tracking-wider text-paper">{item.nameSummary}</div>
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                      <span className="text-lg tracking-wider text-paper">{item.nameSummary}</span>
+                      {item.providerName === "fake" ? (
+                        <span className="border border-outline-variant/60 px-1.5 py-0.5 text-[0.65rem] tracking-widest text-outline">
+                          示例
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
                   <span className="shrink-0 border border-gold/50 px-3 py-1.5 text-xs tracking-widest text-gold">
                     打开

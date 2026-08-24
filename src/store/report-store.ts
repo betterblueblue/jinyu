@@ -37,6 +37,7 @@ function toListItem(report: ReportDocument): ReportListItem {
     surname: report.request.surname,
     gender: report.request.gender,
     nameSummary: report.overview.names.slice(0, 5).join("、"),
+    providerName: report.providerName,
   };
 }
 

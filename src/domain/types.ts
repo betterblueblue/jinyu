@@ -117,6 +117,8 @@ export interface ReportDocument {
   decisionAdvice: string;
   preparationNote?: string;
   originDisclaimer: string;
+  /** 生成来源 provider（"fake"=示例模式 / "stepfun" 等真实 provider），用于历史标注 */
+  providerName?: string;
 }
 
 export interface ReportListItem {
@@ -125,6 +127,7 @@ export interface ReportListItem {
   surname: string;
   gender: Gender;
   nameSummary: string;
+  providerName?: string;
 }
 
 export type GenerationStage = "candidates" | "filter" | "assemble";

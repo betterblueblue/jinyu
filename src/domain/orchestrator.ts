@@ -87,6 +87,8 @@ export async function runGeneration(
       stages,
       bazi: baziResult.summary,
     });
+    // 记录生成来源 provider，供历史列表标注示例模式
+    report.providerName = provider.name;
 
     return { ok: true, stage: "assemble", report };
   } catch (err) {
