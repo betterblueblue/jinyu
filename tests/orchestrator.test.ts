@@ -57,6 +57,34 @@ describe("rankSoft", () => {
     const ranked = rankSoft(cands, n.value).ranked;
     expect(ranked[0]!.styleFit).toMatch(/贴近|端庄耐看/);
   });
+
+  it("关键词打分不含 styleFit（避免模型复述风格名导致全部命中）", () => {
+    const n = normalizeRequest({ surname: "王", gender: "male" });
+    expect(n.ok).toBe(true);
+    if (!n.ok) return;
+    const cands: GatedCandidate[] = [
+      {
+        givenName: "甲",
+        fullName: "王甲",
+        genderLean: "male",
+        styleFit: "契合端庄耐看的风格要求", // styleFit 含关键词，但 meaning 不含
+        meaning: "开阔远大",
+        origin: "",
+      },
+      {
+        givenName: "乙",
+        fullName: "王乙",
+        genderLean: "male",
+        styleFit: "清朗利落",
+        meaning: "温润端庄，稳重有礼", // meaning 真含关键词
+        origin: "",
+      },
+    ];
+    const ranked = rankSoft(cands, n.value).ranked;
+    // 乙的 meaning 真含「端庄」→ 命中关键词加分，应排前
+    // 甲的 styleFit 含「端庄」但 meaning 不含 → 不得分，应排后
+    expect(ranked[0]!.givenName).toBe("乙");
+  });
 });
 
 describe("runGeneration", () => {

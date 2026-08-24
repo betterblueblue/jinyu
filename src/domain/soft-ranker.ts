@@ -22,7 +22,9 @@ export function rankSoft(
 
   const scored = candidates.map((c, index) => {
     let score = 100 - index;
-    const blob = `${c.meaning ?? ""}${c.origin ?? ""}${c.styleFit ?? ""}${c.givenName}`;
+    // 关键词匹配用 meaning/origin/givenName，不含 styleFit：
+    // styleFit 是模型对风格的复述（几乎必含风格名），混入会让所有候选都命中、打分失去区分度
+    const blob = `${c.meaning ?? ""}${c.origin ?? ""}${c.givenName}`;
     const hits = keywords.filter((k) => blob.includes(k));
     score += hits.length * 8;
 
