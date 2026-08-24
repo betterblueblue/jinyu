@@ -10,7 +10,7 @@
 
 ## 技术栈（摘要）
 
-**Next.js（App Router）+ TypeScript** 全栈 · SQLite 快照 · Zod · Vitest · Playwright E2E · Fake/Real LLM 端口 · 摘要图（Satori 优先）。
+**Next.js（App Router）+ TypeScript** 全栈 · 本地 JSON 报告快照 · Zod · Vitest · Playwright E2E · Fake/Real LLM 端口 · 摘要图（Satori 优先）。
 
 **真 LLM**：StepFun · 模型 `step-3.7-flash` · OpenAI 兼容 Chat Completions（`LLM_BASE_URL` + `LLM_API_KEY`，见 `docs/TECH.md` 与 `.env.example`）。
 
@@ -28,15 +28,15 @@ cp .env.example .env.local
 ## 开发
 
 ```bash
-pnpm install
-pnpm dev          # http://localhost:9000
+.\start-dev.ps1   # 一键启动（检查依赖/端口 → pnpm dev，访问 http://localhost:9000）
 pnpm test         # 单元测试（Fake LLM）
-pnpm e2e          # Playwright 金路径（自动起 dev server，强制 Fake）
+pnpm e2e          # Playwright Fake 金路径（自动起 dev server，强制 Fake）
+npx playwright test --config=playwright.real.config.ts   # 真实 LLM 链路 + 穷举回归（需先起 dev server）
 ```
 
-默认账号见 `.env.example`（`jinyu` / `change-me`）。  
-**本地默认走真 LLM**（StepFun）；仅单测 / Playwright 强制 Fake。无 key 时才会回退 Fake。
+默认账号见 `.env.example`（`jinyu` / `change-me`，可用 `.env.local` 覆盖）。  
+**本地默认走真 LLM**（StepFun）；仅单测 / Playwright 强制 Fake。无 key 时才会回退 Fake（历史列表会标注「示例」）。
 
 ## 状态
 
-0→1 应用与 14 条 issue 对应能力已落地；领域单测 + E2E 金路径见上。
+0→1 应用与 14 条 issue 对应能力已落地；领域单测 + Fake E2E 金路径 + 真实 LLM 链路（含穷举回归）见上。

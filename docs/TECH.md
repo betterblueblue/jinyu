@@ -6,7 +6,7 @@ Source: 用户确认「Next.js + TS 全栈（推荐）」；细节由实现默�
 
 ## 约束（来自 PRD）
 
-- 可跑自动化测试（单测 + 一条 E2E，Fake LLM）
+- 可跑自动化测试（单测 + Fake E2E + 真实 LLM E2E + 穷举回归）
 - 可持久化 Report Document 快照
 - 可调 LLM（可替换 Fake / Real）
 - 可导出摘要图片
@@ -27,7 +27,7 @@ Source: 用户确认「Next.js + TS 全栈（推荐）」；细节由实现默�
 | 硬规则 / 编排 | 纯 TS 领域模块（可单测，不绑 React） | Gate / Orchestrator / Assembler 放 `src/domain` 或 `src/server` |
 | 摘要图 | **Satori + resvg-js**（或 `@vercel/og` 思路）优先；不行再退 Playwright 截卡片 DOM | 输出 PNG 字节流 |
 | 单测 | Vitest | 表驱动闸门、Normalizer、编排 Fake 路径 |
-| E2E | Playwright | 一条金路径：登录→填表→报告→下图→历史 |
+| E2E | Playwright | Fake 金路径（`e2e/`）+ 真实 LLM 链路（`e2e-real/`，含穷举输入矩阵回归 `exhaustive.spec.ts`） |
 | 配置 | `.env.local` + 示例 `.env.example` | 预置账号、LLM key、L1/L2 可文件配置 |
 
 ## LLM 接入（已拍板）
