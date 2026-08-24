@@ -101,4 +101,21 @@ describe("buildSummaryCardElement", () => {
     );
     expect(tree).not.toContain("八字契合");
   });
+
+  it("长风格描述（模型原文）完整进入元素树，不被截断或过滤", () => {
+    const longStyleFit =
+      "笔画简洁好写，读音清亮，自带书卷气的端庄质感，远离烂大街模板。同时字形疏朗、结构平稳，日常称呼朗朗上口，整体契合端庄耐看的默认方向，落笔不落俗套。";
+    const report = makeReport({
+      names: [
+        makeName({ fullName: "王语晏", givenName: "语晏", isPrimary: true, styleFit: longStyleFit }),
+        makeName({ fullName: "王清和", givenName: "清和", styleFit: longStyleFit }),
+      ],
+    });
+    const tree = JSON.stringify(buildSummaryCardElement(report));
+    // 长文本完整保留（整段原文在树里出现，未被截断）
+    expect(tree).toContain(longStyleFit);
+    // 且 styleFit 非空时 detailRows 不把它过滤掉
+    const rows = detailRows(report.names[0]!, false);
+    expect(rows.find((r) => r.term === "风格")?.def).toBe(longStyleFit);
+  });
 });
