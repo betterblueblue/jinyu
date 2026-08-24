@@ -2,7 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { NamingFormInput } from "@/domain/types";
+import type { NamingFormInput, StylePrototypeId } from "@/domain/types";
+import { STYLE_PROTOTYPES } from "@/config/style-prototypes";
 
 const STAGES = ["斟酌名字", "核对约束", "整理成文"] as const;
 
@@ -22,6 +23,7 @@ export function NamingForm() {
   );
   const [tabooChars, setTabooChars] = useState("");
   const [avoidPopular, setAvoidPopular] = useState(true);
+  const [stylePrototypeId, setStylePrototypeId] = useState<StylePrototypeId>("default_dignified");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [stageIdx, setStageIdx] = useState(0);
@@ -49,8 +51,7 @@ export function NamingForm() {
       generationChar: generationChar || undefined,
       generationPosition,
       tabooChars: tabooChars || undefined,
-      // 产品默认：端庄耐看；表单不再暴露风格选择
-      stylePrototypeId: "default_dignified",
+      stylePrototypeId,
       avoidPopular,
     }),
     [
@@ -66,6 +67,7 @@ export function NamingForm() {
       generationChar,
       generationPosition,
       tabooChars,
+      stylePrototypeId,
       avoidPopular,
     ],
   );
@@ -275,6 +277,28 @@ export function NamingForm() {
             </Field>
           </div>
         ) : null}
+      </section>
+
+      <section className="mt-6 rounded-sm border border-outline-variant/50 bg-surface/40 p-4 sm:p-5">
+        <h2 className="text-sm font-semibold tracking-[0.16em] text-paper">命名风格 · 可选</h2>
+        <p className="mb-4 mt-1 text-sm text-outline">
+          选定名字的气质方向；不选则默认端庄耐看。
+        </p>
+        <Field label="风格">
+          <select
+            value={stylePrototypeId}
+            onChange={(e) => setStylePrototypeId(e.target.value as StylePrototypeId)}
+            className="field-input"
+            name="stylePrototypeId"
+            data-testid="style-prototype"
+          >
+            {STYLE_PROTOTYPES.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name} — {p.subtitle}
+              </option>
+            ))}
+          </select>
+        </Field>
       </section>
 
       <section className="mt-6 rounded-sm border border-outline-variant/50 bg-surface/40 p-4 sm:p-5">
