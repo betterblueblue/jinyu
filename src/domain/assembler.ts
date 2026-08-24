@@ -166,13 +166,8 @@ export function assembleReport(input: AssembleInput): ReportDocument {
     .filter(Boolean)
     .join("\n");
 
+  // 只保留真实被排除的名字；没有真实排除项时不放占位条目（虚构内容误导用户）
   const notRecommended: EliminationNote[] = eliminated.slice(0, 12);
-  if (!notRecommended.length) {
-    notRecommended.push({
-      givenName: "常见网红模板",
-      reasons: ["为避免过于同质化的热门组合，这类名字已默认排除。"],
-    });
-  }
 
   return {
     id: nanoid(12),

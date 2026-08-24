@@ -160,20 +160,22 @@ export default async function ReportPage({
 
         <div className="ink-divider my-10" />
 
-        <section data-testid="report-not-recommended">
-          <h2 className="text-xs font-medium tracking-[0.22em] text-outline">不推荐说明</h2>
-          <ul className="mt-4 space-y-3">
-            {report.notRecommended.map((e, i) => (
-              <li
-                key={`${e.givenName}-${i}`}
-                className="border-l-2 border-outline-variant/50 pl-3 text-sm leading-relaxed text-on-surface-variant"
-              >
-                <span className="font-semibold tracking-wide text-gold line-through decoration-gold/60">{e.givenName}</span>
-                <span className="text-outline"> — {e.reasons.join("；")}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
+        {report.notRecommended.length ? (
+          <section data-testid="report-not-recommended">
+            <h2 className="text-xs font-medium tracking-[0.22em] text-outline">不推荐说明</h2>
+            <ul className="mt-4 space-y-3">
+              {report.notRecommended.map((e, i) => (
+                <li
+                  key={`${e.givenName}-${i}`}
+                  className="border-l-2 border-outline-variant/50 pl-3 text-sm leading-relaxed text-on-surface-variant"
+                >
+                  <span className="font-semibold tracking-wide text-gold line-through decoration-gold/60">{e.givenName}</span>
+                  <span className="text-outline"> — {e.reasons.join("；")}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
 
         {report.bazi ? (
           <>

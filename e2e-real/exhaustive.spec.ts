@@ -88,8 +88,8 @@ test("正常输入矩阵（真实 LLM）报告结构健康", async ({ request })
       check: (r, n) => {
         const male = r.overview.maleNames ?? [];
         const female = r.overview.femaleNames ?? [];
-        expect(male.filter((x) => female.includes(x)), `${n} 男/女重叠`).toEqual([]);
-        const gs = r.names.map((x) => x.givenName);
+        expect(male.filter((x: string) => female.includes(x)), `${n} 男/女重叠`).toEqual([]);
+        const gs = r.names.map((x: { givenName: string }) => x.givenName);
         expect(new Set(gs).size, `${n} 名字重复`).toBe(gs.length);
       },
     },
