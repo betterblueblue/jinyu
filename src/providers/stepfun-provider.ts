@@ -49,7 +49,7 @@ export class StepFunProvider implements CandidateProvider {
       '"meaning":""',
       '"origin":""',
       '"pitfalls":""',
-      '"styleFit":""',
+      '"styleFit":"该名与所选风格的具体呼应，两三字到一句，忌空话套话（如：温润端方/清朗利落/书卷气）"',
     ];
     if (req.baziEnabled) {
       candidateFields.push('"baziFit":"与生辰气质的呼应（一两句，温和不作定论）"');

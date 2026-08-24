@@ -43,10 +43,13 @@ export function rankSoft(
   scored.sort((a, b) => b.score - a.score);
 
   const ranked = scored.map((s) => {
+    // 保留模型原文 styleFit（更具体）；模型没给时才用风格原型兜底，避免全部套同一模板句
     const fit =
-      s.hits.length > 0
-        ? `与「${proto.name}」方向有呼应（${s.hits.join("、")}）`
-        : s.c.styleFit || `已尽量贴近「${proto.name}」；贴合有限时仍保留可用推荐。`;
+      s.c.styleFit && s.c.styleFit.trim()
+        ? s.c.styleFit.trim()
+        : s.hits.length > 0
+          ? `与「${proto.name}」方向有呼应（${s.hits.join("、")}）`
+          : `已尽量贴近「${proto.name}」；贴合有限时仍保留可用推荐。`;
     return { ...s.c, styleFit: fit };
   });
 

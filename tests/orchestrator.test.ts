@@ -1,8 +1,63 @@
 import { describe, expect, it } from "vitest";
 import { normalizeRequest } from "@/domain/normalizer";
 import { runGeneration } from "@/domain/orchestrator";
+import { rankSoft } from "@/domain/soft-ranker";
 import { FakeProvider } from "@/providers/fake-provider";
 import type { CandidateProvider } from "@/providers/types";
+import type { GatedCandidate, NormalizedRequest } from "@/domain/types";
+
+describe("rankSoft", () => {
+  it("保留模型原文 styleFit，不覆盖成模板句", () => {
+    const n = normalizeRequest({ surname: "王", gender: "male" });
+    expect(n.ok).toBe(true);
+    if (!n.ok) return;
+    const req: NormalizedRequest = n.value;
+
+    const cands: GatedCandidate[] = [
+      {
+        givenName: "清让",
+        fullName: "王清让",
+        genderLean: "male",
+        styleFit: "温润端方，谦和有礼",
+        meaning: "清正谦逊",
+        origin: "",
+      },
+      {
+        givenName: "知夏",
+        fullName: "王知夏",
+        genderLean: "male",
+        styleFit: "", // 模型没给 styleFit
+        meaning: "明朗温暖",
+        origin: "",
+      },
+    ];
+
+    const ranked = rankSoft(cands, req).ranked;
+    const byName = Object.fromEntries(ranked.map((c) => [c.givenName, c.styleFit]));
+    // 有原文 → 保留原文
+    expect(byName["清让"]).toBe("温润端方，谦和有礼");
+    // 无原文且命中关键词（meaning 含「端」不命中，但「端庄」关键词需字面）→ 走模板兜底
+    expect(byName["知夏"]).toMatch(/端庄耐看|贴近/);
+  });
+
+  it("无模型原文且未命中关键词时用贴近兜底", () => {
+    const n = normalizeRequest({ surname: "王", gender: "male" });
+    expect(n.ok).toBe(true);
+    if (!n.ok) return;
+    const cands: GatedCandidate[] = [
+      {
+        givenName: "云帆",
+        fullName: "王云帆",
+        genderLean: "male",
+        styleFit: "",
+        meaning: "开阔远大",
+        origin: "",
+      },
+    ];
+    const ranked = rankSoft(cands, n.value).ranked;
+    expect(ranked[0]!.styleFit).toMatch(/贴近|端庄耐看/);
+  });
+});
 
 describe("runGeneration", () => {
   it("happy path produces report with overview", async () => {
