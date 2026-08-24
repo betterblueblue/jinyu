@@ -3,6 +3,7 @@ import { redirect, notFound } from "next/navigation";
 import { isAuthenticated } from "@/auth/session";
 import { AppShell } from "@/components/AppShell";
 import { getReport } from "@/store/report-store";
+import type { NameDetail, ReportDocument } from "@/domain/types";
 
 export default async function ReportPage({
   params,
@@ -118,44 +119,42 @@ export default async function ReportPage({
 
         <section data-testid="report-names">
           <h2 className="text-xs font-medium tracking-[0.22em] text-outline">逐名详解</h2>
-          <div className="mt-6 space-y-8">
-            {report.names.map((n) => (
-              <div
-                key={n.fullName}
-                className={
-                  n.isPrimary
-                    ? "border-l-[3px] border-gold bg-gradient-to-r from-gold/[0.07] to-transparent pl-4"
-                    : "border-l-2 border-outline-variant/60 pl-4"
-                }
-              >
-                <h3 className="text-2xl font-semibold tracking-[0.2em] text-paper">
-                  {n.fullName}
-                  {n.isPrimary ? (
-                    <span className="ml-2 text-sm font-medium tracking-normal text-gold">
-                      首推
-                    </span>
-                  ) : null}
-                  {n.l2Hot ? (
-                    <span className="ml-2 text-sm tracking-normal text-outline">偏热门</span>
-                  ) : null}
-                </h3>
-                {n.pinyin ? (
-                  <p className="mt-1.5 text-sm tracking-[0.18em] text-outline" data-testid="name-pinyin">
-                    {n.pinyin}
-                  </p>
-                ) : null}
-                <dl className="mt-4 grid gap-3 text-sm leading-relaxed">
-                  <Item term="音韵" def={n.phonology} />
-                  <Item term="字形" def={n.glyph} />
-                  <Item term="寓意" def={n.meaning} />
-                  <Item term="出处" def={n.origin} />
-                  <Item term="避坑" def={n.pitfalls} />
-                  <Item term="风格" def={n.styleFit} />
-                  {report.bazi && n.baziFit ? <Item term="八字契合" def={n.baziFit} /> : null}
-                </dl>
-              </div>
-            ))}
-          </div>
+          {report.request.gender === "unknown" ? (
+            <>
+              {report.overview.maleNames?.length ? (
+                <div className="mt-6">
+                  <h3 className="text-sm font-semibold tracking-[0.16em] text-paper">男向名字</h3>
+                  <div className="mt-3 space-y-8">
+                    {report.overview.maleNames
+                      .map((full) => report.names.find((x) => x.fullName === full))
+                      .filter(Boolean)
+                      .map((n) => (
+                        <NameCard key={n!.fullName} n={n!} report={report} />
+                      ))}
+                  </div>
+                </div>
+              ) : null}
+              {report.overview.femaleNames?.length ? (
+                <div className="mt-8">
+                  <h3 className="text-sm font-semibold tracking-[0.16em] text-paper">女向名字</h3>
+                  <div className="mt-3 space-y-8">
+                    {report.overview.femaleNames
+                      .map((full) => report.names.find((x) => x.fullName === full))
+                      .filter(Boolean)
+                      .map((n) => (
+                        <NameCard key={n!.fullName} n={n!} report={report} />
+                      ))}
+                  </div>
+                </div>
+              ) : null}
+            </>
+          ) : (
+            <div className="mt-6 space-y-8">
+              {report.names.map((n) => (
+                <NameCard key={n.fullName} n={n} report={report} />
+              ))}
+            </div>
+          )}
           <p className="mt-6 text-xs leading-relaxed text-outline">{report.originDisclaimer}</p>
         </section>
 
@@ -205,6 +204,42 @@ export default async function ReportPage({
         </section>
       </article>
     </AppShell>
+  );
+}
+
+function NameCard({ n, report }: { n: NameDetail; report: ReportDocument }) {
+  return (
+    <div
+      className={
+        n.isPrimary
+          ? "border-l-[3px] border-gold bg-gradient-to-r from-gold/[0.07] to-transparent pl-4"
+          : "border-l-2 border-outline-variant/60 pl-4"
+      }
+    >
+      <h3 className="text-2xl font-semibold tracking-[0.2em] text-paper">
+        {n.fullName}
+        {n.isPrimary ? (
+          <span className="ml-2 text-sm font-medium tracking-normal text-gold">首推</span>
+        ) : null}
+        {n.l2Hot ? (
+          <span className="ml-2 text-sm tracking-normal text-outline">偏热门</span>
+        ) : null}
+      </h3>
+      {n.pinyin ? (
+        <p className="mt-1.5 text-sm tracking-[0.18em] text-outline" data-testid="name-pinyin">
+          {n.pinyin}
+        </p>
+      ) : null}
+      <dl className="mt-4 grid gap-3 text-sm leading-relaxed">
+        <Item term="音韵" def={n.phonology} />
+        <Item term="字形" def={n.glyph} />
+        <Item term="寓意" def={n.meaning} />
+        <Item term="出处" def={n.origin} />
+        <Item term="避坑" def={n.pitfalls} />
+        <Item term="风格" def={n.styleFit} />
+        {report.bazi && n.baziFit ? <Item term="八字契合" def={n.baziFit} /> : null}
+      </dl>
+    </div>
   );
 }
 

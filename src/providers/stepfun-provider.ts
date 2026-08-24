@@ -94,6 +94,9 @@ export class StepFunProvider implements CandidateProvider {
           count: req.gender === "unknown" ? 8 : 6,
           instruction:
             "请生成多个候选「名」（不含姓）。若有辈分字必须按位置包含。不要使用避讳字。最终只输出 JSON。" +
+            (req.gender === "unknown"
+              ? "性别未知：8 个候选里要有明确的男向、女向、中性三类，genderLean 分别填 male/female/neutral，不要全部填 neutral——至少各有 1~2 个明确的男向与女向名字，方便用户按实际性别收窄。"
+              : "") +
             (req.baziEnabled
               ? "每个候选的 JSON 对象必须包含 baziFit 字段，值为该名与生辰五行气质呼应的一两句；缺失则整个输出作废。生辰仅作温和参考，克制表述，不作五行用神铁口定论。"
               : ""),
