@@ -2,48 +2,48 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ============ 瑾瑜 · 青玉冷调 token ============
-   浅色（默认）: 青玉冷白底 + 墨青三阶文字 + 青玉/朱砂双点缀
-   深色: [data-theme="dark"] 深青墨，变量反向
+/* ============ 瑾瑜 · 天青釉 token ============
+   浅色（默认）: 釉白天青渐变底 + 深釉三阶文字 + 天青/铁足双点缀
+   深色: [data-theme="dark"] 深青釉，变量反向
    页面用语义色名（gold/cinnabar/paper/bg…），切主题自动变色 */
 
 :root {
   color-scheme: light;
-  /* 青玉冷白 */
-  --bg: oklch(0.973 0.004 157.2);
-  --surface: oklch(1 0 0);
-  --surface-mid: oklch(0.95 0.007 174.4);
-  /* 青墨三阶：浓墨青黑 / 正文青灰 / 辅助淡青灰 */
-  --fg: oklch(0.326 0.033 171.1);
-  --on-fg: oklch(0.985 0.004 157.2);
-  --body: oklch(0.432 0.019 171.8);
-  --muted: oklch(0.535 0.019 168);
-  --faint: oklch(0.647 0.019 164.3);
-  /* 细线与描边（青调） */
-  --border: oklch(0.918 0.009 161.3);
-  --border-strong: oklch(0.836 0.018 164.6);
-  /* 控件（冷白底 · 浅青玉描边） */
-  --control-bg: oklch(1 0 0);
-  --control-bg-hover: oklch(0.947 0.012 170);
-  --control-border: oklch(0.55 0.04 174 / 0.55);
-  --control-border-hover: oklch(0.55 0.05 174 / 0.8);
-  /* 青玉（主强调：首推 / 选中 / 链接 / 图标） */
-  --accent: oklch(0.491 0.055 173.8);
-  --accent-strong: oklch(0.424 0.049 174.2);
-  --accent-soft: oklch(0.947 0.011 167.8);
-  --on-accent: oklch(0.995 0.003 150);
-  --ring: oklch(0.491 0.055 173.8 / 0.35);
-  /* 朱砂（次强调：主按钮 / 必填星号 / 印章 / 提交） */
-  --seal: oklch(0.581 0.161 30.1);
-  --seal-strong: oklch(0.512 0.153 30.1);
-  --seal-soft: oklch(0.946 0.018 30.3);
-  --on-seal: oklch(0.995 0.003 150);
-  /* 印章色：浅色用朱砂（点睛），深色用亮青玉（与深底协调） */
+  /* 釉白底（天青釉渐变：顶部亮釉 → 底部深釉） */
+  --bg: oklch(0.955 0.012 168);
+  --surface: oklch(0.985 0.008 165);
+  --surface-mid: oklch(0.93 0.02 167);
+  /* 深釉三阶：浓深釉 / 正文青灰 / 辅助淡青灰 */
+  --fg: oklch(0.36 0.05 176);
+  --on-fg: oklch(0.985 0.008 165);
+  --body: oklch(0.46 0.035 176);
+  --muted: oklch(0.55 0.03 174);
+  --faint: oklch(0.64 0.025 172);
+  /* 细线与描边（釉青调） */
+  --border: oklch(0.9 0.02 166);
+  --border-strong: oklch(0.82 0.03 170);
+  /* 控件（釉白底 · 浅天青描边） */
+  --control-bg: oklch(0.99 0.005 165);
+  --control-bg-hover: oklch(0.93 0.015 168);
+  --control-border: oklch(0.62 0.05 175 / 0.5);
+  --control-border-hover: oklch(0.55 0.06 175 / 0.75);
+  /* 天青釉（主强调：首推 / 选中 / 链接 / 图标） */
+  --accent: oklch(0.52 0.06 178);
+  --accent-strong: oklch(0.45 0.055 178);
+  --accent-soft: oklch(0.94 0.02 170);
+  --on-accent: oklch(0.985 0.008 165);
+  --ring: oklch(0.52 0.06 178 / 0.35);
+  /* 铁足（次强调：主按钮 / 必填星号 / 印章 / 提交） */
+  --seal: oklch(0.5 0.06 62);
+  --seal-strong: oklch(0.42 0.055 62);
+  --seal-soft: oklch(0.95 0.015 65);
+  --on-seal: oklch(0.985 0.008 165);
+  /* 印章色：浅色用铁足（点睛），深色用亮天青（与深底协调） */
   --stamp: var(--seal);
   --on-stamp: var(--on-seal);
-  /* 阴影：近无，仅极淡浮起 */
-  --shadow: 0 1px 2px oklch(0.18 0.03 170 / 0.06), 0 12px 32px oklch(0.18 0.03 170 / 0.07);
-  --shadow-glow: 0 0 0 4px var(--seal-soft), 0 12px 28px oklch(0.581 0.161 30.1 / 0.22);
+  /* 阴影：近无，仅极淡浮起（釉面柔光） */
+  --shadow: 0 1px 2px oklch(0.2 0.03 175 / 0.06), 0 12px 32px oklch(0.2 0.03 175 / 0.08);
+  --shadow-glow: 0 0 0 4px var(--seal-soft), 0 12px 28px oklch(0.5 0.06 62 / 0.2);
   /* 纸张颗粒（数据 URI 噪点） */
   --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   --grain-opacity: 0.035;
@@ -52,38 +52,38 @@
 
 [data-theme="dark"] {
   color-scheme: dark;
-  /* 深青墨 */
-  --bg: oklch(0.229 0.021 174.5);
-  --surface: oklch(0.252 0.025 168.8);
-  --surface-mid: oklch(0.276 0.024 174.1);
-  /* 青墨三阶反向 */
-  --fg: oklch(0.954 0.01 164.9);
-  --on-fg: oklch(0.16 0.02 174);
-  --body: oklch(0.847 0.015 164.7);
-  --muted: oklch(0.75 0.026 166.7);
-  --faint: oklch(0.647 0.024 167);
-  --border: oklch(0.342 0.025 172.2);
-  --border-strong: oklch(0.408 0.029 172.3);
-  --control-bg: oklch(0.29 0.025 173);
-  --control-bg-hover: oklch(0.32 0.027 173);
-  --control-border: oklch(0.738 0.065 172.8 / 0.62);
-  --control-border-hover: oklch(0.738 0.065 172.8 / 0.85);
-  /* 青玉浅调 */
-  --accent: oklch(0.738 0.065 172.8);
-  --accent-strong: oklch(0.78 0.055 173);
-  --accent-soft: oklch(0.304 0.031 175.7);
-  --on-accent: oklch(0.16 0.02 174);
-  --ring: oklch(0.738 0.065 172.8 / 0.45);
-  /* 朱砂浅调 */
-  --seal: oklch(0.69 0.13 30.1);
-  --seal-strong: oklch(0.75 0.12 30);
-  --seal-soft: oklch(0.292 0.031 31.6);
-  --on-seal: oklch(0.16 0.02 174);
-  /* 深色下印章用亮青玉，与深底协调 */
+  /* 深青釉 */
+  --bg: oklch(0.24 0.025 176);
+  --surface: oklch(0.27 0.028 172);
+  --surface-mid: oklch(0.29 0.026 174);
+  /* 深釉三阶反向 */
+  --fg: oklch(0.95 0.015 168);
+  --on-fg: oklch(0.17 0.025 176);
+  --body: oklch(0.84 0.02 168);
+  --muted: oklch(0.74 0.025 170);
+  --faint: oklch(0.64 0.026 171);
+  --border: oklch(0.34 0.028 174);
+  --border-strong: oklch(0.4 0.03 174);
+  --control-bg: oklch(0.3 0.028 174);
+  --control-bg-hover: oklch(0.33 0.03 174);
+  --control-border: oklch(0.74 0.06 176 / 0.6);
+  --control-border-hover: oklch(0.74 0.06 176 / 0.85);
+  /* 亮天青 */
+  --accent: oklch(0.74 0.06 176);
+  --accent-strong: oklch(0.78 0.055 177);
+  --accent-soft: oklch(0.32 0.035 177);
+  --on-accent: oklch(0.17 0.025 176);
+  --ring: oklch(0.74 0.06 176 / 0.45);
+  /* 铁足浅调 */
+  --seal: oklch(0.72 0.07 65);
+  --seal-strong: oklch(0.78 0.065 65);
+  --seal-soft: oklch(0.3 0.03 64);
+  --on-seal: oklch(0.17 0.025 176);
+  /* 深色下印章用亮天青，与深底协调 */
   --stamp: var(--accent);
   --on-stamp: var(--on-accent);
   --shadow: 0 1px 2px oklch(0 0 0 / 0.4), 0 16px 40px oklch(0 0 0 / 0.35);
-  --shadow-glow: 0 0 0 4px var(--seal-soft), 0 12px 28px oklch(0.69 0.13 30.1 / 0.25);
+  --shadow-glow: 0 0 0 4px var(--seal-soft), 0 12px 28px oklch(0.72 0.07 65 / 0.22);
   --grain-opacity: 0.05;
   --grain-blend: screen;
 }
@@ -93,14 +93,22 @@ body {
   margin: 0;
   padding: 0;
   min-height: 100%;
+  /* 天青釉面渐变（浅色：釉白顶 → 天青底，通透；深色：深釉） */
   background-color: var(--bg);
+  background-image:
+    radial-gradient(90% 55% at 50% -8%, rgba(255,255,255,0.25) 0%, rgba(255,255,255,0) 50%),
+    linear-gradient(180deg, oklch(0.975 0.008 165) 0%, oklch(0.93 0.018 168) 45%, oklch(0.88 0.03 171) 100%);
+  background-attachment: fixed;
   color: var(--fg);
   font-family: "Noto Serif SC", "Source Han Serif SC", "Songti SC", serif;
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
 }
+[data-theme="dark"] body {
+  background-image: radial-gradient(90% 55% at 50% -8%, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0) 50%);
+}
 
-/* 纸张颗粒 + 极淡氛围光（浅色冷调 / 深色深青墨） */
+/* 釉面细微颗粒 + 极淡氛围光 */
 body::before {
   content: "";
   position: fixed;
@@ -120,7 +128,7 @@ body::after {
   background: radial-gradient(
     120% 90% at 50% 0%,
     transparent 45%,
-    oklch(0.326 0.033 171.1 / 0.04) 100%
+    oklch(0.36 0.05 176 / 0.05) 100%
   );
 }
 [data-theme="dark"] body::after {

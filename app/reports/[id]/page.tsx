@@ -49,13 +49,23 @@ export default async function ReportPage({
         <section data-testid="report-overview">
           <h2 className="text-xs font-medium tracking-[0.22em] text-outline">总览</h2>
           <div className="mt-4">
-            <p
-              className="name-hero text-[clamp(3.5rem,11vw,7.5rem)] font-black leading-none tracking-[0.16em] text-gold"
-              data-testid="primary-name"
-              style={{ textIndent: "0.16em" }}
+            <div
+              className="name-hero inline-block rounded-xl px-8 py-6"
+              style={{
+                background:
+                  "linear-gradient(160deg, oklch(0.92 0.02 170 / 0.5), oklch(0.85 0.035 173 / 0.55))",
+                border: "1px solid oklch(0.75 0.045 175 / 0.35)",
+                boxShadow: "inset 0 -8px 20px oklch(0.6 0.05 176 / 0.08), 0 12px 32px oklch(0.3 0.04 175 / 0.1)",
+              }}
             >
-              {report.overview.primaryName}
-            </p>
+              <p
+                className="text-[clamp(3.5rem,11vw,7.5rem)] font-black leading-none tracking-[0.16em] text-gold"
+                data-testid="primary-name"
+                style={{ textIndent: "0.16em" }}
+              >
+                {report.overview.primaryName}
+              </p>
+            </div>
             {(() => {
               const p = report.names.find((x) => x.fullName === report.overview.primaryName);
               return p?.pinyin ? (
