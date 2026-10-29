@@ -23,7 +23,7 @@ Source: 用户确认「Next.js + TS 全栈（推荐）」；细节由实现默�
 | 校验 | Zod | 表单与 API 边界共用 schema |
 | 会话 | 服务端 session + httpOnly cookie（可用 `iron-session` 或等价轻量方案） | 预置单账号；无 OAuth/注册 |
 | 存储 | **本地 JSON 文件**（`data/reports/*.json` + `data/index.json`） | 单用户足够；等价 SQLite 级快照持久化，免原生编译；可再迁 SQLite |
-| LLM 端口 | 自研 `CandidateProvider` 接口；`FakeProvider` 用于测试/CI；生产默认 **StepFun**（见下） | 闸门与 Provider 解耦 |
+| LLM 端口 | 自研 `CandidateProvider` 接口；`FakeProvider` 用于测试/CI；生产默认**本机 OpenAI 兼容网关**（见下） | 闸门与 Provider 解耦 |
 | 硬规则 / 编排 | 纯 TS 领域模块（可单测，不绑 React） | Gate / Orchestrator / Assembler 放 `src/domain` 或 `src/server` |
 | 摘要图 | **Satori + resvg-js**（或 `@vercel/og` 思路）优先；不行再退 Playwright 截卡片 DOM | 输出 PNG 字节流 |
 | 单测 | Vitest | 表驱动闸门、Normalizer、编排 Fake 路径 |
@@ -34,27 +34,27 @@ Source: 用户确认「Next.js + TS 全栈（推荐）」；细节由实现默�
 
 | 项 | 值 |
 |---|---|
-| 厂商 | **StepFun（阶跃）** |
+| 厂商 | **本机 OpenAI 兼容网关**（DSH magpie，`127.0.0.1:3425`） |
 | 协议 | **OpenAI 兼容 Chat Completions**（首选实现） |
-| Base URL | `https://api.stepfun.com/step_plan/v1` |
-| Chat Completions | `https://api.stepfun.com/step_plan/v1/chat/completions` |
-| Messages（Claude 风格，备选） | `https://api.stepfun.com/step_plan/v1/messages` |
-| 默认模型 | **`step-3.7-flash`** |
+| Base URL | `http://127.0.0.1:3425/v1` |
+| Chat Completions | `http://127.0.0.1:3425/v1/chat/completions` |
+| 默认模型 | **`opendesign/deepseek-v4.1-flash`** |
 | API Key | 仅存 `.env.local` 的 `LLM_API_KEY`，**禁止**写入代码/文档/issue |
+| 备用通道 | StepFun 官方（`https://api.stepfun.com/step_plan/v1` · `step-3.7-flash`），换回只改三个 env |
 
 环境变量约定：
 
 ```bash
-LLM_PROVIDER=stepfun
-LLM_BASE_URL=https://api.stepfun.com/step_plan/v1
+LLM_PROVIDER=magpie
+LLM_BASE_URL=http://127.0.0.1:3425/v1
 LLM_API_KEY=...          # 仅 .env.local
-LLM_MODEL=step-3.7-flash
+LLM_MODEL=opendesign/deepseek-v4.1-flash
 LLM_USE_FAKE=false       # 本地默认 false=真 LLM；仅 CI/单测/E2E 设 true
 ```
 
 实现约定：
 
-1. `RealProvider` 按 **OpenAI Chat Completions** 调 `POST {LLM_BASE_URL}/chat/completions`（base 已含 `/step_plan/v1`）。
+1. `RealProvider` 按 **OpenAI Chat Completions** 调 `POST {LLM_BASE_URL}/chat/completions`（base 已含 `/v1`）。
 2. **产品/本地默认走真 LLM**；`LLM_USE_FAKE=true`、单测环境、或无 `LLM_API_KEY` 时才用 `FakeProvider`。
 3. Playwright e2e 在 webServer env 中强制 `LLM_USE_FAKE=true`，不耗额度。
 4. Claude Messages 端点作为备选，MVP 不必实现，除非 OpenAI 兼容路径不通。

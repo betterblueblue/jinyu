@@ -18,13 +18,14 @@ const TOTAL_TIMEOUT_MS = 240_000;
 const IDLE_TIMEOUT_MS = 90_000;
 
 /**
- * StepFun OpenAI-compatible Chat Completions provider (streaming).
+ * OpenAI 兼容 Chat Completions provider（流式）。
+ * 当前接本机网关（`opendesign/deepseek-v4.1-flash`），也可换回 StepFun 等同类网关。
  *
  * 推理模型说明：模型会先产生一段隐藏推理（计入 max_tokens 预算但不返回在 content 里），
  * 因此使用 response_format=json_object + 短思考 prompt 压低推理长度，保证最终 JSON 有足够预算。
  */
 export class StepFunProvider implements CandidateProvider {
-  readonly name = "stepfun";
+  readonly name = process.env.LLM_PROVIDER?.trim() || "stepfun";
 
   constructor(
     private readonly opts: {
@@ -212,7 +213,7 @@ export class StepFunProvider implements CandidateProvider {
             if (payload === "[DONE]") continue;
             let ev: {
               choices?: {
-                delta?: { reasoning_content?: string; content?: string };
+                delta?: { reasoning_content?: string; reasoning?: string; content?: string };
                 finish_reason?: string | null;
               }[];
             };
@@ -222,7 +223,8 @@ export class StepFunProvider implements CandidateProvider {
               continue;
             }
             const delta = ev.choices?.[0]?.delta;
-            if (delta?.reasoning_content) onThinking?.(delta.reasoning_content);
+            const thinking = delta?.reasoning_content ?? delta?.reasoning;
+            if (thinking) onThinking?.(thinking);
             if (delta?.content) content += delta.content;
             if (ev.choices?.[0]?.finish_reason) {
               finishReason = ev.choices[0].finish_reason;

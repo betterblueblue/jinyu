@@ -17,8 +17,8 @@ export function createCandidateProvider(): CandidateProvider {
     return new FakeProvider("default");
   }
 
-  const baseUrl = process.env.LLM_BASE_URL ?? "https://api.stepfun.com/step_plan/v1";
+  const baseUrl = process.env.LLM_BASE_URL ?? "http://127.0.0.1:3425/v1";
   const apiKey = process.env.LLM_API_KEY!;
-  const model = process.env.LLM_MODEL ?? "step-3.7-flash";
+  const model = process.env.LLM_MODEL ?? "opendesign/deepseek-v4.1-flash";
   return new StepFunProvider({ baseUrl, apiKey, model });
 }

@@ -12,7 +12,7 @@
 
 **Next.js（App Router）+ TypeScript** 全栈 · 本地 JSON 报告快照 · Zod · Vitest · Playwright E2E · Fake/Real LLM 端口 · 摘要图（Satori 优先）。
 
-**真 LLM**：StepFun · 模型 `step-3.7-flash` · OpenAI 兼容 Chat Completions（`LLM_BASE_URL` + `LLM_API_KEY`，见 `docs/TECH.md` 与 `.env.example`）。
+**真 LLM**：本机 OpenAI 兼容网关 · 模型 `opendesign/deepseek-v4.1-flash` · Chat Completions（`LLM_BASE_URL` + `LLM_API_KEY`，见 `docs/TECH.md` 与 `.env.example`）。
 
 细节与目录约定见 `docs/TECH.md`。
 
@@ -35,7 +35,7 @@ npx playwright test --config=playwright.real.config.ts   # 真实 LLM 链路 + �
 ```
 
 默认账号见 `.env.example`（`jinyu` / `change-me`，可用 `.env.local` 覆盖）。  
-**本地默认走真 LLM**（StepFun）；仅单测 / Playwright 强制 Fake。无 key 时才会回退 Fake（历史列表会标注「示例」）。
+**本地默认走真 LLM**（本机网关）；仅单测 / Playwright 强制 Fake。无 key 时才会回退 Fake（历史列表会标注「示例」）。
 
 ## 状态
 
