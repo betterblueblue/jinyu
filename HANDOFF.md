@@ -103,7 +103,7 @@ app/live/page.tsx              # 登录校验 + 渲染 LiveClient
 app/live/live-client.tsx       # 全部逻辑（状态机/SSE/存图）
 app/live/live.css              # 四套皮肤变量 + 竖屏版式
 app/api/reports/[id]/route.ts  # 新增：返回报告 JSON（/api/generate 只回 reportId）
-public/skins/bamboo-paper.webp # 竹兰背景，28KB
+public/skins/bamboo-paper.webp # 竹兰背景，25KB（底部留白版，2026-10-30 换）
 tools/fit-window.ps1           # 把浏览器窗口校正成精确 9:16 客户区
 启动直播台.bat                  # 直播启动器（ASCII 编码，自动找 Edge/Chrome）
 ```
