@@ -123,7 +123,7 @@ describe("本地查表", () => {
 describe("分析拼装", () => {
   const base = {
     headline: "张伟有一处真麻烦。",
-    goodPoints: ["两个字都在常用字里，填表不会卡。"],
+    goodPoints: ["「伟」取盛大、担当之义，意思指向明确。"],
     issues: [
       { kind: "meaning", severity: "hard", text: "名字里挂着「伟」这个大字，一辈子都得撑住它。", hint: "换个不喊口号的字。" },
     ],
@@ -186,7 +186,7 @@ describe("分析拼装", () => {
       { fullName: "林知远", gender: "male" },
       providerReturning({
         headline: "林知远挑不出毛病。",
-        goodPoints: ["三个字都在常用字里。"],
+        goodPoints: ["名字里的字面意思连起来是清楚的。"],
         issues: [],
         citations: [],
         closing: "要往前走一步是在贴合上。",
@@ -200,6 +200,53 @@ describe("分析拼装", () => {
       expect(out.result.fitAngle).toContain("林");
     }
   });
+  it("只有一条优点时照常保留，不补位凑数", async () => {
+    const out = await runAnalysis(
+      { fullName: "高登科", gender: "male" },
+      providerReturning({
+        ...base,
+        goodPoints: ["「登科」是旧时科举中第的说法，指向很明确。"],
+      }),
+    );
+    expect(out.ok).toBe(true);
+    if (out.ok) {
+      expect(out.result.goodPoints).toHaveLength(1);
+      expect(out.result.goodPoints[0]).toContain("登科");
+    }
+  });
+
+  it("没有优点时保持空数组，不造占位内容", async () => {
+    const out = await runAnalysis(
+      { fullName: "高登科", gender: "male" },
+      providerReturning({ ...base, goodPoints: [] }),
+    );
+    expect(out.ok).toBe(true);
+    if (out.ok) expect(out.result.goodPoints).toEqual([]);
+  });
+
+  it("确有误读/书写问题时，仍留在值得看看的地方", async () => {
+    const out = await runAnalysis(
+      { fullName: "高登科", gender: "male" },
+      providerReturning({
+        ...base,
+        goodPoints: [],
+        issues: [
+          {
+            kind: "glyph",
+            severity: "cost",
+            text: "「科」在口语里常被听成「课」，报名字时要补一句写法。",
+            hint: "换成不容易听混的字会省事一点。",
+          },
+        ],
+      }),
+    );
+    expect(out.ok).toBe(true);
+    if (out.ok) {
+      expect(out.result.verdict).toBe("cost");
+      expect(out.result.issues.some((i) => i.text.includes("科"))).toBe(true);
+    }
+  });
+
   it("兜底结论的数量跟问题条数一致：一条就说一处", async () => {
     const out = await runAnalysis(
       { fullName: "张伟", gender: "male" },
@@ -229,7 +276,7 @@ describe("分析拼装", () => {
       { fullName: "张若曦", gender: "female" },
       providerReturning({
         headline: "张若曦没有硬伤。",
-        goodPoints: ["三个字都在常用字里。"],
+        goodPoints: ["名字里的字面意思连起来是清楚的。"],
         issues: [
           { kind: "glyph", severity: "cost", text: "「曦」20 画，整个名字 36 画，写起来费劲。" },
         ],

@@ -58,9 +58,9 @@ export class FakeAnalysisProvider implements AnalysisProvider {
     const { fullName, givenName } = input;
     return {
       headline: `${fullName}这个名字没有硬伤，能不能更好听见人。`,
+      // 示例模式不联网，也不假装看得出具体字的含义：这里只说明正式模式会写什么
       goodPoints: [
-        `三个字都在常用字里，办证、买票、打名字都不会卡。`,
-        `读音连起来顺，不用刻意记。`,
+        "示例模式：这里会写这个名字里具体字的含义、组合起来的意思，或是有依据的出处；当前没有接入模型，不做判断。",
       ],
       issues: [
         {
