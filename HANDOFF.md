@@ -164,21 +164,33 @@ bat 里 URL 写死局域网 IP `http://192.168.31.211:9000/live`（直播在另�
 | 真实生成（正式页） | 手动 + Playwright | 「沈静嘉」「陈峻岩」等，16–25s |
 | 真实生成（直播页） | Playwright 点「开始取名」 | 「苏清晏」「苏知微」「苏婉仪」等 |
 | 存图 | Playwright 拦截下载 | 1080×2068 / 2208 / 2240，四套皮肤各自配色 |
-| 历史筛选 | `/history` `/history?src=live` `/history?src=formal` | 144 / 16 / 128（按当前 data 计数；旧版记的 140/14/126 已被新数据覆盖） |
+| 历史筛选 | `/history` `/history?src=live` `/history?src=formal` | 清理后 **129 / 0 / 129**（清理前 144 / 16 / 128） |
 | 窗口 9:16 | `cmd /c 启动直播台.bat` | `Client area: 576 x 1024 ratio 0.5625` |
 | 缩放适配 | 576×1024 / 1280×720 / 1080×1920 | `fitW/fitH` 全 true，横屏两侧纸色不裁切 |
 
 ### 数据现状
 
-`data/index.json` 与 `data/reports/` 各 **144** 条（2026-10-30 实测）。`source` 分布：
+`data/index.json` 与 `data/reports/` 各 **129** 条，**全部按 formal 处理**（2026-10-30 清理后实测）。
 
-| source | 条数 |
-|---|---|
-| `live` | 16 |
-| `formal` | 4 |
-| 无该字段（按 `formal` 处理） | 124 |
+2026-10-30 清掉过 16 条 `source=live` 的直播测试记录，没有删，挪到了：
 
-所以 `/history` 三个 tab 现在的实际数字是**全部 144 / 正式取名 128 / 直播取名 16**（124 条旧数据靠缺省归进 formal）。里面含测试生成的条目，未清理。
+```
+data/_trash/live-2026-10-30T06-53-46/
+  ├─ 16 个 <id>.json       # 原报告
+  ├─ index-removed.json     # 被移除的 16 条索引
+  └─ index-before.json      # 清理前的完整索引（兜底）
+```
+
+要恢复就把 `index-removed.json` 合并回 `index.json`，16 个 json 挪回 `data/reports/`。
+
+所以现在 `/history` 是 **全部 129 / 正式取名 129 / 直播取名 0**。剩下条目按 provider 分：
+
+| providerName | 条数 | 说明 |
+|---|---|---|
+| `fake` | 19 | **全是赵姓男的测试垃圾**，每跑一次 `pnpm test` 多一条，原因见 Pitfalls |
+| `magpie` | 5 | 本机网关真跑 |
+| `stepfun` | 16 | 旧 StepFun 时代真跑 |
+| 空（没该字段） | 89 | 更早的数据 |
 
 ---
 
@@ -200,24 +212,24 @@ bat 里 URL 写死局域网 IP `http://192.168.31.211:9000/live`（直播在另�
 | `a917005` | 报告 `source` 分源 + `GET /api/reports/[id]` + `/history` 三 tab |
 | `d37fcf3` | 生成入口透传 source + 直播未知性别男女各 3 个 |
 | `25cbf5c` | 直播取名台 `/live`（四皮肤 + 缩放 + 存图 + 启动器 + fit-window） |
-| 第 4 个（本次） | 本文件更新 |
+| `5e63762` | HANDOFF 补六选 + 修正过期数字 |
+| 第 5 个 | HANDOFF 去掉满屏/榜单待办，记录数据清理与测试污染 bug |
 
 再往前 `5f681c1` 是 change-impact 目录改名。
 
 ### Needs user decision
 
-- 直播页要不要做「满屏模式」（去版框、收边距、放大字）或「榜单态」（一屏 8–10 行名字 + 评语）
+- `fake` 那 19 条测试垃圾要不要也挪进 `data/_trash/`
 - 卡片上兰花压字要不要彻底解决（需 9:19 卡片专用背景）
-- `data/` 里 16 条直播测试报告要不要清理
 - Next 15.1.0 的安全告警要不要升级
 
 ---
 
 ## 4. Next steps (ordered)
 
-1. **直播体验优化**（用户已提过方向）
-   - 满屏模式：隐藏 `.frame`、padding 从 `92/76/250` 收到 `56/36/140`、字号 +15%
-   - 榜单态：一屏列 8–10 行「名字 + 分数 + 一句评语」，滚动展示，对标同类直播间
+1. **修 store 的测试污染**（真 bug，优先）
+   - `src/store/report-store.ts:5` 在模块顶层就把 `DATA_DIR` 求值完了，`tests/store.test.ts` 却在 `beforeEach` 才设 `JINYU_DATA_DIR`，来不及 → 每次 `pnpm test` 往真实 `data/` 塞一条「赵 / 男 / fake」
+   - 改法：`DATA_DIR` 改成函数、调用时读 env（以后任何测试都能用 env 隔离）；补一条断言防回退
 
 2. **直播档 prompt**（可选）
    - 现在标签是拼出来的（`双字名 · 避开网红名 · 女向`）
@@ -244,6 +256,7 @@ bat 里 URL 写死局域网 IP `http://192.168.31.211:9000/live`（直播在另�
 | 假设页面在 1080×1920 下好看就够了 | 直播窗口是 576×1024 或更小，必须在小窗口验证 |
 | 提交 `.env.local` | 含真 key，gitignored |
 | write 工具报 `ReplaceFileW EIO` | 文件被占用时会发生；改用 PowerShell `[System.IO.File]::WriteAllText` 即可 |
+| 以为测试里的 `JINYU_DATA_DIR` 能隔离数据 | `report-store.ts` 的 `DATA_DIR` 是模块顶层常量，`beforeEach` 里设 env 已经晚了，测试会写进真实 `data/`。已积 19 条赵男 fake 记录 |
 
 ### Useful commands
 
@@ -264,11 +277,11 @@ node scripts/e2e-real-llm.mjs    # 需 dev server
 | Item | Value |
 |---|---|
 | Path | `E:\agent\jinyu` |
-| Git | 仓库 + remote，`main` 分支，工作区干净，最近 4 个 commit 见上 |
+| Git | 仓库 + remote，`main` 分支，工作区干净，最近 5 个 commit 见上 |
 | Package manager | pnpm |
 | Dev server | 9000 端口（本次会话实测已在跑，PID 23396）；否则手动 `pnpm dev` / `.\start-dev.ps1` |
 | 本机局域网 IP | `192.168.31.211`（DHCP，会变） |
-| 数据 | `data/index.json` 144 条（live 16 / formal 128，其中 124 条靠缺省算 formal） |
+| 数据 | `data/index.json` 129 条，全部按 formal；16 条直播记录在 `data/_trash/` 可恢复 |
 | 用户密钥 | `.env.local`（不要打印、不要提交） |
 | 不要删 | `docs/*`、`issues/*`、用户 `.env.local`、`data/`、`public/skins/` |
 
