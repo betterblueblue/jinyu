@@ -104,15 +104,25 @@ function verdictFrom(issues: NameIssue[]): Verdict {
   return "fit";
 }
 
-function fallbackHeadline(verdict: Verdict, fullName: string): string {
+const CN_COUNT = ["", "一", "两", "三", "四", "五"];
+
+/** 兜底文案里的数量必须跟实际问题条数一致，不能写死「两处」 */
+function countPhrase(n: number): string {
+  return n >= 1 && n <= 5 ? `${CN_COUNT[n]}处` : `${n} 处`;
+}
+
+function fallbackHeadline(verdict: Verdict, fullName: string, issueCount: number): string {
   if (verdict === "hard") return `${fullName}这个名字有一处真麻烦，其余部分倒是不用动。`;
-  if (verdict === "cost") return `${fullName}没有硬伤，但有两处代价，叫一辈子都要付。`;
+  if (verdict === "cost") {
+    return `${fullName}没有硬伤，但${countPhrase(issueCount || 1)}代价，叫一辈子都要付。`;
+  }
   return `${fullName}挑不出毛病，真要往前走一步是在「贴不贴这个姓」上。`;
 }
 
 function fallbackClosing(verdict: Verdict, split: { surname: string; givenName: string }): string {
   if (verdict === "hard") return "这一处不改会一直跟着，剩下的字可以留着。";
-  if (verdict === "cost") return `想改的话，动末字就够，「${split.surname}」和头一个字不用碰。`;
+  // 不假定该动的是末字：有的问题出在头一个字上，具体动哪个交给模型写的句子
+  if (verdict === "cost") return `想改的话，动名字里的一个字就够，「${split.surname}」不用碰。`;
   return `名字本身没问题，差的是它跟「${split.surname}」还没长在一起。`;
 }
 
@@ -215,9 +225,9 @@ export async function runAnalysis(
 
   // ---- 文案：模型写的，但要过规则 ----
   let headline = cleanLine(raw.headline ?? "", 70);
-  if (!headline || isBannedVerdict(headline)) headline = fallbackHeadline(verdict, input.fullName);
+  if (!headline || isBannedVerdict(headline)) headline = fallbackHeadline(verdict, input.fullName, issues.length);
   if (verdict === "hard" && /(没有硬伤|没问题|挑不出)/.test(headline)) {
-    headline = fallbackHeadline(verdict, input.fullName);
+    headline = fallbackHeadline(verdict, input.fullName, issues.length);
   }
 
   let closing = cleanLine(raw.closing ?? "", 70);

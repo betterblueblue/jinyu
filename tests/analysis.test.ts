@@ -200,6 +200,29 @@ describe("分析拼装", () => {
       expect(out.result.fitAngle).toContain("林");
     }
   });
+  it("兜底结论的数量跟问题条数一致：一条就说一处", async () => {
+    const out = await runAnalysis(
+      { fullName: "张伟", gender: "male" },
+      providerReturning({
+        ...base,
+        headline: "综合来看，这个名字还不错。", // 含禁词，必被换掉
+        issues: [
+          {
+            kind: "meaning",
+            severity: "cost",
+            text: "「伟」是用得最多的字之一，同班同届都容易撞上。",
+            hint: "换一个没那么挤的字。",
+          },
+        ],
+      }),
+    );
+    expect(out.ok).toBe(true);
+    if (out.ok) {
+      expect(out.result.verdict).toBe("cost");
+      expect(out.result.headline).toContain("一处代价");
+      expect(out.result.headline).not.toContain("两处");
+    }
+  });
 });
 
 describe("输入校验", () => {
