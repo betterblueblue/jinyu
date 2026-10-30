@@ -551,13 +551,6 @@
   padding-left: 0.3em;
   line-height: 1;
 }
-.live-stage .go-hint {
-  font-family: "Noto Sans SC", "PingFang SC", system-ui, sans-serif;
-  font-size: 22px;
-  font-weight: 300;
-  letter-spacing: 0.16em;
-  opacity: 0.62;
-}
 .live-stage .go:hover {
   filter: brightness(1.15);
 }

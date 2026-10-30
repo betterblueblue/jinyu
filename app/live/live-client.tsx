@@ -757,9 +757,6 @@ export function LiveClient() {
                 disabled={!curSurname}
               >
                 <span className="go-main">开始取名</span>
-                <span className="go-hint">
-                  {curSurname ? `为「${curSurname}」出名字 · 回车 / 空格` : "先填姓氏"}
-                </span>
               </button>
 
               <button type="button" className="extra-bar" onClick={() => setDrawerOpen(true)}>
