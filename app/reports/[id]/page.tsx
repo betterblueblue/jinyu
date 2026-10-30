@@ -194,7 +194,11 @@ export default async function ReportPage({
               <h2 className="text-xs font-medium tracking-[0.22em] text-outline">命理摘要（可选）</h2>
               <p className="mt-4 text-lg tracking-widest text-gold">{report.bazi.pillarsText}</p>
               <p className="mt-2 text-xs text-outline">
-                精度：{report.bazi.precision === "six_limited" ? "六字 · 未填时辰" : "八字 · 按节气排盘"}
+                {report.bazi.engine === "lunar-javascript" ? (
+                  <>精度：{report.bazi.precision === "six_limited" ? "六字 · 未填时辰" : "八字 · 按节气排盘"}</>
+                ) : (
+                  <>旧版示意排盘 · 干支由早期版本生成，未按历法计算，不可作为排盘依据</>
+                )}
               </p>
               <ul className="mt-3 space-y-1 text-sm text-on-surface-variant">
                 {report.bazi.notes.map((n) => (

@@ -43,6 +43,11 @@ export class StepFunProvider implements CandidateProvider {
   ): Promise<RawCandidate[]> {
     const liveUnknownSix = Boolean(options?.liveUnknownSix && req.gender === "unknown");
     const proto = getStylePrototype(req.stylePrototypeId);
+    // 四柱先算好再交给模型：模型只解释，不自己推干支
+    const bazi = req.baziEnabled ? buildBaziSummary(req) : null;
+    const baziSummary = bazi && bazi.ok ? bazi.summary : null;
+    const baziPillars = baziSummary?.pillarsText;
+    const baziUncertain = Boolean(baziSummary?.notes.some((n) => n.includes("可能为")));
     const candidateFields = [
       '"givenName":"名不含姓"',
       liveUnknownSix ? '"genderLean":"male|female"' : '"genderLean":"male|female|neutral"',
@@ -91,6 +96,9 @@ export class StepFunProvider implements CandidateProvider {
                 baziEnabled: true,
                 birthDate: req.birthDate,
                 birthHour: req.birthHour || undefined,
+                baziPillars,
+                baziPrecision: baziSummary?.precision,
+                ...(baziUncertain ? { baziUncertain: true } : {}),
               }
             : {}),
           attempt,
@@ -103,7 +111,7 @@ export class StepFunProvider implements CandidateProvider {
                 ? "性别未知：8 个候选里要有明确的男向、女向、中性三类，genderLean 分别填 male/female/neutral，不要全部填 neutral——至少各有 1~2 个明确的男向与女向名字，方便用户按实际性别收窄。"
                 : "") +
             (req.baziEnabled
-              ? "每个候选的 JSON 对象必须包含 baziFit 字段，值为该名与生辰五行气质呼应的一两句；缺失则整个输出作废。生辰仅作温和参考，克制表述，不作五行用神铁口定论。"
+              ? "每个候选的 JSON 对象必须包含 baziFit 字段：基于给定的 baziPillars 解释该名与生辰气质的呼应，不要自行推算或改写干支；baziPillars 缺失时只作季节层面的温和提醒。若 baziUncertain 为 true，说明柱子可能跨立春/节气或跨日，baziFit 必须写明这种不确定，不得给单一结论。生辰仅作温和参考，克制表述，不作五行用神铁口定论。"
               : ""),
         },
         null,
@@ -135,15 +143,11 @@ export class StepFunProvider implements CandidateProvider {
       }
     }
 
-    // 兜底：开启八字时若模型漏了 baziFit，用本地排盘的示意柱补上（克制表述）
-    if (req.baziEnabled && list.length > 0) {
-      const bazi = buildBaziSummary(req);
-      const pillars = bazi.ok && bazi.summary ? bazi.summary.pillarsText : undefined;
-      if (pillars) {
-        for (const c of list) {
-          if (!c.baziFit) {
-            c.baziFit = `四柱为${pillars}，取名字与生辰气质相呼应者，可结合家庭偏好参考；不作铁口定论。`;
-          }
+    // 兜底：开启八字时若模型漏了 baziFit，用已算好的四柱补上（克制表述）
+    if (req.baziEnabled && list.length > 0 && baziPillars) {
+      for (const c of list) {
+        if (!c.baziFit) {
+          c.baziFit = `四柱为${baziPillars}，取名字与生辰气质相呼应者，可结合家庭偏好参考；不作铁口定论。`;
         }
       }
     }

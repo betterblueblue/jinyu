@@ -8,24 +8,24 @@ export type BaziResult =
 /**
  * Optional, restrained bazi summary. No iron-mouth / 用神定论 language.
  *
- * 四柱由 lunar-javascript 按真实历法计算（年柱以立春、月柱以节气为界），
- * 不再用哈希拼示意干支；模型只负责对已算好的柱做克制解释。
+ * 四柱由 lunar-javascript 按真实历法计算（年柱以立春、月柱以节气为界）。
+ * 旧报告由哈希拼干支生成，没有 engine 字段，报告页据此区分，不能套用新标签。
  */
 
-/** 十二时辰 → 代表时刻（取每段中点；子时取 00:30 属早子时） */
-const SHICHEN_MID: Record<string, [number, number]> = {
-  子: [0, 30],
-  丑: [2, 0],
-  寅: [4, 0],
-  卯: [6, 0],
-  辰: [8, 0],
-  巳: [10, 0],
-  午: [12, 0],
-  未: [14, 0],
-  申: [16, 0],
-  酉: [18, 0],
-  戌: [20, 0],
-  亥: [22, 0],
+/** 十二时辰 → 代表时刻（取每段中点；子时取 00:30 属早子时）与起止小时 */
+const SHICHEN: Record<string, { mid: [number, number]; start: number; end: number }> = {
+  子: { mid: [0, 30], start: 23, end: 1 },
+  丑: { mid: [2, 0], start: 1, end: 3 },
+  寅: { mid: [4, 0], start: 3, end: 5 },
+  卯: { mid: [6, 0], start: 5, end: 7 },
+  辰: { mid: [8, 0], start: 7, end: 9 },
+  巳: { mid: [10, 0], start: 9, end: 11 },
+  午: { mid: [12, 0], start: 11, end: 13 },
+  未: { mid: [14, 0], start: 13, end: 15 },
+  申: { mid: [16, 0], start: 15, end: 17 },
+  酉: { mid: [18, 0], start: 17, end: 19 },
+  戌: { mid: [20, 0], start: 19, end: 21 },
+  亥: { mid: [22, 0], start: 21, end: 23 },
 };
 
 const WUXING = ["木", "火", "土", "金", "水"] as const;
@@ -33,10 +33,52 @@ const WUXING = ["木", "火", "土", "金", "水"] as const;
 interface HourPoint {
   hour: number;
   minute: number;
-  /** 用于提示的精度说明，例如「巳时 中点 10:00」 */
-  note: string;
-  /** 是否只精确到时辰 */
+  /** 只精确到时辰（直播台传「巳时 9–11」这类文本）时为 true */
   coarse: boolean;
+  branch?: string;
+  /** 该时辰覆盖的起止小时，用于查年月柱是否跨界 */
+  range?: { from: number; to: number };
+}
+
+interface Chart {
+  year: string;
+  month: string;
+  day: string;
+  time: string;
+  /** 各柱的干、支五行，顺序：年 月 日 时 */
+  wuxing: string[];
+}
+
+function chartAt(
+  date: { year: number; month: number; day: number },
+  hour: number,
+  minute: number,
+): Chart {
+  const eightChar = Solar.fromYmdHms(
+    date.year,
+    date.month,
+    date.day,
+    hour,
+    minute,
+    0,
+  )
+    .getLunar()
+    .getEightChar();
+  // 夜子时（23 点后）日柱归次日，与 baby-name-skill 时辰表的早晚子时约定一致
+  eightChar.setSect(1);
+
+  return {
+    year: eightChar.getYear(),
+    month: eightChar.getMonth(),
+    day: eightChar.getDay(),
+    time: eightChar.getTime(),
+    wuxing: [
+      eightChar.getYearWuXing(),
+      eightChar.getMonthWuXing(),
+      eightChar.getDayWuXing(),
+      eightChar.getTimeWuXing(),
+    ],
+  };
 }
 
 /** 直播台传的是「巳时 9–11」这类文本，正式页可能传 09:00 或 9，两者都要认。 */
@@ -44,16 +86,15 @@ function parseBirthHour(raw?: string): HourPoint | null {
   const value = raw?.trim();
   if (!value) return null;
 
-  const branchChar = [...value].find((ch) => ch in SHICHEN_MID);
+  const branchChar = [...value].find((ch) => ch in SHICHEN);
   if (branchChar) {
-    const [hour, minute] = SHICHEN_MID[branchChar];
-    const hh = String(hour).padStart(2, "0");
-    const mm = String(minute).padStart(2, "0");
+    const { mid, start, end } = SHICHEN[branchChar];
     return {
-      hour,
-      minute,
-      note: `${branchChar}时按中点 ${hh}:${mm} 估算，时柱精度受时辰粒度限制`,
+      hour: mid[0],
+      minute: mid[1],
       coarse: true,
+      branch: branchChar,
+      range: { from: start, to: end },
     };
   }
 
@@ -62,12 +103,7 @@ function parseBirthHour(raw?: string): HourPoint | null {
   const hour = Number(match[1]);
   const minute = match[2] ? Number(match[2]) : 0;
   if (!Number.isFinite(hour) || hour > 23 || minute > 59) return null;
-  return {
-    hour,
-    minute,
-    note: `时辰按 ${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")} 计算`,
-    coarse: false,
-  };
+  return { hour, minute, coarse: false };
 }
 
 function parseBirthDate(raw?: string): { year: number; month: number; day: number } | null {
@@ -85,7 +121,29 @@ function parseBirthDate(raw?: string): { year: number; month: number; day: numbe
 function countWuXing(parts: string[]): string {
   const joined = parts.join("");
   const tally = WUXING.map((w) => [w, [...joined].filter((ch) => ch === w).length] as const);
-  return tally.filter(([, n]) => n > 0).map(([w, n]) => `${w}${n}`).join(" ");
+  return tally
+    .filter(([, n]) => n > 0)
+    .map(([w, n]) => `${w}${n}`)
+    .join(" ");
+}
+
+/** 出生时刻不确定时，年月柱可能跨立春/节气，日柱可能跨两日，都要显式说出来 */
+function crossBoundaryNotes(main: Chart, alt: Chart, where: string): string[] {
+  const notes: string[] = [];
+  if (main.year !== alt.year) {
+    notes.push(
+      `年柱可能为 ${main.year} 或 ${alt.year}（${where}，跨立春），建议用精确出生时间确认。`,
+    );
+  }
+  if (main.month !== alt.month) {
+    notes.push(
+      `月柱可能为 ${main.month} 或 ${alt.month}（${where}，跨节气交接），建议用精确出生时间确认。`,
+    );
+  }
+  if (main.day !== alt.day) {
+    notes.push(`日柱可能为 ${main.day} 或 ${alt.day}（${where}），建议用精确出生时间确认。`);
+  }
+  return notes;
 }
 
 export function buildBaziSummary(req: NormalizedRequest): BaziResult | { ok: true; summary: null } {
@@ -107,52 +165,63 @@ export function buildBaziSummary(req: NormalizedRequest): BaziResult | { ok: tru
   }
 
   const point = parseBirthHour(req.birthHour);
-
-  const solar = Solar.fromYmdHms(
-    date.year,
-    date.month,
-    date.day,
-    point?.hour ?? 0,
-    point?.minute ?? 0,
-    0,
-  );
-  const eightChar = solar.getLunar().getEightChar();
-  // 夜子时（23 点后）日柱归次日，与时辰表约定一致
-  eightChar.setSect(1);
-
-  const yearPillar = eightChar.getYear();
-  const monthPillar = eightChar.getMonth();
-  const dayPillar = eightChar.getDay();
-  const hourPillar = point ? eightChar.getTime() : null;
-
-  const pillarsText = hourPillar
-    ? `${yearPillar} ${monthPillar} ${dayPillar} ${hourPillar}`
-    : `${yearPillar} ${monthPillar} ${dayPillar}`;
+  const main = chartAt(date, point?.hour ?? 0, point?.minute ?? 0);
 
   const notes: string[] = [];
+
+  // 1. 精度说明
   if (!point) {
-    notes.push("未填时辰：仅排年月日六字，精度有限，仅供参考。");
+    notes.push("未填时辰：只排年月日六字，时柱空缺，日柱也可能因出生时段未知而偏差。");
+  } else if (point.coarse) {
+    const hh = String(point.hour).padStart(2, "0");
+    const mm = String(point.minute).padStart(2, "0");
+    notes.push(
+      `时辰按「${point.branch}时」中点 ${hh}:${mm} 估算，时柱精度受时辰粒度限制。`,
+    );
   } else {
-    notes.push(point.note + "。");
+    notes.push(
+      `出生时间按 ${String(point.hour).padStart(2, "0")}:${String(point.minute).padStart(2, "0")} 计算。`,
+    );
   }
+
+  // 2. 跨界检查：出生时刻不确定时年月柱/日柱都可能换
+  if (!point) {
+    const alt = chartAt(date, 23, 59);
+    notes.push(...crossBoundaryNotes(main, alt, "出生时刻未填"));
+  } else if (point.coarse) {
+    if (point.branch === "子") {
+      // 子时横跨两日：对比早子（当日 00:30）与夜子（当日 23:30，日柱已归次日）
+      const late = chartAt(date, 23, 30);
+      notes.push(...crossBoundaryNotes(main, late, "子时横跨两日"));
+      notes.push("子时按早子时（00:30）估算；若实际生于 23 点后，日柱应顺延一日。");
+    } else {
+      // 该时辰时段的最后一分钟（不跨入下一个时辰）
+      const alt = chartAt(date, point.range!.to - 1, 59);
+      notes.push(...crossBoundaryNotes(main, alt, `「${point.branch}时」时段内`));
+    }
+  } else if (point.hour >= 23) {
+    notes.push("出生时间在 23 点后，按夜子时处理：日柱已归次日。");
+  }
+
+  // 3. 排盘规则
   notes.push("年柱以立春为界、月柱以节气为界，按公历生日计算。");
+
+  // 4. 五行本气
   notes.push(
-    `干支本气五行（不含藏干加权）：${countWuXing([
-      eightChar.getYearWuXing(),
-      eightChar.getMonthWuXing(),
-      eightChar.getDayWuXing(),
-      ...(hourPillar ? [eightChar.getTimeWuXing()] : []),
-    ])}。`,
+    `干支本气五行（不含藏干加权）：${countWuXing(point ? main.wuxing : main.wuxing.slice(0, 3))}。`,
   );
-  if (point && hourPillar?.endsWith("子")) {
-    notes.push("时辰落在子时：按早子时（00:30）估算；若实际生于 23 点后，日柱应顺延一日。");
-  }
+
   notes.push("命理部分仅作温和参考，命名决策请以音形义与家庭规则为主。");
+
+  const pillarsText = point
+    ? `${main.year} ${main.month} ${main.day} ${main.time}`
+    : `${main.year} ${main.month} ${main.day}`;
 
   return {
     ok: true,
     summary: {
       enabled: true,
+      engine: "lunar-javascript",
       precision: point ? "full_eight" : "six_limited",
       pillarsText,
       notes,

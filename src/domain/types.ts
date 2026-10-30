@@ -74,6 +74,8 @@ export interface EliminationNote {
 
 export interface BaziSummary {
   enabled: true;
+  /** 排盘引擎标记；旧版哈希「示意排盘」的报告没有该字段，页面据此区分新旧 */
+  engine?: "lunar-javascript";
   precision: "full_eight" | "six_limited";
   pillarsText: string;
   notes: string[];

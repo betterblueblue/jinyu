@@ -62,11 +62,40 @@ describe("StepFunProvider payload（八字字段进 prompt）", () => {
     expect(user.baziEnabled).toBe(true);
     expect(user.birthDate).toBe("2024-05-01");
     expect(user.birthHour).toBe("9");
+    // 四柱要在提示词里给出，模型只解释不推算
+    expect(user.baziPrecision).toBe("full_eight");
+    expect(String(user.baziPillars).split(" ")).toHaveLength(4);
+    expect(user).not.toHaveProperty("baziUncertain");
     // system 的 JSON 格式定义要求输出 baziFit
     expect(systemContent(body)).toContain('"baziFit":"与生辰气质的呼应');
-    // user instruction 硬强调每个候选必须包含 baziFit
+    // user instruction 硬强调每个候选必须包含 baziFit，且必须基于给定四柱
     expect(String(user.instruction)).toContain("每个候选的 JSON 对象必须包含 baziFit 字段");
+    expect(String(user.instruction)).toContain("基于给定的 baziPillars");
     expect(String(user.instruction)).toContain("不作五行用神铁口定论");
+  });
+
+  it("出生时刻跨立春时，payload 带 baziUncertain 并要求写出不确定", async () => {
+    const captured: string[] = [];
+    captureFetch(captured);
+
+    const n = normalizeRequest({
+      surname: "王",
+      gender: "male",
+      nameLength: "two",
+      baziEnabled: true,
+      birthDate: "2025-02-03",
+      birthHour: "亥时 21–23",
+    });
+    expect(n.ok).toBe(true);
+    if (!n.ok) return;
+
+    const provider = new StepFunProvider({ baseUrl: "http://x", apiKey: "k", model: "m" });
+    await provider.generateCandidates(n.value, 0);
+
+    const body = JSON.parse(captured[0]!) as Record<string, unknown>;
+    const user = userContent(body);
+    expect(user.baziUncertain).toBe(true);
+    expect(String(user.instruction)).toContain("baziUncertain");
   });
 
   it("关闭八字时 payload 不含八字字段", async () => {
@@ -85,6 +114,7 @@ describe("StepFunProvider payload（八字字段进 prompt）", () => {
     expect(user).not.toHaveProperty("baziEnabled");
     expect(user).not.toHaveProperty("birthDate");
     expect(user).not.toHaveProperty("birthHour");
+    expect(user).not.toHaveProperty("baziPillars");
     // 关闭八字时 system 格式不含 baziFit、instruction 不要求输出
     expect(systemContent(body)).not.toContain("baziFit");
     expect(String(user.instruction)).not.toContain("baziFit");

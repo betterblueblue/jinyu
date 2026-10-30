@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildBaziSummary } from "@/domain/bazi";
-import type { NormalizedRequest } from "@/domain/types";
+import type { BaziSummary, NormalizedRequest } from "@/domain/types";
 
 function req(over: Partial<NormalizedRequest> = {}): NormalizedRequest {
   return {
@@ -20,10 +20,14 @@ function req(over: Partial<NormalizedRequest> = {}): NormalizedRequest {
   };
 }
 
-function pillars(over: Partial<NormalizedRequest>): string[] {
+function summary(over: Partial<NormalizedRequest>): BaziSummary {
   const result = buildBaziSummary(req(over));
   if (!result.ok || !result.summary) throw new Error("expected bazi summary");
-  return result.summary.pillarsText.split(" ");
+  return result.summary;
+}
+
+function pillars(over: Partial<NormalizedRequest>): string[] {
+  return summary(over).pillarsText.split(" ");
 }
 
 describe("bazi 四柱", () => {
@@ -43,41 +47,65 @@ describe("bazi 四柱", () => {
     expect(after[1]).toBe("戊寅");
   });
 
-  it("夜子时（23 点后）日柱归次日", () => {
-    const late = pillars({ birthDate: "2026-10-30", birthHour: "23:30" });
-    const early = pillars({ birthDate: "2026-10-30", birthHour: "22:30" });
-    expect(late[2]).toBe("戊寅");
-    expect(early[2]).toBe("丁丑");
+  it("精确 23:30 按夜子时换日柱，且提示不说早子时", () => {
+    const late = summary({ birthDate: "2026-10-30", birthHour: "23:30" });
+    const early = summary({ birthDate: "2026-10-30", birthHour: "22:30" });
+    expect(late.pillarsText.split(" ")[2]).toBe("戊寅");
+    expect(early.pillarsText.split(" ")[2]).toBe("丁丑");
+    expect(late.notes.join("")).toContain("夜子时");
+    expect(late.notes.join("")).not.toContain("早子时");
   });
 
   it("认直播台的「巳时 9–11」文本，结果与 10 点一致", () => {
-    const fromLabel = pillars({ birthDate: "2026-10-30", birthHour: "巳时 9–11" });
-    const fromNumber = pillars({ birthDate: "2026-10-30", birthHour: "10" });
-    expect(fromLabel[3]).toBe(fromNumber[3]);
-    expect(fromLabel[3].endsWith("巳")).toBe(true);
+    const fromLabel = summary({ birthDate: "2026-10-30", birthHour: "巳时 9–11" });
+    const fromNumber = summary({ birthDate: "2026-10-30", birthHour: "10" });
+    expect(fromLabel.pillarsText.split(" ")[3]).toBe(fromNumber.pillarsText.split(" ")[3]);
+    expect(fromLabel.pillarsText.endsWith("巳")).toBe(true);
+    expect(fromLabel.notes.join("")).toContain("估算");
   });
 
   it("无时辰只排六字并标精度有限", () => {
-    const result = buildBaziSummary(req({ birthDate: "2026-04-13", birthHour: undefined }));
-    if (!result.ok || !result.summary) throw new Error("expected bazi summary");
-    expect(result.summary.precision).toBe("six_limited");
-    expect(result.summary.pillarsText.split(" ")).toHaveLength(3);
-    expect(result.summary.notes.join("")).toContain("仅排年月日");
+    const result = summary({ birthDate: "2026-04-13", birthHour: undefined });
+    expect(result.precision).toBe("six_limited");
+    expect(result.pillarsText.split(" ")).toHaveLength(3);
+    expect(result.notes.join("")).toContain("只排年月日");
   });
 
-  it("有五行本气统计，且不再随时辰改动年月日柱", () => {
+  it("未填时辰且当天跨立春时，提示年月柱可能跨界", () => {
+    // 2025-02-03 立春 22:10：当日 00:00 与 23:59 分属不同年柱、月柱
+    const notes = summary({ birthDate: "2025-02-03" }).notes.join(" | ");
+    expect(notes).toContain("年柱可能为");
+    expect(notes).toContain("甲辰");
+    expect(notes).toContain("乙巳");
+    expect(notes).toContain("月柱可能为");
+  });
+
+  it("时辰标签覆盖立春时刻时同样提示跨界", () => {
+    // 亥时 21–23 包含 22:10 的立春
+    const notes = summary({ birthDate: "2025-02-03", birthHour: "亥时 21–23" }).notes.join(" | ");
+    expect(notes).toContain("年柱可能为");
+    expect(notes).toContain("立春");
+  });
+
+  it("时辰标签为子时，提示早子/夜子不确定", () => {
+    const notes = summary({ birthDate: "2026-10-30", birthHour: "子时 23–1" }).notes.join(" | ");
+    expect(notes).toContain("早子时");
+    expect(notes).toContain("日柱可能为");
+  });
+
+  it("五行统计存在，且年月日柱不随时辰变化", () => {
     const noHour = pillars({ birthDate: "2026-04-13" });
     const withHour = pillars({ birthDate: "2026-04-13", birthHour: "10" });
     expect(withHour.slice(0, 3)).toEqual(noHour);
-    const result = buildBaziSummary(req({ birthDate: "2026-04-13", birthHour: "10" }));
-    if (!result.ok || !result.summary) throw new Error("expected bazi summary");
-    expect(result.summary.notes.join("")).toMatch(/五行/);
+    expect(summary({ birthDate: "2026-04-13", birthHour: "10" }).notes.join("")).toMatch(/五行/);
+  });
+
+  it("新排盘带 engine 标记（旧报告没有）", () => {
+    expect(summary({ birthHour: "10" }).engine).toBe("lunar-javascript");
   });
 
   it("未出生或日期非法时拒绝排盘", () => {
-    const unborn = buildBaziSummary(req({ birthStatus: "unborn", isPreparationName: true }));
-    expect(unborn.ok).toBe(false);
-    const bad = buildBaziSummary(req({ birthDate: "2026-13-40" }));
-    expect(bad.ok).toBe(false);
+    expect(buildBaziSummary(req({ birthStatus: "unborn", isPreparationName: true })).ok).toBe(false);
+    expect(buildBaziSummary(req({ birthDate: "2026-13-40" })).ok).toBe(false);
   });
 });
