@@ -15,6 +15,8 @@ export default defineConfig({
   // 默认 30 秒单测超时会先于用例里的 60–180 秒等待到期
   timeout: 240_000,
   reporter: "list",
+  globalSetup: "./e2e/global-setup.ts",
+  globalTeardown: "./e2e/global-teardown.ts",
   use: {
     baseURL: "http://127.0.0.1:9000",
     trace: "on-first-retry",
