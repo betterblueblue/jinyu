@@ -118,6 +118,8 @@ export interface ReportDocument {
   originDisclaimer: string;
   /** 生成来源 provider（"fake"=示例模式 / "stepfun" 等真实 provider），用于历史标注 */
   providerName?: string;
+  /** 生成来源：live=直播取名台 / formal=正式取名页（旧数据无此字段，按 formal 处理） */
+  source?: "live" | "formal";
 }
 
 export interface ReportListItem {
@@ -127,6 +129,8 @@ export interface ReportListItem {
   gender: Gender;
   nameSummary: string;
   providerName?: string;
+  /** 生成来源：live=直播取名台 / formal=正式取名页（旧数据缺省视为 formal） */
+  source?: "live" | "formal";
 }
 
 export type GenerationStage = "candidates" | "filter" | "assemble";

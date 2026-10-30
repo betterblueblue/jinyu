@@ -38,6 +38,7 @@ function toListItem(report: ReportDocument): ReportListItem {
     gender: report.request.gender,
     nameSummary: report.overview.names.slice(0, 5).join("、"),
     providerName: report.providerName,
+    source: report.source ?? "formal",
   };
 }
 
@@ -61,6 +62,10 @@ export async function getReport(id: string): Promise<ReportDocument | null> {
   }
 }
 
-export async function listReports(): Promise<ReportListItem[]> {
-  return readIndex();
+export async function listReports(filter?: {
+  source?: "live" | "formal";
+}): Promise<ReportListItem[]> {
+  const items = await readIndex();
+  if (!filter?.source) return items;
+  return items.filter((i) => (i.source ?? "formal") === filter.source);
 }

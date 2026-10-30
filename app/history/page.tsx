@@ -4,12 +4,25 @@ import { isAuthenticated } from "@/auth/session";
 import { AppShell } from "@/components/AppShell";
 import { listReports } from "@/store/report-store";
 
-export default async function HistoryPage() {
+export default async function HistoryPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ src?: string }>;
+}) {
   if (!(await isAuthenticated())) {
     redirect("/login");
   }
 
-  const items = await listReports();
+  const { src } = await searchParams;
+  const filter = src === "live" ? "live" : src === "formal" ? "formal" : undefined;
+  const items = await listReports(filter ? { source: filter } : undefined);
+
+  const tabs: { key: "all" | "formal" | "live"; label: string; href: string }[] = [
+    { key: "all", label: "全部", href: "/history" },
+    { key: "formal", label: "正式取名", href: "/history?src=formal" },
+    { key: "live", label: "直播取名", href: "/history?src=live" },
+  ];
+  const active = filter ?? "all";
 
   return (
     <AppShell authed>
@@ -23,6 +36,23 @@ export default async function HistoryPage() {
             ? `共 ${items.length} 份快照 · 打开为生成时的全文，不重新跑模型。`
             : "打开为生成时的全文快照，不重新跑模型。"}
         </p>
+
+        <nav className="reveal mt-5 flex flex-wrap gap-2">
+          {tabs.map((t) => (
+            <Link
+              key={t.key}
+              href={t.href}
+              className={`border px-3 py-1.5 text-xs tracking-widest transition ${
+                active === t.key
+                  ? "border-gold text-gold"
+                  : "border-outline-variant/60 text-outline hover:border-gold/50 hover:text-gold"
+              }`}
+            >
+              {t.label}
+            </Link>
+          ))}
+        </nav>
+
         <div className="ink-divider my-7" />
         {items.length === 0 ? (
           <div className="py-8">
@@ -48,6 +78,11 @@ export default async function HistoryPage() {
                     </div>
                     <div className="mt-1 flex flex-wrap items-center gap-2">
                       <span className="text-lg tracking-wider text-paper">{item.nameSummary}</span>
+                      {(item.source ?? "formal") === "live" ? (
+                        <span className="border border-gold/50 bg-gold/10 px-1.5 py-0.5 text-[0.65rem] tracking-widest text-gold">
+                          直播
+                        </span>
+                      ) : null}
                       {item.providerName === "fake" ? (
                         <span className="border border-outline-variant/60 px-1.5 py-0.5 text-[0.65rem] tracking-widest text-outline">
                           示例
