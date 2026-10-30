@@ -44,12 +44,6 @@
   --hair: rgba(35, 28, 20, 0.18);
   --hair-2: rgba(35, 28, 20, 0.1);
   --vignette: inset 0 0 150px rgba(96, 76, 46, 0.1), inset 0 0 26px rgba(96, 76, 46, 0.07);
-  --seal-bg: radial-gradient(78% 78% at 32% 24%, #bc4c3b 0%, #a5382a 55%, #8b2a1e 100%);
-  --seal-color: #f7f0df;
-  --seal-ring: inset 0 0 0 1.15px rgba(246, 239, 223, 0.5);
-  --seal-size: 92px;
-  --seal-font: 56px;
-  --seal-radius: 2px;
   --tag-pad: 0 32px;
   --tag-bg: transparent;
   --btn-bg: var(--ink);
@@ -93,12 +87,6 @@
   --hair: rgba(45, 72, 64, 0.18);
   --hair-2: rgba(45, 72, 64, 0.1);
   --vignette: inset 0 0 160px rgba(70, 100, 90, 0.1), inset 0 0 30px rgba(70, 100, 90, 0.06);
-  --seal-bg: transparent;
-  --seal-color: #2f4a42;
-  --seal-ring: inset 0 0 0 1.5px rgba(47, 74, 66, 0.55);
-  --seal-size: 84px;
-  --seal-font: 48px;
-  --seal-radius: 3px;
   --tag-pad: 16px 34px;
   --tag-bg: rgba(255, 255, 255, 0.62);
   --btn-bg: #2c4a42;
@@ -130,12 +118,6 @@
   --hair: rgba(20, 22, 26, 0.14);
   --hair-2: rgba(20, 22, 26, 0.07);
   --vignette: inset 0 0 170px rgba(40, 44, 50, 0.08), inset 0 0 24px rgba(40, 44, 50, 0.05);
-  --seal-bg: transparent;
-  --seal-color: #9e2b25;
-  --seal-ring: inset 0 0 0 1px rgba(158, 43, 37, 0.6);
-  --seal-size: 78px;
-  --seal-font: 44px;
-  --seal-radius: 0;
   --tag-pad: 0 30px;
   --tag-bg: transparent;
   --btn-bg: #101114;
@@ -170,12 +152,6 @@
   --hair: rgba(35, 45, 32, 0.2);
   --hair-2: rgba(35, 45, 32, 0.11);
   --vignette: inset 0 0 150px rgba(60, 80, 50, 0.08), inset 0 0 26px rgba(60, 80, 50, 0.05);
-  --seal-bg: radial-gradient(78% 78% at 32% 24%, #b44c3c 0%, #9c3a2b 55%, #7e2a1e 100%);
-  --seal-color: #f6f0e0;
-  --seal-ring: inset 0 0 0 1.15px rgba(246, 240, 224, 0.5);
-  --seal-size: 92px;
-  --seal-font: 56px;
-  --seal-radius: 2px;
   --tag-pad: 0 32px;
   --tag-bg: transparent;
   --btn-bg: #1c261a;
@@ -432,34 +408,6 @@
   display: flex;
   align-items: center;
   gap: 26px;
-}
-.live-stage .seal {
-  width: var(--seal-size);
-  height: var(--seal-size);
-  flex: none;
-  position: relative;
-  display: grid;
-  place-items: center;
-  transform: rotate(-3.2deg);
-  background: var(--seal-bg);
-  color: var(--seal-color);
-  box-shadow: var(--seal-ring);
-  border-radius: var(--seal-radius);
-  font-size: var(--seal-font);
-  font-weight: 600;
-  line-height: 1;
-  filter: drop-shadow(0 1px 1.5px rgba(35, 28, 20, 0.16));
-}
-.live-stage .seal::after {
-  content: "";
-  position: absolute;
-  inset: -1px;
-  border-radius: var(--seal-radius);
-  pointer-events: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='110' height='110'%3E%3Cfilter id='s'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.5' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='110' height='110' filter='url(%23s)' opacity='0.7'/%3E%3C/svg%3E");
-  background-size: 110px 110px;
-  mix-blend-mode: multiply;
-  opacity: 0.42;
 }
 .live-stage .brand-name {
   font-size: 46px;

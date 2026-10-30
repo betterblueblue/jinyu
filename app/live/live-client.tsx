@@ -54,10 +54,10 @@ const SKINS: Skin[] = ["paper", "celadon", "silver", "bamboo"];
 const G_LABEL: Record<Gender, string> = { male: "男", female: "女", unknown: "未知" };
 
 const SKINC = {
-  paper: { bg: "#F3EFE4", ink: "#191410", ink2: "#4A4238", ink3: "#6B6355", accent: "#A5382A", line: "rgba(35,28,20,.20)", sealBg: "#A5382A", sealFg: "#F7F0DF" },
-  celadon: { bg: "#EAF2ED", ink: "#16211D", ink2: "#35504A", ink3: "#4B625A", accent: "#3A574E", line: "rgba(45,72,64,.22)", sealBg: "", sealFg: "#2F4A42" },
-  silver: { bg: "#F0F0ED", ink: "#0E1013", ink2: "#34373C", ink3: "#5E6266", accent: "#9E2B25", line: "rgba(20,22,26,.18)", sealBg: "", sealFg: "#9E2B25" },
-  bamboo: { bg: "#E0E7D6", ink: "#1C261A", ink2: "#3A4534", ink3: "#4E5945", accent: "#9C3A2B", line: "rgba(35,45,32,.20)", sealBg: "#9C3A2B", sealFg: "#F6F0E0" },
+  paper: { bg: "#F3EFE4", ink: "#191410", ink2: "#4A4238", ink3: "#6B6355", accent: "#A5382A", line: "rgba(35,28,20,.20)" },
+  celadon: { bg: "#EAF2ED", ink: "#16211D", ink2: "#35504A", ink3: "#4B625A", accent: "#3A574E", line: "rgba(45,72,64,.22)" },
+  silver: { bg: "#F0F0ED", ink: "#0E1013", ink2: "#34373C", ink3: "#5E6266", accent: "#9E2B25", line: "rgba(20,22,26,.18)" },
+  bamboo: { bg: "#E0E7D6", ink: "#1C261A", ink2: "#3A4534", ink3: "#4E5945", accent: "#9C3A2B", line: "rgba(35,45,32,.20)" },
 } as const;
 
 const SERIF = '"Noto Serif SC","Source Han Serif SC","Songti SC",SimSun,serif';
@@ -210,29 +210,14 @@ function buildGroupedCard(show: ShowData, skin: Skin, bgImage: HTMLImageElement 
 
   const sx = 90;
   const sy = 90;
-  const ss = 86;
-  if (C.sealBg) {
-    x.fillStyle = C.sealBg;
-    x.fillRect(sx, sy, ss, ss);
-    x.fillStyle = C.sealFg;
-  } else {
-    x.strokeStyle = C.sealFg;
-    x.lineWidth = 1.6;
-    x.strokeRect(sx, sy, ss, ss);
-    x.fillStyle = C.sealFg;
-  }
-  x.textAlign = "center";
-  x.textBaseline = "middle";
-  x.font = `600 46px ${SERIF}`;
-  x.fillText("瑾", sx + ss / 2, sy + ss / 2 + 3);
   x.textAlign = "left";
   x.textBaseline = "alphabetic";
   x.fillStyle = C.ink;
   x.font = `600 40px ${SERIF}`;
-  x.fillText("瑾瑜", sx + ss + 28, sy + 58);
+  x.fillText("瑾瑜", sx, sy + 58);
   x.fillStyle = C.ink3;
   x.font = `300 21px ${SANS}`;
-  x.fillText("男女分组推荐", sx + ss + 164, sy + 58);
+  x.fillText("男女分组推荐", sx + 136, sy + 58);
 
   x.textAlign = "center";
   x.fillStyle = C.ink2;
@@ -539,33 +524,14 @@ export function LiveClient() {
 
     const sx = 104;
     const sy = 104;
-    const ss = 86;
-    if (C.sealBg) {
-      x.fillStyle = C.sealBg;
-      x.fillRect(sx, sy, ss, ss);
-      x.strokeStyle = "rgba(247,240,223,.5)";
-      x.lineWidth = 1.2;
-      x.strokeRect(sx + 6, sy + 6, ss - 12, ss - 12);
-      x.fillStyle = C.sealFg;
-    } else {
-      x.strokeStyle = C.sealFg;
-      x.lineWidth = 1.6;
-      x.strokeRect(sx, sy, ss, ss);
-      x.fillStyle = C.sealFg;
-    }
-    x.textAlign = "center";
-    x.textBaseline = "middle";
-    x.font = `600 46px ${SERIF}`;
-    x.fillText("瑾", sx + ss / 2, sy + ss / 2 + 3);
-
     x.textAlign = "left";
     x.textBaseline = "alphabetic";
     x.fillStyle = C.ink;
     x.font = `600 40px ${SERIF}`;
-    x.fillText("瑾瑜", sx + ss + 30, sy + 58);
+    x.fillText("瑾瑜", sx, sy + 58);
     x.fillStyle = C.ink3;
     x.font = `300 21px ${SANS}`;
-    x.fillText("一次正式命名报告", sx + ss + 30 + 104, sy + 58);
+    x.fillText("一次正式命名报告", sx + 136, sy + 58);
 
     x.textAlign = "center";
     x.fillStyle = C.ink;
@@ -689,7 +655,6 @@ export function LiveClient() {
           <main className={`sheet ${drawerOpen ? "dim" : ""}`}>
             <header className="topbar">
               <div className="brand">
-                <div className="seal">瑾</div>
                 <div className="brand-name">瑾瑜</div>
                 <div className="brand-sub">中文取名</div>
               </div>
