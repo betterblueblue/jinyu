@@ -364,6 +364,118 @@ git status --porcelain
 
 ---
 
+## 8. 名字分析（2026-10-30 新增）
+
+> 状态：**功能已落地，代码、语料、测试都在**。名字分析这条主链路真实模型跑通过；
+> 但 `/live` 姓氏输入框在一次自动化复查里状态没更新，**未复验**，见「待验证」一节。
+> 用户 2026-10-30 决定先不验，回头自己看。
+
+### 做什么
+
+直播台输入**完整姓名**（性别必填，生日可选），诊断这个名字有哪些问题，然后一键把问题转成约束去取名。
+
+- 入口：`/live` 输入态底部「名字分析」按钮，或按 `A`
+- 状态：输入 → 分析中（思考字幕 + 进度）→ 结论
+- 结论三档，由代码判、不由模型说：
+
+  | verdict | 准入条件 | 按钮 |
+  |---|---|---|
+  | `hard` 有硬伤 | 谐音成不雅词 / 字打不出 / 坏意思 / 性别明显错位 | 换个名字看看 |
+  | `cost` 有代价 | 无硬伤，但有读起来闷、年代旧、重名多、意思说满这类小亏 | 看看换成什么样的 |
+  | `fit` 没问题 | **必须 issues 为空**，才允许说「还能更贴合」 | 看看更贴合的写法 |
+
+- 「更贴合」不是万能话术：`fitAngle` 必须提到姓氏，不提就用兜底句，防止什么名字都能说「还能更贴合」
+- **不显示分数**、**不算五格**、结论放第一句、不许出现「能用/还行/总体来说」
+- 分析结果**不落盘**（过程不是交付物）；点按钮后带 `surname + tabooChars + styleNotes` 走原 `/api/generate`，硬闸门照走
+
+### 分工：哪些算、哪些问模型
+
+| 项 | 谁 | 说明 |
+|---|---|---|
+| 笔画 | 本地 | Unihan `kTotalStrokes`，模型数笔画必错 |
+| 常用度 | 本地 | GB2312 一级/二级/表外，由编码区反查，不依赖外部数据 |
+| 性别倾向 | 本地 | 人名经验字表（`gender-lean.ts`），只收倾向明确的字 |
+| 谐音 / 字义 / 年代感 / 措辞 | 模型 | 只有语感能判 |
+| 引文 | 模型给 + **代码逐字核验** | 核不过就删，不显示 |
+
+### 语料核验
+
+`data/corpus/pieces.jsonl`（**不进 git**，91,220 篇 / 30.7MB），23 部：诗经、楚辞、论语、大学、中庸、孟子、周易、尚书、礼记、左传、文选、古文观止、全唐诗、宋词、元曲、纳兰词、千字文、声律启蒙、三字经、幼学琼林、千家诗、唐诗三百首、增广贤文。
+
+- 重建：`pnpm corpus:build`（先 `build-chars.mjs` 出字表，再 `fetch.mjs` 下载归一化），几分钟
+- 来源：`chinese-poetry`（JSON）+ `garychowcmu/daizhigev20`（殆知阁纯文本，用于经部与文选）
+- 核验只回答「这句原文在不在这本书里」，**不判断用得对不对**——那查不出来
+- 篇名说错但原文有的，自动校正并标 `corrected`
+- 繁体语料（全唐诗 32%，千字文/三字经/增广贤文约 30%）比对时折简体；**展示也折**，但 `乾幹藉徵著覆瞭` 保留原字，免得「乾坤」变「干坤」
+- 字表没装时全部退化：笔画/常用度查不到就不说，引文一律「暂无可核出处」，**不会编**
+- JSON 语料有嵌套两层 `content` 的（古文观止、声律启蒙），`fetch.mjs` 里是递归摊平；只收字符串否则会得到 `[object Object]`
+
+### 文件
+
+```
+scripts/corpus/sources.mjs         # 语料源清单（含 daizhige 的切块正则）
+scripts/corpus/fetch.mjs           # 下载 + 递归摊平 + 切块 → pieces.jsonl
+scripts/corpus/build-chars.mjs     # Unihan → chars.json（笔画/繁简/GB分级）
+src/domain/analysis/types.ts       # AnalysisResult 等
+src/domain/analysis/chars.ts       # 字表读取、折合、展示用简化
+src/domain/analysis/corpus.ts      # 语料加载与引文核验
+src/domain/analysis/split-name.ts  # 姓名拆分 + 复姓歧义备选
+src/domain/analysis/gender-lean.ts # 性别倾向字表
+src/domain/analysis/rules.ts       # 本地确定性检查 → Issue
+src/domain/analysis/prompt.ts      # 提示词 + 输出归一化
+src/domain/analysis/analyze.ts     # 编排：本地检查 + 模型 + 核验 + 拼装
+src/providers/chat.ts              # 共用的流式 Chat Completions 客户端
+src/providers/analysis-provider.ts # 分析端口（真 / Fake）
+app/api/analyze/route.ts           # SSE：thinking / stage / done / error
+app/live/analyze-panel.tsx         # 三态面板
+app/live/analyze.css               # 面板样式（跟随四套皮肤变量）
+scripts/probe-analysis.ts          # 离线自检（不联网）
+tests/analysis.test.ts             # 23 个用例
+tests/fixtures/corpus/             # 测试用微型语料 + 字表
+```
+
+### 顺手改的
+
+- `stepfun-provider.ts` 里那份私有的 `streamChat` 抽到 `src/providers/chat.ts`，取名和分析共用一份流解析
+- `buildBaziSummary` 参数收窄成 `BaziInput`（`Pick<NormalizedRequest,...>`），分析复用排盘不用伪造整份表单
+
+### 验证（2026-10-30 实测）
+
+| 项 | 结果 |
+|---|---|
+| `pnpm typecheck` | 干净 |
+| `pnpm test` | **74/74**（含 analysis 23 个） |
+| 语料核验离线自检 | `pnpm tsx scripts/probe-analysis.ts` 全部符合预期，故意编的句子被驳回 |
+| 真实模型分析 | 高登科 → cost，3 条问题，出处「全唐诗·登科后」核验通过并折成简体 |
+| 一键改名 | 面板关闭、姓氏带过去、出「高承岳」 |
+| 576×1024 / 1080×1920 | 输入、分析中、结论、底部按钮都不溢出（截图已删，需要时重跑） |
+| `pnpm e2e` | **跑不了**，见下 |
+
+### 待验证（下次接手先做这一条）
+
+一次自动化复查里，`/live` 输入态的**姓氏输入框打字后按钮仍是 disabled**：DOM 里 value 有值，但 `draft` 状态没更新，说明 onChange 没触发；同一页面上点击类交互（性别按钮、名字分析入口）都正常。
+
+怀疑是 dev server 长时间 HMR 后的陈旧模块，**先重启 `pnpm dev` 再复验**。重启后仍复现，就从这里查：`app/live/live-client.tsx` 的 `surname-input` → `setDraft` → `curSurname`。
+
+没验证的是这条路径：未知性别 → 六选分组 → 存图。之前（改 UI 当天首次 E2E）是通的，改动只新增了入口按钮和 `generate(override?)`，理论上不影响，但**没复验就不要当成已验证**。
+
+### `pnpm e2e` 为什么跑不了
+
+`playwright.config.ts` 的 `webServer` 是 `reuseExistingServer: !CI`，会直接复用 9000 端口上已经跑着的 dev server。那个 server 用的是 `.env.local` 里的 `betterblue`，而 config 里灌的是 `change-me`，登录必然失败（3 个 spec 全挂在登录）。这不是代码回归。
+
+要跑通二选一：先停掉自己的 dev server 再 `pnpm e2e`，或临时把 config 的 `JINYU_AUTH_PASSWORD` 改成 `.env.local` 里的值。
+
+### 已知限制
+
+- **结论页在 576 小窗里要滚动**，最后一行会卡在按钮上沿；滚动区已留 44px 内边距，但视觉上仍像被截断
+- 生日框是原生 `input[date]`，占位符跟随浏览器语言（显示 `yyyy/mm/dd`）
+- 性别选「不填」时跳过性别判断
+- 引文只核到「原文在不在这本书里」，用错典故查不出来（如「桃之夭夭」被理解成逃跑）
+- 语料缺失时功能降级但不报错，容易被误当成「模型没给出处」
+- `data/corpus/` 不进 git，换台机器要重跑 `pnpm corpus:build`
+
+---
+
 ## Self-check
 
 - 区分了「已完成 / 未提交 / 未验证」

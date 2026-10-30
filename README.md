@@ -34,9 +34,21 @@ pnpm e2e          # Playwright Fake 金路径（自动起 dev server，强制 Fa
 npx playwright test --config=playwright.real.config.ts   # 真实 LLM 链路 + 穷举回归（需先起 dev server）
 ```
 
+## 语料（名字分析的出处核验要用）
+
+直播台的名字分析会把模型给的引文拿回原文逐字核对，底本放在 `data/corpus/`（不进 git）：
+
+```bash
+pnpm corpus:build   # Unihan 字表 + 23 部语料，约 31MB，首次要下载几分钟
+```
+
+只装字表不装语料也能跑，只是所有引文都会降级成「暂无可核出处」，不会编。
+
 默认账号见 `.env.example`（`jinyu` / `change-me`，可用 `.env.local` 覆盖）。  
 **本地默认走真 LLM**（本机网关）；仅单测 / Playwright 强制 Fake。无 key 时才会回退 Fake（历史列表会标注「示例」）。
 
 ## 状态
 
 0→1 应用与 14 条 issue 对应能力已落地；领域单测 + Fake E2E 金路径 + 真实 LLM 链路（含穷举回归）见上。
+
+2026-10-30 增加 `名字分析`：直播台输入完整姓名 → 三档结论（有硬伤 / 有代价 / 没问题但可更贴合）→ 一键带约束去取名。详见 `HANDOFF.md`。

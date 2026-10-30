@@ -1,0 +1,507 @@
+/* 输入态里的入口：已经有名字的人走这条 */
+.live-stage .entry-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  width: 100%;
+  padding: 24px 2px;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px dashed var(--hair);
+  font-family: inherit;
+  font-size: 25px;
+  letter-spacing: 0.16em;
+  color: var(--ink-2);
+  cursor: pointer;
+  transition: color 0.16s ease-out;
+}
+.live-stage .entry-bar span:last-child {
+  font-family: "Noto Sans SC", system-ui, sans-serif;
+  font-size: 21px;
+  font-weight: 300;
+  letter-spacing: 0.1em;
+  color: var(--ink-3);
+}
+.live-stage .entry-bar:hover {
+  color: var(--accent);
+}
+.live-stage .entry-bar:hover span:last-child {
+  color: var(--accent);
+}
+
+/* 名字分析面板：盖在直播台上的一层纸，四套皮肤共用同一套变量 */
+
+.live-stage .ap {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  padding: 84px 76px 72px;
+  background: var(--stage-bg);
+  animation: ap-in 0.22s ease-out;
+}
+@keyframes ap-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 内框，和直播台的版框呼应 */
+.live-stage .ap::before {
+  content: "";
+  position: absolute;
+  inset: 34px;
+  border: 1px solid var(--hair-2);
+  pointer-events: none;
+}
+
+.live-stage .ap-top {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 28px;
+  border-bottom: 1px solid var(--hair);
+  flex: none;
+}
+.live-stage .ap-title {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+.live-stage .ap-seal {
+  width: 64px;
+  height: 64px;
+  display: grid;
+  place-items: center;
+  background: var(--accent);
+  color: #f7f0df;
+  font-size: 34px;
+  font-weight: 600;
+  line-height: 1;
+}
+.live-stage .ap-name {
+  font-size: 42px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+}
+.live-stage .ap-sub {
+  font-family: "Noto Sans SC", system-ui, sans-serif;
+  font-size: 21px;
+  font-weight: 300;
+  letter-spacing: 0.12em;
+  color: var(--ink-3);
+  padding-left: 22px;
+  border-left: 1px solid var(--hair-2);
+}
+.live-stage .ap-close {
+  padding: 14px 26px;
+  background: transparent;
+  border: 1px solid var(--hair);
+  border-radius: var(--btn-radius);
+  font-family: inherit;
+  font-size: 24px;
+  letter-spacing: 0.18em;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.live-stage .ap-close:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.live-stage .ap-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---------- 输入 ---------- */
+.live-stage .ap-input {
+  justify-content: flex-start;
+  gap: 26px;
+  padding: 56px 12px 0;
+}
+.live-stage .ap-label {
+  font-family: "Noto Sans SC", system-ui, sans-serif;
+  font-size: 23px;
+  font-weight: 300;
+  letter-spacing: 0.22em;
+  color: var(--ink-3);
+}
+.live-stage .ap-label em {
+  font-style: normal;
+  letter-spacing: 0.06em;
+  opacity: 0.6;
+  margin-left: 12px;
+}
+.live-stage .ap-name-input {
+  width: 100%;
+  padding: 6px 0 20px;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--input-line);
+  border-radius: 0;
+  text-align: center;
+  font-family: inherit;
+  font-size: 116px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  color: var(--ink-name);
+  outline: none;
+}
+.live-stage .ap-name-input::placeholder {
+  font-size: 62px;
+  font-weight: 400;
+  letter-spacing: 0.3em;
+  color: var(--ink-3);
+  opacity: 0.38;
+}
+.live-stage .ap-name-input:focus {
+  border-bottom-color: var(--accent);
+}
+
+.live-stage .ap-split {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+  font-family: "Noto Sans SC", system-ui, sans-serif;
+  font-size: 24px;
+  font-weight: 300;
+  letter-spacing: 0.1em;
+  color: var(--ink-3);
+}
+.live-stage .ap-split b {
+  font-family: inherit;
+  font-weight: 500;
+  color: var(--accent);
+  padding: 0 6px;
+}
+.live-stage .ap-split-alt {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 21px;
+}
+.live-stage .ap-split-alt button {
+  padding: 8px 18px;
+  background: transparent;
+  border: 1px dashed var(--hair);
+  border-radius: var(--btn-radius);
+  font-family: inherit;
+  font-size: 21px;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.live-stage .ap-split-alt button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.live-stage .ap-genders {
+  display: flex;
+  gap: 20px;
+}
+.live-stage .ap-genders button {
+  flex: 1;
+  padding: 24px 0;
+  background: rgba(255, 255, 255, 0.32);
+  border: 1px solid var(--hair);
+  border-radius: var(--btn-radius);
+  font-family: inherit;
+  font-size: 34px;
+  letter-spacing: 0.22em;
+  color: var(--ink-2);
+  cursor: pointer;
+  transition: all 0.16s ease-out;
+}
+.live-stage .ap-genders button.on {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.live-stage .ap-date {
+  width: 100%;
+  padding: 22px 26px;
+  background: rgba(255, 255, 255, 0.32);
+  border: 1px solid var(--hair);
+  border-radius: var(--btn-radius);
+  font-family: inherit;
+  font-size: 30px;
+  letter-spacing: 0.12em;
+  color: var(--ink);
+  outline: none;
+  color-scheme: light;
+}
+.live-stage .ap-date::-webkit-datetime-edit {
+  color: var(--ink-3);
+  font-family: inherit;
+}
+.live-stage .ap-date::-webkit-calendar-picker-indicator {
+  opacity: 0.45;
+  cursor: pointer;
+}
+.live-stage .ap-date:focus {
+  border-color: var(--accent);
+}
+
+.live-stage .ap-error {
+  margin: 0;
+  padding: 16px 22px;
+  background: var(--accent-soft);
+  border-left: 3px solid var(--accent);
+  font-size: 25px;
+  color: var(--accent);
+}
+
+/* ---------- 主按钮 ---------- */
+.live-stage .ap-go {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 38px 0 34px;
+  background: var(--btn-bg);
+  color: var(--btn-color);
+  border: 0;
+  border-radius: var(--btn-radius);
+  font-family: inherit;
+  cursor: pointer;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.18),
+    0 3px 0 rgba(29, 26, 22, 0.2);
+  transition: transform 0.12s ease-out, opacity 0.2s ease-out;
+}
+.live-stage .ap-go-main {
+  font-size: 44px;
+  font-weight: 600;
+  letter-spacing: 0.26em;
+  padding-left: 0.26em;
+  line-height: 1;
+}
+.live-stage .ap-go-hint {
+  font-family: "Noto Sans SC", system-ui, sans-serif;
+  font-size: 21px;
+  font-weight: 300;
+  letter-spacing: 0.14em;
+  opacity: 0.62;
+}
+.live-stage .ap-go:active {
+  transform: translateY(3px);
+}
+.live-stage .ap-go.is-empty {
+  opacity: 0.3;
+  cursor: not-allowed;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+/* ---------- 分析中 ---------- */
+.live-stage .ap-analyzing {
+  justify-content: center;
+  gap: 30px;
+  padding: 0 20px;
+}
+.live-stage .ap-stage {
+  margin: 0;
+  text-align: center;
+  font-size: 40px;
+  letter-spacing: 0.24em;
+  color: var(--ink-2);
+}
+.live-stage .ap-bar {
+  height: 4px;
+  background: var(--hair-2);
+  overflow: hidden;
+}
+.live-stage .ap-bar i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.4s ease-out;
+}
+.live-stage .ap-think {
+  max-height: 420px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  font-family: "Noto Sans SC", system-ui, sans-serif;
+  font-size: 26px;
+  font-weight: 300;
+  line-height: 1.7;
+  color: var(--ink-3);
+}
+.live-stage .ap-think p {
+  margin: 0;
+  opacity: 0.86;
+}
+
+/* ---------- 结论 ---------- */
+.live-stage .ap-result {
+  overflow-y: auto;
+  padding: 36px 12px 44px;
+  gap: 34px;
+  scrollbar-width: none;
+}
+.live-stage .ap-result::-webkit-scrollbar {
+  display: none;
+}
+.live-stage .ap-headline {
+  margin: 0;
+  font-size: 46px;
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: 0.02em;
+  padding-left: 26px;
+  border-left: 5px solid var(--accent);
+}
+.live-stage .ap-headline.v-fit {
+  border-left-color: var(--ink-3);
+}
+
+.live-stage .ap-block {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.live-stage .ap-block h4 {
+  margin: 0;
+  font-family: "Noto Sans SC", system-ui, sans-serif;
+  font-size: 23px;
+  font-weight: 400;
+  letter-spacing: 0.24em;
+  color: var(--accent);
+}
+.live-stage .ap-good {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.live-stage .ap-good li {
+  position: relative;
+  padding-left: 30px;
+  font-size: 31px;
+  line-height: 1.7;
+  color: var(--ink-2);
+}
+.live-stage .ap-good li::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 20px;
+  width: 12px;
+  height: 1px;
+  background: var(--ink-3);
+}
+
+.live-stage .ap-issue {
+  padding: 24px 26px;
+  border: 1px solid var(--hair-2);
+  border-left: 3px solid var(--hair);
+  background: rgba(255, 255, 255, 0.22);
+}
+.live-stage .ap-issue.hard {
+  border-left-color: var(--accent);
+  background: var(--accent-soft);
+}
+.live-stage .ap-issue-text {
+  margin: 0;
+  font-size: 31px;
+  line-height: 1.72;
+  color: var(--ink);
+}
+.live-stage .ap-issue-hint {
+  margin: 14px 0 0;
+  font-family: "Noto Sans SC", system-ui, sans-serif;
+  font-size: 25px;
+  font-weight: 300;
+  line-height: 1.65;
+  color: var(--ink-3);
+}
+
+.live-stage .ap-fit {
+  margin: 0;
+  font-size: 31px;
+  line-height: 1.75;
+  color: var(--ink-2);
+}
+
+.live-stage .ap-cite {
+  padding: 22px 0 22px 24px;
+  border-left: 1px solid var(--hair);
+}
+.live-stage .ap-cite-quote {
+  margin: 0;
+  font-size: 33px;
+  line-height: 1.6;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+}
+.live-stage .ap-cite-src {
+  margin: 10px 0 0;
+  font-family: "Noto Sans SC", system-ui, sans-serif;
+  font-size: 22px;
+  letter-spacing: 0.16em;
+  color: var(--accent);
+}
+.live-stage .ap-cite-line {
+  margin: 10px 0 0;
+  font-size: 24px;
+  line-height: 1.7;
+  color: var(--ink-3);
+}
+.live-stage .ap-cite-gloss {
+  margin: 8px 0 0;
+  font-family: "Noto Sans SC", system-ui, sans-serif;
+  font-size: 23px;
+  font-weight: 300;
+  color: var(--ink-2);
+}
+
+.live-stage .ap-closing {
+  margin: 0;
+  padding-top: 22px;
+  border-top: 1px dashed var(--hair);
+  font-size: 32px;
+  line-height: 1.7;
+  color: var(--ink-2);
+}
+
+/* ---------- 结论页底部 ---------- */
+.live-stage .ap-foot {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-top: 26px;
+  border-top: 1px solid var(--hair);
+}
+.live-stage .ap-again {
+  padding: 18px 0;
+  background: transparent;
+  border: 0;
+  font-family: inherit;
+  font-size: 24px;
+  letter-spacing: 0.18em;
+  color: var(--ink-3);
+  cursor: pointer;
+}
+.live-stage .ap-again:hover {
+  color: var(--accent);
+}

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { NameDetail, ReportDocument } from "@/domain/types";
+import { AnalyzePanel } from "./analyze-panel";
 import "./live.css";
 
 type Skin = "paper" | "celadon" | "silver" | "bamboo";
@@ -284,6 +285,7 @@ export function LiveClient() {
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cardNo, setCardNo] = useState(1);
+  const [analyzeOpen, setAnalyzeOpen] = useState(false);
 
   const rootRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -313,9 +315,11 @@ export function LiveClient() {
     return () => window.removeEventListener("resize", fit);
   }, []);
 
-  const generate = useCallback(async () => {
+  /** 从名字分析带过来的约束：姓氏已定、要避开的字、定向要求 */
+  const generate = useCallback(
+    async (override?: { surname?: string; gender?: Gender; taboo?: string; notes?: string }) => {
     if (busy.current) return;
-    const surname = draft.trim();
+    const surname = (override?.surname ?? draft).trim();
     if (!surname) {
       inputRef.current?.focus();
       return;
@@ -333,11 +337,12 @@ export function LiveClient() {
         body: JSON.stringify({
           source: "live",
           surname,
-          gender,
+          gender: override?.gender ?? gender,
           nameLength: extra.len,
           generationChar: extra.genChar || undefined,
           generationPosition: extra.genPos,
-          tabooChars: extra.taboo || undefined,
+          tabooChars: override?.taboo || extra.taboo || undefined,
+          styleNotes: override?.notes || undefined,
           baziEnabled: extra.bazi && Boolean(extra.birthDate),
           birthDate: extra.birthDate || undefined,
           birthHour: extra.birthHour || undefined,
@@ -409,7 +414,25 @@ export function LiveClient() {
       } finally {
         busy.current = false;
       }
-  }, [draft, gender, extra]);
+    },
+    [draft, gender, extra],
+  );
+
+  /** 分析完直接把结论当约束送进取名：姓氏带过去，问题转成避讳和定向要求 */
+  const regenFromAnalysis = useCallback(
+    (brief: { surname: string; gender: Gender; tabooChars: string[]; styleNotes: string; avoidPopular: boolean }) => {
+      setAnalyzeOpen(false);
+      setDraft(brief.surname);
+      setGender(brief.gender);
+      void generate({
+        surname: brief.surname,
+        gender: brief.gender,
+        taboo: brief.tabooChars.join(""),
+        notes: brief.styleNotes,
+      });
+    },
+    [generate],
+  );
 
   const resetToInput = useCallback(() => {
     setShow(null);
@@ -433,7 +456,17 @@ export function LiveClient() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
+        if (analyzeOpen) {
+          setAnalyzeOpen(false);
+          return;
+        }
         setDrawerOpen(false);
+        return;
+      }
+      // 分析面板开着的时候不吃其它快捷键，免得在输入框外按空格就把取名触发了
+      if (analyzeOpen) return;
+      if (e.key === "a" || e.key === "A") {
+        setAnalyzeOpen(true);
         return;
       }
       if (e.key === "s" || e.key === "S") {
@@ -459,7 +492,7 @@ export function LiveClient() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [phase, resetToInput, generate, cycleSkin]);
+  }, [phase, resetToInput, generate, cycleSkin, analyzeOpen]);
 
   /* ---------- 存图 ---------- */
   const exportCard = useCallback(() => {
@@ -726,6 +759,11 @@ export function LiveClient() {
                 </span>
               </button>
 
+              <button type="button" className="entry-bar" onClick={() => setAnalyzeOpen(true)}>
+                <span>名字分析</span>
+                <span>已经有名字了？先看看问题在哪 · A</span>
+              </button>
+
               {error && <p className="gen-error">{error}</p>}
             </section>
 
@@ -990,6 +1028,8 @@ export function LiveClient() {
           <button type="button" className="skin-btn" onClick={cycleSkin}>
             换肤 · {SKIN_LABEL[skin]} · S
           </button>
+
+          <AnalyzePanel open={analyzeOpen} onClose={() => setAnalyzeOpen(false)} onRegenerate={regenFromAnalysis} />
         </div>
       </div>
     </div>

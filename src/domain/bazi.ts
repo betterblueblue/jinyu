@@ -156,7 +156,10 @@ function distinctPillars(charts: Chart[]): {
   return { years: uniq((c) => c.year), months: uniq((c) => c.month), days: uniq((c) => c.day) };
 }
 
-export function buildBaziSummary(req: NormalizedRequest): BaziResult | { ok: true; summary: null } {
+/** 排盘只依赖这四个字段；名字分析复用同一套排盘，不需要完整表单请求 */
+export type BaziInput = Pick<NormalizedRequest, "baziEnabled" | "birthStatus" | "birthDate" | "birthHour">;
+
+export function buildBaziSummary(req: BaziInput): BaziResult | { ok: true; summary: null } {
   if (!req.baziEnabled) {
     return { ok: true, summary: null };
   }
