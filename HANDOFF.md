@@ -444,26 +444,28 @@ tests/fixtures/corpus/             # 测试用微型语料 + 字表
 | 项 | 结果 |
 |---|---|
 | `pnpm typecheck` | 干净 |
-| `pnpm test` | **74/74**（含 analysis 23 个） |
+| `pnpm test` | **77/77**（含 analysis 26 个） |
 | 语料核验离线自检 | `pnpm tsx scripts/probe-analysis.ts` 全部符合预期，故意编的句子被驳回 |
 | 真实模型分析 | 高登科 → cost，3 条问题，出处「全唐诗·登科后」核验通过并折成简体 |
 | 一键改名 | 面板关闭、姓氏带过去、出「高承岳」 |
 | 576×1024 / 1080×1920 | 输入、分析中、结论、底部按钮都不溢出（截图已删，需要时重跑） |
-| `pnpm e2e` | **跑不了**，见下 |
+| `pnpm e2e` | **3 passed**（1.6m，复用 9000 上已启动的 server，跑完自动清理用例生成的报告） |
 
-### 待验证（下次接手先做这一条）
+### e2e 现在怎么跑（2026-10-30 已修通）
 
-一次自动化复查里，`/live` 输入态的**姓氏输入框打字后按钮仍是 disabled**：DOM 里 value 有值，但 `draft` 状态没更新，说明 onChange 没触发；同一页面上点击类交互（性别按钮、名字分析入口）都正常。
+`reuseExistingServer` 会复用 9000 上已启动的 dev server，而那个 server 用的是 `.env.local`，所以账号也改成从 `.env.local` 读（`e2e/local-env.ts`）。之前 config 里写死 `change-me`，与 `.env.local` 的 `betterblue` 不符，3 个 spec 全挂在登录。
 
-怀疑是 dev server 长时间 HMR 后的陈旧模块，**先重启 `pnpm dev` 再复验**。重启后仍复现，就从这里查：`app/live/live-client.tsx` 的 `surname-input` → `setDraft` → `curSurname`。
+配套改了三处：
 
-没验证的是这条路径：未知性别 → 六选分组 → 存图。之前（改 UI 当天首次 E2E）是通的，改动只新增了入口按钮和 `generate(override?)`，理论上不影响，但**没复验就不要当成已验证**。
+- 单测超时 30s → 240s：复用 server 时跑的是真实模型，一次 16–25 秒，用例里的 60–180 秒等待先前会被默认超时提前判死
+- `globalSetup` 记下 `data/index.json` 现有 id，`globalTeardown` 把新增的 王/林/苏 报告挪进 `data/_trash/e2e-<时间>/`，用户历史不被污染
+- 实测 3 passed (1.6m)，跑前跑后 index 都是 114 条
 
-### `pnpm e2e` 为什么跑不了
+### 已修：`/live` 姓氏输入框打字后按钮仍 disabled（2026-10-30）
 
-`playwright.config.ts` 的 `webServer` 是 `reuseExistingServer: !CI`，会直接复用 9000 端口上已经跑着的 dev server。那个 server 用的是 `.env.local` 里的 `betterblue`，而 config 里灌的是 `change-me`，登录必然失败（3 个 spec 全挂在登录）。这不是代码回归。
+不是陈旧模块，是 **hydration 竞态**：hydrate 之前输入的字符只落在 DOM，onChange 还没绑上，`draft` 一直是空，按钮因此禁死；之后再打字还会和早先的字符拼在一起（「苏」+「李」=「李苏」）。
 
-要跑通二选一：先停掉自己的 dev server 再 `pnpm e2e`，或临时把 config 的 `JINYU_AUTH_PASSWORD` 改成 `.env.local` 里的值。
+修法：`live-client.tsx` 挂载后把输入框现值同步回 `draft`。Playwright 复验：修复前 disabled 保持 3.7 秒，修复后一挂载就恢复。
 
 ### 已知限制
 
