@@ -91,6 +91,17 @@ export function normalizeRequest(input: NamingFormInput): NormalizeResult {
   }
 
   const tabooChars = splitTaboo(data.tabooChars);
+  // 死局防护：单字名又要辈分字 → 合法名只剩「辈分字」一个，永远凑不满候选数（当前最少 3 个）
+  if (nameLength === "one" && generationChar) {
+    return {
+      ok: false,
+      message: `单字名 + 辈分字「${generationChar}」只能得到同一个字，凑不出多个候选；请改双字名或去掉辈分字`,
+      fieldErrors: {
+        nameLength: "单字名与辈分字冲突，请改双字名",
+        generationChar: "单字名时无法再要求辈分字",
+      },
+    };
+  }
   // 死局防护：辈分字必须出现，又要求避开同一字 → 永远无候选。提前拦截并提示。
   if (generationChar && tabooChars.includes(generationChar)) {
     return {

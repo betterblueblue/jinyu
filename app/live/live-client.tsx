@@ -925,7 +925,7 @@ export function LiveClient() {
                   <button
                     type="button"
                     className={extra.len === "one" ? "on" : ""}
-                    onClick={() => setExtra((p) => ({ ...p, len: "one" }))}
+                    onClick={() => setExtra((p) => ({ ...p, len: "one", genChar: "" }))}
                   >
                     单字名
                   </button>
@@ -938,7 +938,8 @@ export function LiveClient() {
                   <input
                     className="inp"
                     maxLength={1}
-                    placeholder="单个汉字，如 知"
+                    disabled={extra.len === "one"}
+                    placeholder={extra.len === "one" ? "单字名不能再填辈分字" : "单个汉字，如 知"}
                     value={extra.genChar}
                     onChange={(e) => setExtra((p) => ({ ...p, genChar: e.target.value }))}
                   />

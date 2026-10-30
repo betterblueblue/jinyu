@@ -62,6 +62,26 @@ describe("normalizeRequest", () => {
     if (!r.ok) expect(r.message).toMatch(/避讳字不能包含辈分字/);
   });
 
+  it("rejects single-char name combined with a generation char (deadlock)", () => {
+    const r = normalizeRequest({
+      surname: "沈",
+      gender: "unknown",
+      nameLength: "one",
+      generationChar: "知",
+      generationPosition: "first",
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.message).toMatch(/单字名/);
+      expect(r.fieldErrors?.generationChar).toBeDefined();
+    }
+  });
+
+  it("allows single-char name without a generation char", () => {
+    const r = normalizeRequest({ surname: "沈", gender: "male", nameLength: "one" });
+    expect(r.ok).toBe(true);
+  });
+
   it("allows taboo and generation that do not overlap", () => {
     const r = normalizeRequest({
       surname: "沈",
