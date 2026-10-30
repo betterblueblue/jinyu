@@ -27,12 +27,6 @@ interface Props {
   }) => void;
 }
 
-const VERDICT_BTN: Record<AnalysisResult["verdict"], string> = {
-  hard: "换个名字看看",
-  cost: "看看换成什么样的",
-  fit: "看看更贴合的写法",
-};
-
 const STAGE_LABEL: Record<string, string> = {
   reading: "正在读这个名字",
   verifying: "正在核对出处",
@@ -186,7 +180,7 @@ export function AnalyzePanel({ open, onClose, onRegenerate }: Props) {
         <div className="ap-title">
           <span className="ap-seal">析</span>
           <span className="ap-name">名字分析</span>
-          <span className="ap-sub">已经取好的名字，看看问题在哪</span>
+          <span className="ap-sub">看看名字的读音、字义和使用体验</span>
         </div>
         <button type="button" className="ap-close" onClick={onClose} aria-label="关闭">
           关闭
@@ -363,8 +357,8 @@ export function AnalyzePanel({ open, onClose, onRegenerate }: Props) {
                 })
               }
             >
-              <span className="ap-go-main">{VERDICT_BTN[result.verdict]}</span>
-              <span className="ap-go-hint">姓氏「{result.split.surname}」已经带过去</span>
+              <span className="ap-go-main">试试取新名字</span>
+              <span className="ap-go-hint">想看看其他选择？姓氏「{result.split.surname}」已经带过去</span>
             </button>
             <button
               type="button"
