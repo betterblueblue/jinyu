@@ -315,6 +315,16 @@ export function LiveClient() {
     return () => window.removeEventListener("resize", fit);
   }, []);
 
+  /**
+   * hydrate 之前打进输入框的字符只存在于 DOM，React 收不到 onChange（指针/点击事件要等 hydrate 才绑上）。
+   * 这类字符会让「开始取名」一直 disabled，之后继续打字还会和它拼在一起（「苏」+「李」=「李苏」）。
+   * 挂载后把 DOM 里的现值同步回状态，双方就一致了。
+   */
+  useEffect(() => {
+    const el = inputRef.current;
+    if (el && el.value) setDraft((prev) => (prev ? prev : el.value));
+  }, []);
+
   /** 从名字分析带过来的约束：姓氏已定、要避开的字、定向要求 */
   const generate = useCallback(
     async (override?: { surname?: string; gender?: Gender; taboo?: string; notes?: string }) => {
