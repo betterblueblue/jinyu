@@ -34,6 +34,8 @@ interface ShowData {
   tags: string[];
   rows: [string, string][];
   alts: ShowAlt[];
+  /** 开了生辰时带上四柱，直播页和存图都要显示 */
+  bazi?: string;
   groups?: {
     male: ShowAlt[];
     female: ShowAlt[];
@@ -87,12 +89,10 @@ function toShow(report: ReportDocument): ShowData {
   const alts = report.names.filter((n) => n.fullName !== primary.fullName).slice(0, 2);
   const rowsFor = (n: NameDetail): [string, string][] => {
     const all: [string, string][] = [
-      ["音韵", n.phonology],
-      ["字形", n.glyph],
       ["寓意", n.meaning],
       ["出处", n.origin],
-      ["避坑", n.pitfalls],
-      ["风格", n.styleFit],
+      // 开了生辰才给这一项，模型/兜底都会写 baziFit
+      ...(n.baziFit ? ([["八字", n.baziFit]] as [string, string][]) : []),
     ];
     return all.filter((r) => Boolean(r[1]));
   };
@@ -101,10 +101,8 @@ function toShow(report: ReportDocument): ShowData {
     py: n.pinyin ?? "",
     one: n.meaning,
     rows: [
-      ["音韵", n.phonology],
       ["寓意", n.meaning],
       ["出处", n.origin],
-      ["避坑", n.pitfalls],
     ].filter((r) => Boolean(r[1])) as [string, string][],
   });
   const groupFor = (fullNames?: string[]): ShowAlt[] =>
@@ -139,6 +137,7 @@ function toShow(report: ReportDocument): ShowData {
     ],
     rows: rowsFor(primary),
     alts: alts.map(toAlt),
+    ...(report.bazi?.pillarsText ? { bazi: report.bazi.pillarsText } : {}),
     groups,
   };
 }
@@ -544,7 +543,8 @@ export function LiveClient() {
     const altMax = altBlocks.reduce((m, b) => Math.max(m, b.h), 0);
 
     const nameY = 470;
-    const H = Math.max(1440, Math.ceil(796 + mainH + 60 + 54 + altMax + 140));
+    const baziExtra = show.bazi ? 56 : 0;
+    const H = Math.max(1440, Math.ceil(796 + mainH + 60 + baziExtra + 54 + altMax + 140));
     const cv = document.createElement("canvas");
     cv.width = W;
     cv.height = H;
@@ -618,7 +618,13 @@ export function LiveClient() {
       cy[col] = y + 40 + r.lines.length * 44 + 26;
     });
 
-    const div2 = 796 + mainH + 20;
+    const div2 = 796 + mainH + (show.bazi ? 60 : 20);
+    if (show.bazi) {
+      x.textAlign = "center";
+      x.fillStyle = C.ink3;
+      x.font = `400 22px ${SERIF}`;
+      x.fillText(`四柱 ${show.bazi}`, W / 2, 796 + mainH + 34);
+    }
     x.strokeStyle = C.line;
     x.beginPath();
     x.moveTo(M, div2);
@@ -679,7 +685,7 @@ export function LiveClient() {
   return (
     <div className="live-root" ref={rootRef} data-skin={skin}>
       <div className="live-viewport">
-        <div className={`live-stage ${ready ? "ready" : ""}`}>
+        <div className={`live-stage ${ready ? "ready" : ""} ${show?.bazi ? "has-bazi" : ""}`}>
           <div className="sheen" />
           <div className="toplight" />
           <div className="fiber" />
@@ -854,12 +860,22 @@ export function LiveClient() {
 
                     <section className="details reveal" style={{ ["--d" as string]: "850ms" }}>
                       {show.rows.map(([label, text]) => (
-                        <div className="detail" key={label}>
+                        <div
+                          className={`detail${label === "八字" ? " wide" : ""}`}
+                          key={label}
+                        >
                           <span className="label">{label}</span>
                           <p>{text}</p>
                         </div>
                       ))}
                     </section>
+
+                    {show.bazi && (
+                      <p className="bazi reveal" style={{ ["--d" as string]: "900ms" }}>
+                        <span className="bazi-label">四柱</span>
+                        {show.bazi}
+                      </p>
+                    )}
 
                     <section className="alt reveal" style={{ ["--d" as string]: "1000ms" }}>
                       <span className="alt-label">备选</span>
