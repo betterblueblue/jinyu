@@ -2,22 +2,32 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { ReportDocument, ReportListItem } from "@/domain/types";
 
-const DATA_DIR = process.env.JINYU_DATA_DIR || path.join(process.cwd(), "data");
-const REPORTS_DIR = path.join(DATA_DIR, "reports");
-const INDEX_FILE = path.join(DATA_DIR, "index.json");
+// 路径必须调用时求值：测试在 beforeEach 里设 JINYU_DATA_DIR，
+// 若在这里用顶层常量，模块 import 时 env 还没设好，测试会写进真实 data/
+function dataDir(): string {
+  return process.env.JINYU_DATA_DIR || path.join(process.cwd(), "data");
+}
+
+function reportsDir(): string {
+  return path.join(dataDir(), "reports");
+}
+
+function indexFile(): string {
+  return path.join(dataDir(), "index.json");
+}
 
 async function ensureDirs(): Promise<void> {
-  await fs.mkdir(REPORTS_DIR, { recursive: true });
+  await fs.mkdir(reportsDir(), { recursive: true });
   try {
-    await fs.access(INDEX_FILE);
+    await fs.access(indexFile());
   } catch {
-    await fs.writeFile(INDEX_FILE, "[]", "utf8");
+    await fs.writeFile(indexFile(), "[]", "utf8");
   }
 }
 
 async function readIndex(): Promise<ReportListItem[]> {
   await ensureDirs();
-  const raw = await fs.readFile(INDEX_FILE, "utf8");
+  const raw = await fs.readFile(indexFile(), "utf8");
   try {
     return JSON.parse(raw) as ReportListItem[];
   } catch {
@@ -27,7 +37,7 @@ async function readIndex(): Promise<ReportListItem[]> {
 
 async function writeIndex(items: ReportListItem[]): Promise<void> {
   await ensureDirs();
-  await fs.writeFile(INDEX_FILE, JSON.stringify(items, null, 2), "utf8");
+  await fs.writeFile(indexFile(), JSON.stringify(items, null, 2), "utf8");
 }
 
 function toListItem(report: ReportDocument): ReportListItem {
@@ -44,7 +54,7 @@ function toListItem(report: ReportDocument): ReportListItem {
 
 export async function saveReport(report: ReportDocument): Promise<void> {
   await ensureDirs();
-  const file = path.join(REPORTS_DIR, `${report.id}.json`);
+  const file = path.join(reportsDir(), `${report.id}.json`);
   await fs.writeFile(file, JSON.stringify(report, null, 2), "utf8");
   const index = await readIndex();
   const next = [toListItem(report), ...index.filter((i) => i.id !== report.id)];
@@ -53,7 +63,7 @@ export async function saveReport(report: ReportDocument): Promise<void> {
 
 export async function getReport(id: string): Promise<ReportDocument | null> {
   await ensureDirs();
-  const file = path.join(REPORTS_DIR, `${id}.json`);
+  const file = path.join(reportsDir(), `${id}.json`);
   try {
     const raw = await fs.readFile(file, "utf8");
     return JSON.parse(raw) as ReportDocument;

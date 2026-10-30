@@ -33,5 +33,13 @@ describe("report store", () => {
     expect(loaded?.overview.primaryName).toBe(gen.report.overview.primaryName);
     const list = await listReports();
     expect(list.some((i) => i.id === gen.report.id)).toBe(true);
+
+    // 隔离性：必须写进 JINYU_DATA_DIR 指的临时目录，不能碰仓库真实的 data/
+    await expect(
+      fs.access(path.join(dir, "reports", `${gen.report.id}.json`)),
+    ).resolves.toBeUndefined();
+    await expect(
+      fs.access(path.join(process.cwd(), "data", "reports", `${gen.report.id}.json`)),
+    ).rejects.toThrow();
   });
 });
