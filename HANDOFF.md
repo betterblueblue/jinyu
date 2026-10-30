@@ -143,7 +143,8 @@ tools/fit-window.ps1           # 把浏览器窗口校正成精确 9:16 客户�
 - notes 给出干支本气五行统计（不含藏干加权）
 - `BaziSummary` 新增 `engine: "lunar-javascript"`；**旧报告没有该字段**，报告页据此显示「旧版示意排盘 · 不可作为排盘依据」，不会把新标签贴到旧数据上
 - **四柱先算好再进 prompt**：`baziPillars` / `baziPrecision` /（跨界时）`baziUncertain` 一起发给模型，instruction 明确要求基于给定柱子解释、不得自行推算干支
-- 出生时刻不确定时做跨界检查：无时辰比 00:00 与 23:59，时辰标签比该时段首尾（亥时用 22:59，不跨入子时），柱子不一致就在 notes 里写「年柱/月柱/日柱可能为 A 或 B」；子时单独提示早子/夜子
+- 出生时刻不确定时做跨界检查：**时段起点、中点、终点都要比**（只比中点和终点会漏掉落在前半段的节气——2024-04-04 清明 15:02 在申时 15–17 的前半段，月柱 丁卯→戊辰）；无时辰比 00:00 与 23:59；子时比早子 00:30 与夜子 23:30。柱子不一致时 notes 写「年柱/月柱/日柱可能为 A 或 B」，备选同时放进 `pillarOptions` 供兜底文案和提示词用（`baziPillarOptions`）
+- 模型漏填 `baziFit` 时，有 `pillarOptions` 就写「出生时刻不确定：年柱可能为 A 或 B……」，**不给单一结论**
 - 精确 23:30 走「夜子时，日柱已归次日」，不再写「按早子时 00:30 估算」
 
 校验点写在 `tests/bazi.test.ts`（历法校验数据出自 `baby-name-skill/references/wanni-calendar.md`）：
@@ -157,6 +158,8 @@ tools/fit-window.ps1           # 把浏览器窗口校正成精确 9:16 客户�
 | 2026-10-30 23:30 vs 22:30 | 日柱 戊寅 / 丁丑 |
 | 2025-02-03 未填时辰 | notes 列出年柱/月柱/日柱两种可能 |
 | 2025-02-03 亥时 21–23 | 提示跨立春，但**不**误报日柱跨界 |
+| 2024-04-04 申时 15–17 | 月柱 丁卯/戊辰（节气在前半段也要报） |
+| 2024-04-04 辰时 7–9 | 不报跨界（整段都在清明前） |
 | 2026-10-30 子时 | 提示日柱可能两个 + 早子时说明 |
 
 **仍然没解决**：时柱只有时辰级，没有出生地/真太阳时；喜忌、用神还是模型措辞，不因排盘变准。要更准得先在页面补「精确到分钟 + 出生地」。
@@ -190,7 +193,7 @@ bat 里 URL 写死局域网 IP `http://192.168.31.211:9000/live`（直播在另�
 
 | Check | Command / method | Result |
 |---|---|---|
-| Unit tests | `pnpm test` | Exit 0；**46/46** passed（2026-10-30 复跑，含八字排盘 11 个用例） |
+| Unit tests | `pnpm test` | Exit 0；**49/49** passed（2026-10-30 复跑，含八字排盘 13 个用例） |
 | Typecheck | `pnpm typecheck` | 干净 |
 | 真实生成（正式页） | 手动 + Playwright | 「沈静嘉」「陈峻岩」等，16–25s |
 | 真实生成（直播页） | Playwright 点「开始取名」 | 「苏清晏」「苏知微」「苏婉仪」等 |
@@ -247,6 +250,8 @@ data/_trash/fake-2026-10-30T06-59-52/   # 19 条 providerName=fake 的示例模�
 | 第 8 个 | `feat(bazi)` 换成 lunar-javascript 真实四柱排盘 + 7 个校验用例 |
 | 第 9 个 | HANDOFF 补排盘一节 |
 | 第 10 个 | 修评审三处：旧报告标签、跨界提示、四柱进 prompt |
+| 第 11 个 | HANDOFF 记录上一轮评审修复 |
+| 第 12 个 | 修评审两处：节气在前半段漏报、不确定时兜底给单一结论（含本文档） |
 
 再往前 `5f681c1` 是 change-impact 目录改名。
 
@@ -293,7 +298,7 @@ data/_trash/fake-2026-10-30T06-59-52/   # 19 条 providerName=fake 的示例模�
 ```bash
 pnpm install
 pnpm dev                 # 9000 端口
-pnpm test                # 46 个
+pnpm test                # 49 个
 pnpm typecheck
 pnpm e2e
 node scripts/probe-provider.ts   # 真实模型 + 闸门
@@ -307,7 +312,7 @@ node scripts/e2e-real-llm.mjs    # 需 dev server
 | Item | Value |
 |---|---|
 | Path | `E:\agent\jinyu` |
-| Git | 仓库 + remote，`main` 分支，工作区干净，最近 10 个 commit 见上 |
+| Git | 仓库 + remote，`main` 分支，工作区干净，最近 12 个 commit 见上 |
 | Package manager | pnpm |
 | Dev server | 9000 端口（本次会话实测已在跑，PID 23396）；否则手动 `pnpm dev` / `.\start-dev.ps1` |
 | 本机局域网 IP | `192.168.31.211`（DHCP，会变） |

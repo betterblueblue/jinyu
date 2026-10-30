@@ -128,22 +128,32 @@ function countWuXing(parts: string[]): string {
 }
 
 /** 出生时刻不确定时，年月柱可能跨立春/节气，日柱可能跨两日，都要显式说出来 */
-function crossBoundaryNotes(main: Chart, alt: Chart, where: string): string[] {
+function crossBoundaryNotes(charts: Chart[], where: string): string[] {
+  const { years, months, days } = distinctPillars(charts);
   const notes: string[] = [];
-  if (main.year !== alt.year) {
+  if (years.length > 1) {
     notes.push(
-      `年柱可能为 ${main.year} 或 ${alt.year}（${where}，跨立春），建议用精确出生时间确认。`,
+      `年柱可能为 ${years.join(" 或 ")}（${where}，跨立春），建议用精确出生时间确认。`,
     );
   }
-  if (main.month !== alt.month) {
+  if (months.length > 1) {
     notes.push(
-      `月柱可能为 ${main.month} 或 ${alt.month}（${where}，跨节气交接），建议用精确出生时间确认。`,
+      `月柱可能为 ${months.join(" 或 ")}（${where}，跨节气交接），建议用精确出生时间确认。`,
     );
   }
-  if (main.day !== alt.day) {
-    notes.push(`日柱可能为 ${main.day} 或 ${alt.day}（${where}），建议用精确出生时间确认。`);
+  if (days.length > 1) {
+    notes.push(`日柱可能为 ${days.join(" 或 ")}（${where}），建议用精确出生时间确认。`);
   }
   return notes;
+}
+
+function distinctPillars(charts: Chart[]): {
+  years: string[];
+  months: string[];
+  days: string[];
+} {
+  const uniq = (pick: (c: Chart) => string) => [...new Set(charts.map(pick))];
+  return { years: uniq((c) => c.year), months: uniq((c) => c.month), days: uniq((c) => c.day) };
 }
 
 export function buildBaziSummary(req: NormalizedRequest): BaziResult | { ok: true; summary: null } {
@@ -184,20 +194,27 @@ export function buildBaziSummary(req: NormalizedRequest): BaziResult | { ok: tru
     );
   }
 
-  // 2. 跨界检查：出生时刻不确定时年月柱/日柱都可能换
+  // 2. 跨界检查：出生时刻不确定时年月柱/日柱都可能换。
+  //    必须同时看时段起点、中点、终点——节气可能落在时段前半段。
+  let charts: Chart[] = [main];
   if (!point) {
-    const alt = chartAt(date, 23, 59);
-    notes.push(...crossBoundaryNotes(main, alt, "出生时刻未填"));
+    const open = chartAt(date, 0, 0);
+    const close = chartAt(date, 23, 59);
+    charts = [open, main, close];
+    notes.push(...crossBoundaryNotes(charts, "出生时刻未填"));
   } else if (point.coarse) {
     if (point.branch === "子") {
-      // 子时横跨两日：对比早子（当日 00:30）与夜子（当日 23:30，日柱已归次日）
+      // 子时横跨两日：早子（当日 00:30）与夜子（当日 23:30，日柱已归次日）
       const late = chartAt(date, 23, 30);
-      notes.push(...crossBoundaryNotes(main, late, "子时横跨两日"));
+      charts = [main, late];
+      notes.push(...crossBoundaryNotes(charts, "子时横跨两日"));
       notes.push("子时按早子时（00:30）估算；若实际生于 23 点后，日柱应顺延一日。");
     } else {
+      const start = chartAt(date, point.range!.from % 24, 0);
       // 该时辰时段的最后一分钟（不跨入下一个时辰）
-      const alt = chartAt(date, point.range!.to - 1, 59);
-      notes.push(...crossBoundaryNotes(main, alt, `「${point.branch}时」时段内`));
+      const end = chartAt(date, point.range!.to - 1, 59);
+      charts = [start, main, end];
+      notes.push(...crossBoundaryNotes(charts, `「${point.branch}时」时段内`));
     }
   } else if (point.hour >= 23) {
     notes.push("出生时间在 23 点后，按夜子时处理：日柱已归次日。");
@@ -217,6 +234,13 @@ export function buildBaziSummary(req: NormalizedRequest): BaziResult | { ok: tru
     ? `${main.year} ${main.month} ${main.day} ${main.time}`
     : `${main.year} ${main.month} ${main.day}`;
 
+  // 柱子不止一种时，把备选留给调用方（兜底文案、提示词）用，避免把其中一组写成确定结果
+  const { years, months, days } = distinctPillars(charts);
+  const pillarOptions =
+    years.length > 1 || months.length > 1 || days.length > 1
+      ? { year: years, month: months, day: days }
+      : undefined;
+
   return {
     ok: true,
     summary: {
@@ -224,6 +248,7 @@ export function buildBaziSummary(req: NormalizedRequest): BaziResult | { ok: tru
       engine: "lunar-javascript",
       precision: point ? "full_eight" : "six_limited",
       pillarsText,
+      ...(pillarOptions ? { pillarOptions } : {}),
       notes,
       restrainedAdvice: "若关心五行平衡，可把排盘当作背景信息，与名字音形义交叉看，而不当作唯一标准。",
     },

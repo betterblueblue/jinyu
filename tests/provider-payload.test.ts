@@ -147,6 +147,32 @@ describe("StepFunProvider payload（八字字段进 prompt）", () => {
     expect(list[0]?.baziFit).toContain("四柱为");
   });
 
+  it("柱子不确定时，兜底文案不给单一结论", async () => {
+    vi.stubGlobal("fetch", async (_url: string, _opts: RequestInit) => {
+      return sseResponse('{"candidates":[{"givenName":"嘉言","genderLean":"male"}]}');
+    });
+
+    // 2025-02-03 亥时 21–23：立春 22:10 落在时段内，年柱月柱都有两种可能
+    const n = normalizeRequest({
+      surname: "王",
+      gender: "male",
+      nameLength: "two",
+      baziEnabled: true,
+      birthDate: "2025-02-03",
+      birthHour: "亥时 21–23",
+    });
+    expect(n.ok).toBe(true);
+    if (!n.ok) return;
+
+    const provider = new StepFunProvider({ baseUrl: "http://x", apiKey: "k", model: "m" });
+    const list = await provider.generateCandidates(n.value, 0);
+    const fit = list[0]?.baziFit ?? "";
+    expect(fit).toContain("出生时刻不确定");
+    expect(fit).toContain("甲辰");
+    expect(fit).toContain("乙巳");
+    expect(fit).not.toContain("四柱为甲辰");
+  });
+
   it("直播未知性别只请求明确的男向女向候选，并给两组预留过滤余量", async () => {
     const captured: string[] = [];
     captureFetch(captured);

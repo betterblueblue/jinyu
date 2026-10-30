@@ -72,12 +72,20 @@ export interface EliminationNote {
   reasons: string[];
 }
 
+export interface BaziPillarOptions {
+  year: string[];
+  month: string[];
+  day: string[];
+}
+
 export interface BaziSummary {
   enabled: true;
   /** 排盘引擎标记；旧版哈希「示意排盘」的报告没有该字段，页面据此区分新旧 */
   engine?: "lunar-javascript";
   precision: "full_eight" | "six_limited";
   pillarsText: string;
+  /** 出生时刻不确定时，可能出现的柱子备选（不止一种才有该字段） */
+  pillarOptions?: BaziPillarOptions;
   notes: string[];
   restrainedAdvice: string;
 }

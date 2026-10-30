@@ -87,6 +87,22 @@ describe("bazi 四柱", () => {
     expect(notes).toContain("立春");
   });
 
+  it("节气落在时辰前半段也要报（2024-04-04 清明 15:02，申时 15–17）", () => {
+    // 15:00 月柱 丁卯，15:02 清明后变 戊辰；只比中点和终点会漏
+    const result = summary({ birthDate: "2024-04-04", birthHour: "申时 15–17" });
+    const notes = result.notes.join(" | ");
+    expect(notes).toContain("月柱可能为");
+    expect(notes).toContain("丁卯");
+    expect(notes).toContain("戊辰");
+    expect(result.pillarOptions?.month).toEqual(["丁卯", "戊辰"]);
+  });
+
+  it("时辰整体落在节气之后时不报跨界", () => {
+    // 2024-04-04 申时以外的时段：辰时 07–09 在清明前，月柱只有丁卯
+    const notes = summary({ birthDate: "2024-04-04", birthHour: "辰时 7–9" }).notes.join(" | ");
+    expect(notes).not.toContain("月柱可能为");
+  });
+
   it("时辰标签为子时，提示早子/夜子不确定", () => {
     const notes = summary({ birthDate: "2026-10-30", birthHour: "子时 23–1" }).notes.join(" | ");
     expect(notes).toContain("早子时");
