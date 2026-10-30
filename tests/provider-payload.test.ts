@@ -70,8 +70,9 @@ describe("StepFunProvider payload（八字字段进 prompt）", () => {
     expect(systemContent(body)).toContain('"baziFit":"与生辰气质的呼应');
     // user instruction 硬强调每个候选必须包含 baziFit，且必须基于给定四柱
     expect(String(user.instruction)).toContain("每个候选的 JSON 对象必须包含 baziFit 字段");
-    expect(String(user.instruction)).toContain("基于给定的 baziPillars");
-    expect(String(user.instruction)).toContain("不作五行用神铁口定论");
+    expect(String(user.instruction)).toContain("不许出现天干地支");
+    expect(String(user.instruction)).toContain("baziPillars 只供你自己参考");
+    expect(String(user.instruction)).toContain("不作铁口定论");
   });
 
   it("出生时刻跨立春时，payload 带 baziUncertain 并要求写出不确定", async () => {
@@ -144,7 +145,8 @@ describe("StepFunProvider payload（八字字段进 prompt）", () => {
     const list = await provider.generateCandidates(n.value, 0);
     expect(list.length).toBe(1);
     expect(list[0]?.baziFit).toBeDefined();
-    expect(list[0]?.baziFit).toContain("四柱为");
+    expect(list[0]?.baziFit).toMatch(/属|生在/);
+    expect(list[0]?.baziFit).not.toContain("四柱");
   });
 
   it("柱子不确定时，兜底文案不给单一结论", async () => {
@@ -168,9 +170,10 @@ describe("StepFunProvider payload（八字字段进 prompt）", () => {
     const list = await provider.generateCandidates(n.value, 0);
     const fit = list[0]?.baziFit ?? "";
     expect(fit).toContain("出生时刻不确定");
-    expect(fit).toContain("甲辰");
-    expect(fit).toContain("乙巳");
-    expect(fit).not.toContain("四柱为甲辰");
+    expect(fit).toContain("属");
+    expect(fit).not.toContain("四柱");
+    // 直播/取名文案里不出现干支
+    expect(fit).not.toMatch(/[甲乙丙丁戊己庚辛壬癸][子丑寅卯辰巳午未申酉戌亥]/);
   });
 
   it("直播未知性别只请求明确的男向女向候选，并给两组预留过滤余量", async () => {

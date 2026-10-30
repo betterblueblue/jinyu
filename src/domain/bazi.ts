@@ -251,9 +251,46 @@ export function buildBaziSummary(req: BaziInput): BaziResult | { ok: true; summa
       engine: "lunar-javascript",
       precision: point ? "full_eight" : "six_limited",
       pillarsText,
+      // 给普通人看的说法：属相 + 出生季节，不吐干支
+      readable: {
+        zodiac: ZODIAC[main.year[1] ?? ""] ?? "",
+        season: SEASON[main.month[1] ?? ""] ?? "",
+      },
       ...(pillarOptions ? { pillarOptions } : {}),
       notes,
       restrainedAdvice: "若关心五行平衡，可把排盘当作背景信息，与名字音形义交叉看，而不当作唯一标准。",
     },
   };
 }
+
+/** 年支 → 属相 */
+const ZODIAC: Record<string, string> = {
+  子: "鼠",
+  丑: "牛",
+  寅: "虎",
+  卯: "兔",
+  辰: "龙",
+  巳: "蛇",
+  午: "马",
+  未: "羊",
+  申: "猴",
+  酉: "鸡",
+  戌: "狗",
+  亥: "猪",
+};
+
+/** 月支 → 季节（辰未戌丑是换季月，说「春末/秋末」这种） */
+const SEASON: Record<string, string> = {
+  寅: "春天",
+  卯: "春天",
+  辰: "春末",
+  巳: "夏天",
+  午: "夏天",
+  未: "夏末",
+  申: "秋天",
+  酉: "秋天",
+  戌: "秋末",
+  亥: "冬天",
+  子: "冬天",
+  丑: "冬末",
+};

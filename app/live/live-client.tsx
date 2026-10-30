@@ -137,7 +137,10 @@ function toShow(report: ReportDocument): ShowData {
     ],
     rows: rowsFor(primary),
     alts: alts.map(toAlt),
-    ...(report.bazi?.pillarsText ? { bazi: report.bazi.pillarsText } : {}),
+    // 直播观众看不懂干支：只说属相和出生季节
+    ...(report.bazi?.readable
+      ? { bazi: `属${report.bazi.readable.zodiac} · ${report.bazi.readable.season}出生` }
+      : {}),
     groups,
   };
 }
@@ -623,7 +626,7 @@ export function LiveClient() {
       x.textAlign = "center";
       x.fillStyle = C.ink3;
       x.font = `400 22px ${SERIF}`;
-      x.fillText(`四柱 ${show.bazi}`, W / 2, 796 + mainH + 34);
+      x.fillText(`生辰 ${show.bazi}`, W / 2, 796 + mainH + 34);
     }
     x.strokeStyle = C.line;
     x.beginPath();
@@ -710,7 +713,7 @@ export function LiveClient() {
 
             {/* 输入态 */}
             <section className={`pane pane-input ${phase === "input" ? "on" : ""}`}>
-              <p className="hint">评论区报姓氏，我来取名</p>
+              <p className="hint">想分析名字，留姓名；想取名，留姓氏和性别</p>
               <div className="field">
                 <input
                   ref={inputRef}
@@ -774,7 +777,7 @@ export function LiveClient() {
 
               <button type="button" className="entry-bar" onClick={() => setAnalyzeOpen(true)}>
                 <span>名字分析</span>
-                <span>已经有名字了？先看看问题在哪 · A</span>
+                <span>已经有名字？看看读音、字义和使用体验 · A</span>
               </button>
 
               {error && <p className="gen-error">{error}</p>}
@@ -872,7 +875,7 @@ export function LiveClient() {
 
                     {show.bazi && (
                       <p className="bazi reveal" style={{ ["--d" as string]: "900ms" }}>
-                        <span className="bazi-label">四柱</span>
+                        <span className="bazi-label">生辰</span>
                         {show.bazi}
                       </p>
                     )}
@@ -898,7 +901,7 @@ export function LiveClient() {
                 <div className="marquee-track">
                   {[0, 1, 2].map((i) => (
                     <span key={i}>
-                      评论区报姓氏和男女，挨个取名<em>◆</em>
+                      评论区留姓名可分析，留姓氏可取名，主播挑选讲解<em>◆</em>
                     </span>
                   ))}
                 </div>

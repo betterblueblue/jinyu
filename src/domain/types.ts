@@ -84,6 +84,8 @@ export interface BaziSummary {
   engine?: "lunar-javascript";
   precision: "full_eight" | "six_limited";
   pillarsText: string;
+  /** 给普通人看的说法：属相 + 出生季节，不出现干支 */
+  readable?: { zodiac: string; season: string };
   /** 出生时刻不确定时，可能出现的柱子备选（不止一种才有该字段） */
   pillarOptions?: BaziPillarOptions;
   notes: string[];

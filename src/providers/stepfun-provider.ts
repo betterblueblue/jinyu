@@ -109,7 +109,7 @@ export class StepFunProvider implements CandidateProvider {
                 ? "性别未知：8 个候选里要有明确的男向、女向、中性三类，genderLean 分别填 male/female/neutral，不要全部填 neutral——至少各有 1~2 个明确的男向与女向名字，方便用户按实际性别收窄。"
                 : "") +
             (req.baziEnabled
-              ? "每个候选的 JSON 对象必须包含 baziFit 字段：基于给定的 baziPillars 解释该名与生辰气质的呼应，不要自行推算或改写干支；baziPillars 缺失时只作季节层面的温和提醒。若 baziUncertain 为 true，说明柱子可能跨立春/节气或跨日，参照 baziPillarOptions 里的备选，baziFit 必须写明这种不确定，不得给单一结论。生辰仅作温和参考，克制表述，不作五行用神铁口定论。"
+              ? "每个候选的 JSON 对象必须包含 baziFit 字段：用普通人听得懂的话说这个名字和出生季节/气候合不合（例如「生在夏天，名字取清润的字压一压」），不许出现天干地支、日柱月柱、五行用神这类词——baziPillars 只供你自己参考，不要抄进句子里；baziPillars 缺失时只作季节层面的温和提醒。若 baziUncertain 为 true，说明出生时刻不确定，句子必须留有余地，不给单一结论。生辰仅作温和参考，不作铁口定论。"
               : ""),
         },
         null,
@@ -141,24 +141,15 @@ export class StepFunProvider implements CandidateProvider {
       }
     }
 
-    // 兜底：开启八字时若模型漏了 baziFit，用已算好的结果补上（克制表述，不确定时不给单一结论）
+    // 兜底：开启八字时若模型漏了 baziFit，用已经算好的结果补上
+    // 措辞只留「属相 + 出生季节」，不出现干支；柱子不确定时明说不确定
     if (req.baziEnabled && list.length > 0 && baziPillars) {
-      const opts = baziSummary?.pillarOptions;
-      const fallback = opts
-        ? `出生时刻不确定：${
-            [
-              opts.year.length > 1
-                ? `年柱可能为 ${opts.year.join(" 或 ")}`
-                : `年柱 ${opts.year[0]}`,
-              opts.month.length > 1
-                ? `月柱可能为 ${opts.month.join(" 或 ")}`
-                : `月柱 ${opts.month[0]}`,
-              opts.day.length > 1
-                ? `日柱可能为 ${opts.day.join(" 或 ")}`
-                : `日柱 ${opts.day[0]}`,
-            ].join("、")
-          }；名字与生辰气质的呼应需待精确出生时间再定，不作铁口定论。`
-        : `四柱为${baziPillars}，取名字与生辰气质相呼应者，可结合家庭偏好参考；不作铁口定论。`;
+      const readable = baziSummary?.readable;
+      const who = readable?.zodiac ? `属${readable.zodiac}，` : "";
+      const when = readable?.season ? `生在${readable.season}` : "生辰已按公历生日计算";
+      const fallback = baziSummary?.pillarOptions
+        ? `${who}${when}，但出生时刻不确定，岁节可能落在前后两侧，名字与季节的呼应等精确时间再定，不作铁口定论。`
+        : `${who}${when}，名字取与之相合的字更稳，可结合家庭偏好参考；不作铁口定论。`;
       for (const c of list) {
         if (!c.baziFit) {
           c.baziFit = fallback;
