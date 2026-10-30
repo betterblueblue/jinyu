@@ -1,10 +1,13 @@
 import { test, expect } from "@playwright/test";
+import { e2eCredentials } from "./local-env";
+
+const { username, password } = e2eCredentials();
 
 test("unknown gender: 报告男向/女向零重叠、无重复名", async ({ page }) => {
   await page.goto("/login");
   await page.getByTestId("login-form").waitFor();
-  await page.locator('input[name="username"]').fill("jinyu");
-  await page.locator('input[name="password"]').fill("change-me");
+  await page.locator('input[name="username"]').fill(username);
+  await page.locator('input[name="password"]').fill(password);
   await page.getByRole("button", { name: "登录" }).click();
   await expect(page).toHaveURL(/\/name/);
 
@@ -36,8 +39,8 @@ test("live unknown: 男女各三个、无中性名，六名卡片可下载", asy
   await page.setViewportSize({ width: 576, height: 1024 });
   await page.goto("/login");
   await page.getByTestId("login-form").waitFor();
-  await page.locator('input[name="username"]').fill("jinyu");
-  await page.locator('input[name="password"]').fill("change-me");
+  await page.locator('input[name="username"]').fill(username);
+  await page.locator('input[name="password"]').fill(password);
   await page.getByRole("button", { name: "登录" }).click();
   await expect(page).toHaveURL(/\/name/);
 
