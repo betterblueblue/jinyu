@@ -141,9 +141,12 @@ tools/fit-window.ps1           # 把浏览器窗口校正成精确 9:16 客户�
 - 无时辰 → 只排年月日，`precision: "six_limited"`
 - `birthHour` 兼容「巳时 9–11」「10:00」「10」三种写法；时辰文本按该时辰中点估算，精度写进 notes
 - notes 给出干支本气五行统计（不含藏干加权）
-- 模型仍只负责解释、不负责算；`StepFunProvider` 兜底文案从「四柱示意为」改成「四柱为」；报告页精度标签改成「八字 · 按节气排盘」/「六字 · 未填时辰」
+- `BaziSummary` 新增 `engine: "lunar-javascript"`；**旧报告没有该字段**，报告页据此显示「旧版示意排盘 · 不可作为排盘依据」，不会把新标签贴到旧数据上
+- **四柱先算好再进 prompt**：`baziPillars` / `baziPrecision` /（跨界时）`baziUncertain` 一起发给模型，instruction 明确要求基于给定柱子解释、不得自行推算干支
+- 出生时刻不确定时做跨界检查：无时辰比 00:00 与 23:59，时辰标签比该时段首尾（亥时用 22:59，不跨入子时），柱子不一致就在 notes 里写「年柱/月柱/日柱可能为 A 或 B」；子时单独提示早子/夜子
+- 精确 23:30 走「夜子时，日柱已归次日」，不再写「按早子时 00:30 估算」
 
-校验点写在 `tests/bazi.test.ts`（数据出自 `baby-name-skill/references/wanni-calendar.md`）：
+校验点写在 `tests/bazi.test.ts`（历法校验数据出自 `baby-name-skill/references/wanni-calendar.md`）：
 
 | 用例 | 期望 |
 |---|---|
@@ -152,6 +155,9 @@ tools/fit-window.ps1           # 把浏览器窗口校正成精确 9:16 客户�
 | 2026-04-13 日柱 | 丁巳 |
 | 2025-02-03 21:00 vs 23:00（立春 22:10） | 甲辰/丁丑 → 乙巳/戊寅 |
 | 2026-10-30 23:30 vs 22:30 | 日柱 戊寅 / 丁丑 |
+| 2025-02-03 未填时辰 | notes 列出年柱/月柱/日柱两种可能 |
+| 2025-02-03 亥时 21–23 | 提示跨立春，但**不**误报日柱跨界 |
+| 2026-10-30 子时 | 提示日柱可能两个 + 早子时说明 |
 
 **仍然没解决**：时柱只有时辰级，没有出生地/真太阳时；喜忌、用神还是模型措辞，不因排盘变准。要更准得先在页面补「精确到分钟 + 出生地」。
 
@@ -184,7 +190,7 @@ bat 里 URL 写死局域网 IP `http://192.168.31.211:9000/live`（直播在另�
 
 | Check | Command / method | Result |
 |---|---|---|
-| Unit tests | `pnpm test` | Exit 0；**41/41** passed（2026-10-30 复跑，含八字排盘 7 个用例） |
+| Unit tests | `pnpm test` | Exit 0；**46/46** passed（2026-10-30 复跑，含八字排盘 11 个用例） |
 | Typecheck | `pnpm typecheck` | 干净 |
 | 真实生成（正式页） | 手动 + Playwright | 「沈静嘉」「陈峻岩」等，16–25s |
 | 真实生成（直播页） | Playwright 点「开始取名」 | 「苏清晏」「苏知微」「苏婉仪」等 |
@@ -240,6 +246,7 @@ data/_trash/fake-2026-10-30T06-59-52/   # 19 条 providerName=fake 的示例模�
 | 第 7 个 | HANDOFF 数字更新到清理后的 110 条 |
 | 第 8 个 | `feat(bazi)` 换成 lunar-javascript 真实四柱排盘 + 7 个校验用例 |
 | 第 9 个 | HANDOFF 补排盘一节 |
+| 第 10 个 | 修评审三处：旧报告标签、跨界提示、四柱进 prompt |
 
 再往前 `5f681c1` 是 change-impact 目录改名。
 
@@ -286,7 +293,7 @@ data/_trash/fake-2026-10-30T06-59-52/   # 19 条 providerName=fake 的示例模�
 ```bash
 pnpm install
 pnpm dev                 # 9000 端口
-pnpm test                # 41 个
+pnpm test                # 46 个
 pnpm typecheck
 pnpm e2e
 node scripts/probe-provider.ts   # 真实模型 + 闸门
@@ -300,7 +307,7 @@ node scripts/e2e-real-llm.mjs    # 需 dev server
 | Item | Value |
 |---|---|
 | Path | `E:\agent\jinyu` |
-| Git | 仓库 + remote，`main` 分支，工作区干净，最近 9 个 commit 见上 |
+| Git | 仓库 + remote，`main` 分支，工作区干净，最近 10 个 commit 见上 |
 | Package manager | pnpm |
 | Dev server | 9000 端口（本次会话实测已在跑，PID 23396）；否则手动 `pnpm dev` / `.\start-dev.ps1` |
 | 本机局域网 IP | `192.168.31.211`（DHCP，会变） |
