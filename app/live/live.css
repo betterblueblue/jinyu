@@ -36,9 +36,9 @@
 .live-stage {
   --stage-bg: radial-gradient(88% 62% at 50% 6%, #fcf9f0 0%, #f4f0e5 42%, #ece6d6 78%, #e5decc 100%);
   --ink: #1b1510;
-  --ink-name: #191410;
-  --ink-2: #4a4238;
-  --ink-3: #6b6355;
+  --ink-name: #191510;
+  --ink-2: #35302a;
+  --ink-3: #514a40;
   --accent: #a5382a;
   --accent-soft: rgba(165, 56, 42, 0.08);
   --hair: rgba(35, 28, 20, 0.18);
@@ -54,15 +54,16 @@
   --input-line: var(--hair);
   --marquee-color: var(--ink-3);
   --fs-name: 216px;
-  --fs-py: 31px;
-  --fs-mean: 50px;
-  --fs-tag: 29px;
-  --fs-detail: 31px;
-  --fs-alt: 41px;
+  /* 直播画面缩到手机后会掉一半，拼音和正文不能再走细字重、小字号 */
+  --fs-py: 36px;
+  --fs-mean: 52px;
+  --fs-tag: 30px;
+  --fs-detail: 46px;
+  --fs-alt: 48px;
   --fs-btn: 35px;
-  --fs-dlabel: 23px;
-  --hero-mt: 72px;
-  --details-mt: 44px;
+  --fs-dlabel: 26px;
+  --hero-mt: 64px;
+  --details-mt: 42px;
   --name-ls: 0.04em;
 
   width: 1080px;
@@ -794,9 +795,10 @@
   margin: 34px 0 0;
   font-family: "Noto Sans SC", "PingFang SC", system-ui, sans-serif;
   font-size: var(--fs-py);
-  font-weight: 200;
-  letter-spacing: 0.44em;
-  padding-left: 0.44em;
+  /* 200 字重在直播画面缩到一半后基本看不见了，回到常规字重 */
+  font-weight: 400;
+  letter-spacing: 0.18em;
+  padding-left: 0.18em;
   color: var(--ink-3);
   text-transform: lowercase;
 }
@@ -813,7 +815,7 @@
 .live-stage .meaning {
   margin: 44px 0 0;
   font-size: var(--fs-mean);
-  font-weight: 400;
+  font-weight: 500;
   letter-spacing: 0.14em;
   padding-left: 0.14em;
   color: var(--ink-2);
@@ -881,20 +883,52 @@
 .live-stage .detail .label {
   display: block;
   font-size: var(--fs-dlabel);
-  letter-spacing: 0.46em;
+  letter-spacing: 0.24em;
   color: var(--accent);
   margin-bottom: 6px;
 }
 .live-stage .detail p {
   margin: 0;
-  font-size: calc(var(--fs-detail) - 5px);
-  line-height: 1.62;
+  font-family: "Noto Sans SC", "PingFang SC", system-ui, sans-serif;
+  font-size: calc(var(--fs-detail) - 4px);
+  font-weight: 400;
+  line-height: 1.5;
   color: var(--ink-2);
   letter-spacing: 0.04em;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+/* 宣纸皮肤：详解改单栏，正文用黑体大字号，直播缩到手机后还能读 */
+[data-skin="paper"] .live-stage .details {
+  grid-template-columns: 1fr;
+  gap: 28px;
+  max-width: 940px;
+}
+
+/* 多出「八字」一行时会顶到备选，降一档字号、收紧行距与间距 */
+[data-skin="paper"] .live-stage.has-bazi .detail p {
+  font-size: 32px;
+  line-height: 1.45;
+  -webkit-line-clamp: 2;
+}
+[data-skin="paper"] .live-stage.has-bazi .details {
+  gap: 14px;
+}
+[data-skin="paper"] .live-stage.has-bazi .alt-name {
+  font-size: 44px;
+}
+[data-skin="paper"] .live-stage.has-bazi .alt-one {
+  font-size: 24px;
+  -webkit-line-clamp: 2;
+}
+[data-skin="paper"] .live-stage.has-bazi .bazi {
+  margin-top: 8px;
+}
+[data-skin="paper"] .live-stage.has-bazi .alt {
+  margin-top: 10px;
 }
 
 /* 四柱：只在开了生辰时出现，一行，压在下半部详解与备选之间 */
@@ -970,17 +1004,17 @@
 }
 .live-stage .alt-py {
   font-family: "Noto Sans SC", "PingFang SC", system-ui, sans-serif;
-  font-size: 23px;
-  font-weight: 300;
-  letter-spacing: 0.2em;
-  color: var(--ink-3);
+  font-size: 26px;
+  font-weight: 400;
+  letter-spacing: 0.1em;
+  color: var(--ink-2);
 }
 .live-stage .alt-one {
-  font-size: 23px;
-  letter-spacing: 0.04em;
+  font-size: 26px;
+  letter-spacing: 0.03em;
   color: var(--ink-2);
-  line-height: 1.6;
-  max-width: 360px;
+  line-height: 1.55;
+  max-width: 400px;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -1074,15 +1108,15 @@
 .live-stage .group-py {
   margin: 14px 0 0;
   font-family: "Noto Sans SC", "PingFang SC", system-ui, sans-serif;
-  font-size: 20px;
-  font-weight: 300;
-  letter-spacing: 0.08em;
-  color: var(--ink-3);
+  font-size: 26px;
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  color: var(--ink-2);
 }
 .live-stage .group-one {
   margin: 18px 0 0;
-  font-size: 24px;
-  line-height: 1.65;
+  font-size: 28px;
+  line-height: 1.5;
   letter-spacing: 0.04em;
   color: var(--ink-2);
   display: -webkit-box;
