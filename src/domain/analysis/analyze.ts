@@ -45,6 +45,8 @@ function tidy(text: string): string {
   return text
     .replace(/([\u4e00-\u9fa5])(\d)/g, "$1 $2")
     .replace(/(\d)([\u4e00-\u9fa5])/g, "$1 $2")
+    // 汉字之间不该有空格：「周子衿 没有硬伤」是模型输出的残留
+    .replace(/([\u4e00-\u9fa5])[ \t]+(?=[\u4e00-\u9fa5])/g, "$1")
     .replace(/(?<!\d),(?!\d)/g, "，")
     .replace(/(?<!\d);/g, "；")
     .replace(/(?<!\d):(?!\d)/g, "：")
@@ -98,6 +100,14 @@ export function validateAnalysisInput(raw: {
   };
 }
 
+/** 本地已经覆盖的话题：模型重复说同一件事时按话题丢掉 */
+function topicOf(issue: { kind: string; text: string }): string | null {
+  if (issue.kind === "gender") return "gender";
+  if (/画/.test(issue.text)) return "strokes";
+  if (/(打不出来|打不出|录入|方框|生僻|不在最常用|次常用|不常用)/.test(issue.text)) return "charset";
+  return null;
+}
+
 function verdictFrom(issues: NameIssue[]): Verdict {
   if (issues.some((i) => i.severity === "hard")) return "hard";
   if (issues.length > 0) return "cost";
@@ -134,6 +144,7 @@ export async function runAnalysis(
   input: AnalysisInput,
   provider: AnalysisProvider,
   onThinking?: (chunk: string) => void,
+  onStage?: (stage: "verifying") => void,
 ): Promise<AnalysisOutcome> {
   const splitOutcome = splitFullName(input.fullName);
   if (!splitOutcome.ok || !splitOutcome.split) {
@@ -195,6 +206,10 @@ export async function runAnalysis(
   }
 
   // ---- 问题：本地 + 模型，去重后按严重度排序 ----
+  // 本地已经查实的东西（笔画、字集、性别倾向）不再收模型说的同一件事，
+  // 否则一份结果里会出现两条「笔画太重」，读起来像凑数。
+  const localTopics = new Set(local.issues.map(topicOf).filter((t): t is string => Boolean(t)));
+
   const modelIssues: NameIssue[] = normalizeRawIssues(raw.issues)
     .map((i) => ({
       kind: i.kind as NameIssue["kind"],
@@ -202,7 +217,11 @@ export async function runAnalysis(
       text: cleanLine(i.text, 90),
       ...(i.hint ? { hint: cleanLine(i.hint, 60) } : {}),
     }))
-    .filter((i) => i.text.length >= 6);
+    .filter((i) => i.text.length >= 6)
+    .filter((i) => {
+      const topic = topicOf(i);
+      return !(topic && localTopics.has(topic));
+    });
 
   const issues: NameIssue[] = [...local.issues, ...modelIssues]
     .filter((issue, index, all) => all.findIndex((x) => x.text === issue.text) === index)
@@ -212,6 +231,7 @@ export async function runAnalysis(
   const verdict = verdictFrom(issues);
 
   // ---- 引文：逐条回原文核验 ----
+  onStage?.("verifying");
   const citations: VerifiedCitation[] = [];
   const rejectedCitations: RejectedCitation[] = [];
   for (const claim of normalizeRawCitations(raw.citations)) {

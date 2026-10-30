@@ -43,8 +43,11 @@ export async function POST(req: Request) {
 
       try {
         emit("stage", { stage: "reading" });
-        const outcome = await runAnalysis(input, createAnalysisProvider(), (text) =>
-          emit("thinking", { text }),
+        const outcome = await runAnalysis(
+          input,
+          createAnalysisProvider(),
+          (text) => emit("thinking", { text }),
+          (stage) => emit("stage", { stage }),
         );
 
         if (!outcome.ok) {
@@ -52,7 +55,6 @@ export async function POST(req: Request) {
           return;
         }
 
-        emit("stage", { stage: "verifying" });
         emit("done", { result: outcome.result });
       } catch (err) {
         const message = err instanceof Error ? err.message : "分析失败，请稍后重试";

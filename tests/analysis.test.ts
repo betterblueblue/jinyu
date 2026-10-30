@@ -223,6 +223,37 @@ describe("分析拼装", () => {
       expect(out.result.headline).not.toContain("两处");
     }
   });
+
+  it("本地已查实的笔画问题，模型重复说时只留本地那条", async () => {
+    const out = await runAnalysis(
+      { fullName: "张若曦", gender: "female" },
+      providerReturning({
+        headline: "张若曦没有硬伤。",
+        goodPoints: ["三个字都在常用字里。"],
+        issues: [
+          { kind: "glyph", severity: "cost", text: "「曦」20 画，整个名字 36 画，写起来费劲。" },
+        ],
+        citations: [],
+        closing: "想改的话动一个字就够。",
+        regenBrief: { tabooChars: ["曦"], styleNotes: "笔画收一点", avoidPopular: true },
+      }),
+    );
+    expect(out.ok).toBe(true);
+    if (out.ok) {
+      const strokeIssues = out.result.issues.filter((i) => i.text.includes("画"));
+      expect(strokeIssues).toHaveLength(1);
+      expect(strokeIssues[0]!.text).toContain("笔画差得有点远");
+    }
+  });
+
+  it("结论句里汉字之间多出来的空格会被清掉", async () => {
+    const out = await runAnalysis(
+      { fullName: "张伟", gender: "male" },
+      providerReturning({ ...base, headline: "张伟 没有硬伤，但这个名字人人都用。" }),
+    );
+    expect(out.ok).toBe(true);
+    if (out.ok) expect(out.result.headline).not.toMatch(/[\u4e00-\u9fa5] [\u4e00-\u9fa5]/);
+  });
 });
 
 describe("输入校验", () => {
