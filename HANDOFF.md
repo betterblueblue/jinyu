@@ -37,6 +37,7 @@ Two product surfaces now:
 | Tech stack | `docs/TECH.md` |
 | UI | `docs/UI.md` |
 | Issues (14 slices) | `issues/` (all `Status: done`) |
+| 直播运行讨论稿（2026-10-30） | `docs/直播运行讨论稿-2026-10-30.html`（背景参考，不是规范） |
 
 ---
 
