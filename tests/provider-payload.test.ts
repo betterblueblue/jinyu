@@ -114,7 +114,7 @@ describe("StepFunProvider payload（八字字段进 prompt）", () => {
     const list = await provider.generateCandidates(n.value, 0);
     expect(list.length).toBe(1);
     expect(list[0]?.baziFit).toBeDefined();
-    expect(list[0]?.baziFit).toContain("四柱示意为");
+    expect(list[0]?.baziFit).toContain("四柱为");
   });
 
   it("直播未知性别只请求明确的男向女向候选，并给两组预留过滤余量", async () => {

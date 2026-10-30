@@ -194,7 +194,7 @@ export default async function ReportPage({
               <h2 className="text-xs font-medium tracking-[0.22em] text-outline">命理摘要（可选）</h2>
               <p className="mt-4 text-lg tracking-widest text-gold">{report.bazi.pillarsText}</p>
               <p className="mt-2 text-xs text-outline">
-                精度：{report.bazi.precision === "six_limited" ? "六字 · 精度有限" : "八字示意"}
+                精度：{report.bazi.precision === "six_limited" ? "六字 · 未填时辰" : "八字 · 按节气排盘"}
               </p>
               <ul className="mt-3 space-y-1 text-sm text-on-surface-variant">
                 {report.bazi.notes.map((n) => (

@@ -142,7 +142,7 @@ export class StepFunProvider implements CandidateProvider {
       if (pillars) {
         for (const c of list) {
           if (!c.baziFit) {
-            c.baziFit = `四柱示意为${pillars}，名字与生辰气质的细致呼应建议结合家庭偏好参考；不作铁口定论。`;
+            c.baziFit = `四柱为${pillars}，取名字与生辰气质相呼应者，可结合家庭偏好参考；不作铁口定论。`;
           }
         }
       }
