@@ -75,7 +75,7 @@ Two product surfaces now:
 | `paper` | 宣纸墨色 | 米白纸、双线版框、朱红实底印章 |
 | `celadon` | 青瓷天青 | 天青釉、三层开片、细线框印章、胶囊标签 |
 | `silver` | 冷白刻版 | 冷白、刻度线、编号 `REVEAL / No.001`、竖排英文、姓氏大字水印 |
-| `bamboo` | 竹兰 | **背景图** `public/skins/bamboo-paper.webp` |
+| `bamboo` | 竹兰 | **背景图** `public/skins/bamboo-paper.webp`；**默认皮肤**（2026-10-30 起） |
 
 **竹兰背景图规格**（换图就看这段）：卡片是 1080×约 2100–2300，`drawImage(0,0,W,H)` 拉伸铺满，所以
 

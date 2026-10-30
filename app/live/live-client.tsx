@@ -300,7 +300,8 @@ function buildGroupedCard(show: ShowData, skin: Skin, bgImage: HTMLImageElement 
 }
 
 export function LiveClient() {
-  const [skin, setSkin] = useState<Skin>("paper");
+  // 默认开竹兰；S 键仍按 paper → celadon → silver → bamboo 循环
+  const [skin, setSkin] = useState<Skin>("bamboo");
   const [phase, setPhase] = useState<Phase>("input");
   const [gender, setGender] = useState<Gender>("unknown");
   const [draft, setDraft] = useState("");
