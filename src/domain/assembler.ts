@@ -20,11 +20,17 @@ export interface AssembleInput {
   relaxations: string[];
   stages: string[];
   bazi?: BaziSummary | null;
+  liveUnknownSix?: boolean;
 }
 
-function targetCounts(req: NormalizedRequest): { total: number; male?: number; female?: number } {
+function targetCounts(
+  req: NormalizedRequest,
+  liveUnknownSix: boolean,
+): { total: number; male?: number; female?: number } {
   if (req.gender === "unknown") {
-    return { total: 4, male: 2, female: 2 };
+    return liveUnknownSix
+      ? { total: 6, male: 3, female: 3 }
+      : { total: 4, male: 2, female: 2 };
   }
   return { total: 4 };
 }
@@ -33,13 +39,14 @@ function pickNames(
   ranked: GatedCandidate[],
   req: NormalizedRequest,
   primaryIndex: number,
+  liveUnknownSix: boolean,
 ): {
   selected: GatedCandidate[];
   primary: GatedCandidate;
   maleNames?: string[];
   femaleNames?: string[];
 } {
-  const { total, male, female } = targetCounts(req);
+  const { total, male, female } = targetCounts(req, liveUnknownSix);
 
   // 统一去重：模型可能重复输出同一 givenName 的候选（不同 genderLean/pitfalls），
   // 全部路径（男/女/未知）按 givenName 只保留最先出现的那个，杜绝重复进报告
@@ -76,20 +83,22 @@ function pickNames(
   const femaleLean = uniqueRanked.filter((c) => c.genderLean === "female");
   const neutralPool = uniqueRanked.filter((c) => c.genderLean !== "male" && c.genderLean !== "female");
 
-  // 男向/女向全量倾向都保留，缺口用 neutral 补齐，每个 neutral 只进一组
-  const mPick: GatedCandidate[] = [...maleLean];
-  const fPick: GatedCandidate[] = [...femaleLean];
-  if (mPick.length < needMale) {
-    for (const c of neutralPool) {
-      if (mPick.length >= needMale) break;
-      mPick.push(c);
+  // 直播未知性别只保留明确的男向/女向各 3 个；正式页保留原 neutral 补齐逻辑
+  const mPick: GatedCandidate[] = liveUnknownSix ? maleLean.slice(0, needMale) : [...maleLean];
+  const fPick: GatedCandidate[] = liveUnknownSix ? femaleLean.slice(0, needFemale) : [...femaleLean];
+  if (!liveUnknownSix) {
+    if (mPick.length < needMale) {
+      for (const c of neutralPool) {
+        if (mPick.length >= needMale) break;
+        mPick.push(c);
+      }
     }
-  }
-  if (fPick.length < needFemale) {
-    for (const c of neutralPool) {
-      if (fPick.length >= needFemale) break;
-      if (mPick.includes(c)) continue; // neutral 已入男向则不再进女向
-      fPick.push(c);
+    if (fPick.length < needFemale) {
+      for (const c of neutralPool) {
+        if (fPick.length >= needFemale) break;
+        if (mPick.includes(c)) continue; // neutral 已入男向则不再进女向
+        fPick.push(c);
+      }
     }
   }
 
@@ -109,11 +118,22 @@ function pickNames(
 }
 
 export function assembleReport(input: AssembleInput): ReportDocument {
-  const { request, ranked, primaryIndex, eliminated, styleNotes, relaxations, stages, bazi } = input;
+  const {
+    request,
+    ranked,
+    primaryIndex,
+    eliminated,
+    styleNotes,
+    relaxations,
+    stages,
+    bazi,
+    liveUnknownSix = false,
+  } = input;
   const { selected, primary, maleNames: groupMale, femaleNames: groupFemale } = pickNames(
     ranked,
     request,
     primaryIndex,
+    liveUnknownSix,
   );
 
   const names: NameDetail[] = selected.map((c) => ({
@@ -141,7 +161,9 @@ export function assembleReport(input: AssembleInput): ReportDocument {
     `首推 ${primary.fullName}`,
     request.gender === "unknown"
       ? bothSides
-        ? "含男向与女向备选，得知实际性别后可收窄"
+        ? liveUnknownSix
+          ? "男向与女向各 3 个备选，得知实际性别后可收窄"
+          : "含男向与女向备选，得知实际性别后可收窄"
         : "备选较少，得知实际性别后可按向补充"
       : "精选少量备选便于比较",
     request.isPreparationName ? "备名语境" : null,

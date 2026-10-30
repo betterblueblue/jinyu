@@ -3,11 +3,12 @@ import { applyHardGate, assertNoForbiddenPadding } from "./gate";
 import { buildBaziSummary } from "./bazi";
 import { rankSoft } from "./soft-ranker";
 import type { CandidateProvider } from "@/providers/types";
-import type { GenerationResult, NormalizedRequest } from "./types";
+import type { GatedCandidate, GenerationResult, NormalizedRequest } from "./types";
 
 const MAX_ATTEMPTS = 2;
 const MIN_KNOWN = 3;
 const MIN_UNKNOWN = 4;
+const LIVE_UNKNOWN_PER_GROUP = 3;
 
 export type ProgressEvent =
   | { type: "thinking"; text: string }
@@ -17,16 +18,19 @@ export async function runGeneration(
   req: NormalizedRequest,
   provider: CandidateProvider,
   onProgress?: (evt: ProgressEvent) => void,
+  options?: { source?: "live" | "formal" },
 ): Promise<GenerationResult> {
   const stages: string[] = [];
   const relaxations: string[] = [];
+  const liveUnknownSix = options?.source === "live" && req.gender === "unknown";
+  const providerOptions = { liveUnknownSix };
   let stage: GenerationResult["stage"] = "candidates";
 
   const emitThinking = (chunk: string) => onProgress?.({ type: "thinking", text: chunk });
 
   try {
     stages.push("candidates");
-    let allRaw = await provider.generateCandidates(req, 0, emitThinking);
+    let allRaw = await provider.generateCandidates(req, 0, emitThinking, providerOptions);
 
     stage = "filter";
     stages.push("filter");
@@ -34,14 +38,14 @@ export async function runGeneration(
     let gate = applyHardGate(allRaw, req);
     let allowL2Primary = false;
 
-    if (countOk(gate.passed, req) < minNeeded(req)) {
+    if (!hasEnoughCandidates(gate.passed, req, liveUnknownSix)) {
       // limited retry
-      const more = await provider.generateCandidates(req, 1, emitThinking);
+      const more = await provider.generateCandidates(req, 1, emitThinking, providerOptions);
       allRaw = [...allRaw, ...more];
       gate = applyHardGate(allRaw, req);
     }
 
-    if (countOk(gate.passed, req) < minNeeded(req)) {
+    if (!hasEnoughCandidates(gate.passed, req, liveUnknownSix)) {
       // A+: relax soft only — allow L2 as primary, note style hard-fit relaxed
       allowL2Primary = true;
       relaxations.push("L2 可进入首推");
@@ -49,12 +53,16 @@ export async function runGeneration(
       // re-rank later with allowL2Primary; no hard-rule relaxation
     }
 
-    if (countOk(gate.passed, req) < minNeeded(req)) {
+    if (!hasEnoughCandidates(gate.passed, req, liveUnknownSix)) {
       return {
         ok: false,
         stage: "filter",
         errorCode: "INSUFFICIENT_CANDIDATES",
-        message: buildInsufficientMessage(req, gate.eliminated.map((e) => e.reasons).flat()),
+        message: buildInsufficientMessage(
+          req,
+          gate.eliminated.map((e) => e.reasons).flat(),
+          liveUnknownSix,
+        ),
         relaxations,
       };
     }
@@ -86,9 +94,12 @@ export async function runGeneration(
       relaxations,
       stages,
       bazi: baziResult.summary,
+      liveUnknownSix,
     });
     // 记录生成来源 provider，供历史列表标注示例模式
     report.providerName = provider.name;
+    // 记录生成入口：直播台还是正式取名页
+    report.source = options?.source ?? "formal";
 
     return { ok: true, stage: "assemble", report };
   } catch (err) {
@@ -107,17 +118,33 @@ function minNeeded(req: NormalizedRequest): number {
   return req.gender === "unknown" ? MIN_UNKNOWN : MIN_KNOWN;
 }
 
-function countOk(passed: { length: number }, _req: NormalizedRequest): number {
-  return passed.length;
+function hasEnoughCandidates(
+  passed: GatedCandidate[],
+  req: NormalizedRequest,
+  liveUnknownSix: boolean,
+): boolean {
+  if (liveUnknownSix) {
+    const male = passed.filter((c) => c.genderLean === "male").length;
+    const female = passed.filter((c) => c.genderLean === "female").length;
+    return male >= LIVE_UNKNOWN_PER_GROUP && female >= LIVE_UNKNOWN_PER_GROUP;
+  }
+  return passed.length >= minNeeded(req);
 }
 
-function buildInsufficientMessage(req: NormalizedRequest, reasons: string[]): string {
+function buildInsufficientMessage(
+  req: NormalizedRequest,
+  reasons: string[],
+  liveUnknownSix: boolean,
+): string {
   const hints: string[] = [];
   if (req.generationChar) hints.push(`辈分字「${req.generationChar}」过严时可改位置或调整用字`);
   if (req.tabooChars.length) hints.push("避讳字过多会大幅减少可用名");
   if (req.avoidPopular) hints.push("可暂时关闭「尽量避开热门名」（仍会拦截最烂大街的网红模板）");
   if (reasons.some((r) => r.includes("网红"))) hints.push("许多过于常见的网红名已被排除，属预期行为");
   const extra = hints.length ? `建议：${hints.join("；")}。` : "请回表单放宽条件后重试。";
+  if (liveUnknownSix) {
+    return `男向或女向候选不足，直播模式需要两组各 ${LIVE_UNKNOWN_PER_GROUP} 个明确推荐，不会用中性名凑数。${extra}`;
+  }
   return `可用候选不足，无法凑满精选推荐。硬规则（网红模板/避讳/辈分/字数）不会放宽。${extra}`;
 }
 

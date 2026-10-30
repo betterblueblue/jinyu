@@ -1,5 +1,5 @@
 import type { NormalizedRequest, RawCandidate } from "@/domain/types";
-import type { CandidateProvider } from "./types";
+import type { CandidateGenerationOptions, CandidateProvider } from "./types";
 
 /**
  * Deterministic Fake LLM for tests and local happy-path without network.
@@ -16,6 +16,7 @@ export class FakeProvider implements CandidateProvider {
     req: NormalizedRequest,
     attempt: number,
     onThinking?: (chunk: string) => void,
+    options?: CandidateGenerationOptions,
   ): Promise<RawCandidate[]> {
     const g = req.generationChar ?? "";
     const two = req.nameLength !== "one";
@@ -105,6 +106,13 @@ export class FakeProvider implements CandidateProvider {
       );
     }
 
+    // 直播未知性别：Fake 同样只给明确男女倾向，并保证每组至少 3 个可用候选
+    if (req.gender === "unknown" && options?.liveUnknownSix) {
+      return [
+        ...base.filter((c) => c.genderLean !== "neutral"),
+        mk("景", "行", "male", { meaning: "景行：景仰高行，端正开阔。" }),
+      ];
+    }
     // gender-unknown needs both leans
     if (req.gender === "unknown") {
       return base;

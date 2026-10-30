@@ -1,7 +1,7 @@
 import type { NormalizedRequest, RawCandidate } from "@/domain/types";
 import { getStylePrototype } from "@/config/style-prototypes";
 import { buildBaziSummary } from "@/domain/bazi";
-import type { CandidateProvider } from "./types";
+import type { CandidateGenerationOptions, CandidateProvider } from "./types";
 
 interface ChatMessage {
   role: "system" | "user" | "assistant";
@@ -39,11 +39,13 @@ export class StepFunProvider implements CandidateProvider {
     req: NormalizedRequest,
     attempt: number,
     onThinking?: (chunk: string) => void,
+    options?: CandidateGenerationOptions,
   ): Promise<RawCandidate[]> {
+    const liveUnknownSix = Boolean(options?.liveUnknownSix && req.gender === "unknown");
     const proto = getStylePrototype(req.stylePrototypeId);
     const candidateFields = [
       '"givenName":"名不含姓"',
-      '"genderLean":"male|female|neutral"',
+      liveUnknownSix ? '"genderLean":"male|female"' : '"genderLean":"male|female|neutral"',
       '"pinyin":"标准拼音，含声调，如 shū yǎo"',
       '"phonology":""',
       '"glyph":""',
@@ -92,12 +94,14 @@ export class StepFunProvider implements CandidateProvider {
               }
             : {}),
           attempt,
-          count: req.gender === "unknown" ? 8 : 6,
+          count: liveUnknownSix ? 12 : req.gender === "unknown" ? 8 : 6,
           instruction:
             "请生成多个候选「名」（不含姓）。若有辈分字必须按位置包含。不要使用避讳字。最终只输出 JSON。" +
-            (req.gender === "unknown"
-              ? "性别未知：8 个候选里要有明确的男向、女向、中性三类，genderLean 分别填 male/female/neutral，不要全部填 neutral——至少各有 1~2 个明确的男向与女向名字，方便用户按实际性别收窄。"
-              : "") +
+            (liveUnknownSix
+              ? "性别未知（直播男女分组）：生成 12 个候选，男向 6 个、女向 6 个，供服务端各精选 3 个。genderLean 只能填 male 或 female，禁止 neutral，不要生成中性名；两组名字不得重复，每个名字都要有明确的男向或女向气质。"
+              : req.gender === "unknown"
+                ? "性别未知：8 个候选里要有明确的男向、女向、中性三类，genderLean 分别填 male/female/neutral，不要全部填 neutral——至少各有 1~2 个明确的男向与女向名字，方便用户按实际性别收窄。"
+                : "") +
             (req.baziEnabled
               ? "每个候选的 JSON 对象必须包含 baziFit 字段，值为该名与生辰五行气质呼应的一两句；缺失则整个输出作废。生辰仅作温和参考，克制表述，不作五行用神铁口定论。"
               : ""),

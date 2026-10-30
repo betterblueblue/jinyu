@@ -116,4 +116,24 @@ describe("StepFunProvider payload（八字字段进 prompt）", () => {
     expect(list[0]?.baziFit).toBeDefined();
     expect(list[0]?.baziFit).toContain("四柱示意为");
   });
+
+  it("直播未知性别只请求明确的男向女向候选，并给两组预留过滤余量", async () => {
+    const captured: string[] = [];
+    captureFetch(captured);
+
+    const n = normalizeRequest({ surname: "苏", gender: "unknown", nameLength: "two" });
+    expect(n.ok).toBe(true);
+    if (!n.ok) return;
+
+    const provider = new StepFunProvider({ baseUrl: "http://x", apiKey: "k", model: "m" });
+    await provider.generateCandidates(n.value, 0, undefined, { liveUnknownSix: true });
+
+    const body = JSON.parse(captured[0]!) as Record<string, unknown>;
+    const user = userContent(body);
+    expect(user.count).toBe(12);
+    expect(String(user.instruction)).toContain("男向 6 个、女向 6 个");
+    expect(String(user.instruction)).toContain("禁止 neutral");
+    expect(systemContent(body)).toContain('"genderLean":"male|female"');
+    expect(systemContent(body)).not.toContain('"genderLean":"male|female|neutral"');
+  });
 });

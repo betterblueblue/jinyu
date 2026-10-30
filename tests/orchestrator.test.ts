@@ -275,4 +275,63 @@ describe("runGeneration", () => {
     expect(male.filter((x) => female.includes(x))).toEqual([]); // 不跨组重复
     expect(result.report.overview.names).toHaveLength(4);
   });
+
+  it("live unknown: 男向女向各 3 个，不使用 neutral 补齐", async () => {
+    const n = normalizeRequest({ surname: "苏", gender: "unknown" });
+    expect(n.ok).toBe(true);
+    if (!n.ok) return;
+
+    const result = await runGeneration(n.value, new FakeProvider("default"), undefined, {
+      source: "live",
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const male = result.report.overview.maleNames ?? [];
+    const female = result.report.overview.femaleNames ?? [];
+    expect(male).toHaveLength(3);
+    expect(female).toHaveLength(3);
+    expect(result.report.names).toHaveLength(6);
+    expect(result.report.names.every((x) => x.genderLean !== "neutral")).toBe(true);
+    expect(
+      male.every((full) => result.report.names.find((x) => x.fullName === full)?.genderLean === "male"),
+    ).toBe(true);
+    expect(
+      female.every((full) => result.report.names.find((x) => x.fullName === full)?.genderLean === "female"),
+    ).toBe(true);
+  });
+
+  it("live unknown: 某一组不足时失败，不用中性名或另一组凑满六个", async () => {
+    const n = normalizeRequest({ surname: "苏", gender: "unknown" });
+    expect(n.ok).toBe(true);
+    if (!n.ok) return;
+
+    const provider: CandidateProvider = {
+      name: "missing-male",
+      async generateCandidates() {
+        const mk = (givenName: string, genderLean: "male" | "female" | "neutral") => ({
+          givenName,
+          genderLean,
+          meaning: "端庄清朗",
+        });
+        return [
+          mk("景行", "male"),
+          mk("明澈", "male"),
+          mk("怀瑾", "female"),
+          mk("清和", "female"),
+          mk("知微", "female"),
+          mk("书白", "neutral"),
+          mk("安然", "neutral"),
+          mk("清晏", "neutral"),
+        ];
+      },
+    };
+
+    const result = await runGeneration(n.value, provider, undefined, { source: "live" });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.errorCode).toBe("INSUFFICIENT_CANDIDATES");
+    expect(result.message).toContain("两组各 3 个");
+    expect(result.message).toContain("不会用中性名凑数");
+  });
 });

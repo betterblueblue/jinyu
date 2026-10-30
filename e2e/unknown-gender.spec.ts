@@ -31,3 +31,42 @@ test("unknown gender: 报告男向/女向零重叠、无重复名", async ({ pag
   expect(new Set(given).size).toBe(given.length);
   void overviewNames;
 });
+
+test("live unknown: 男女各三个、无中性名，六名卡片可下载", async ({ page }) => {
+  await page.setViewportSize({ width: 576, height: 1024 });
+  await page.goto("/login");
+  await page.getByTestId("login-form").waitFor();
+  await page.locator('input[name="username"]').fill("jinyu");
+  await page.locator('input[name="password"]').fill("change-me");
+  await page.getByRole("button", { name: "登录" }).click();
+  await expect(page).toHaveURL(/\/name/);
+
+  await page.goto("/live");
+  await page.getByRole("textbox", { name: "姓氏" }).fill("苏");
+  await page.locator(".genders button").filter({ hasText: "未知" }).click();
+  await page.locator("button.go").click();
+
+  await expect(page.getByTestId("live-unknown-groups")).toBeVisible({ timeout: 60_000 });
+  const maleGroup = page.getByTestId("live-male-group");
+  const femaleGroup = page.getByTestId("live-female-group");
+  await expect(maleGroup.locator(".group-item")).toHaveCount(3);
+  await expect(femaleGroup.locator(".group-item")).toHaveCount(3);
+  await expect(page.locator(".live-stage")).not.toContainText("中性");
+
+  const maleNames = await maleGroup.locator(".group-name").allTextContents();
+  const femaleNames = await femaleGroup.locator(".group-name").allTextContents();
+  expect(new Set([...maleNames, ...femaleNames]).size).toBe(6);
+  expect(maleNames.every((name) => name.startsWith("苏"))).toBe(true);
+  expect(femaleNames.every((name) => name.startsWith("苏"))).toBe(true);
+
+  const groupsBox = await page.getByTestId("live-unknown-groups").boundingBox();
+  const footerBox = await page.locator(".live-stage .bottom").boundingBox();
+  expect(groupsBox).not.toBeNull();
+  expect(footerBox).not.toBeNull();
+  expect(groupsBox!.y + groupsBox!.height).toBeLessThan(footerBox!.y);
+
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "存图" }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe("瑾瑜-苏-男女各三.png");
+});

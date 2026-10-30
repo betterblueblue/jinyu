@@ -19,8 +19,10 @@ export async function POST(req: Request) {
 
   // 流开启前的校验失败仍返回普通 JSON（现状不变）
   let request: NormalizedRequest | null = null;
+  let source: "live" | "formal" = "formal";
   try {
-    const body = (await req.json()) as NamingFormInput;
+    const body = (await req.json()) as NamingFormInput & { source?: string };
+    source = body.source === "live" ? "live" : "formal";
     const normalized = normalizeRequest(body);
     if (!normalized.ok) {
       return NextResponse.json(
@@ -45,10 +47,15 @@ export async function POST(req: Request) {
 
       try {
         const provider = createCandidateProvider();
-        const result = await runGeneration(request!, provider, (evt: ProgressEvent) => {
-          if (evt.type === "thinking") emit("thinking", { text: evt.text });
-          else if (evt.type === "stage") emit("stage", { stage: evt.stage });
-        });
+        const result = await runGeneration(
+          request!,
+          provider,
+          (evt: ProgressEvent) => {
+            if (evt.type === "thinking") emit("thinking", { text: evt.text });
+            else if (evt.type === "stage") emit("stage", { stage: evt.stage });
+          },
+          { source },
+        );
 
         if (!result.ok) {
           emit("error", {
