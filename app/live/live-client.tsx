@@ -432,6 +432,10 @@ export function LiveClient() {
     setThinking([]);
     setProgress(0);
     setDraft("");
+    // 直播是连续换观众：性别与补充条件（字数/辈分/避讳/生辰）一起清零，
+    // 否则上一位的条件会静默带到下一位身上，画面里只显示成一行小字
+    setGender("unknown");
+    setExtra({ ...EMPTY_EXTRA });
     setPhase("input");
     requestAnimationFrame(() => inputRef.current?.focus());
   }, []);
