@@ -19,7 +19,12 @@ export interface AnalysisProvider {
   analyze(input: AnalysisPromptInput, onThinking?: (chunk: string) => void): Promise<RawAnalysis | null>;
 }
 
-const DEFAULT_MAX_TOKENS = 8192;
+/**
+ * 首轮 8192：实测把预算压到 4096 并不能提速（推理长度由模型自己决定，
+ * 10.9–19.4 秒区间跟预算无关，finish_reason 全是 stop），却多出被截断后重试的风险。
+ * 真正管用的是提示词里那句「推理不超过 200 字」。
+ */
+const FIRST_MAX_TOKENS = 8192;
 const RETRY_MAX_TOKENS = 16384;
 
 export class LlmAnalysisProvider implements AnalysisProvider {
@@ -32,7 +37,7 @@ export class LlmAnalysisProvider implements AnalysisProvider {
 
     const first = await streamChat(this.opts, {
       messages,
-      maxTokens: DEFAULT_MAX_TOKENS,
+      maxTokens: FIRST_MAX_TOKENS,
       onThinking,
     });
 
