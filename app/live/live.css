@@ -417,6 +417,8 @@
   line-height: 1;
 }
 .live-stage .brand-sub {
+  /* 已从顶栏移除，见 .waiting 上的说明 */
+  display: none;
   font-family: "Noto Sans SC", "PingFang SC", system-ui, sans-serif;
   font-size: 21px;
   font-weight: 300;
@@ -427,7 +429,9 @@
   line-height: 1.2;
 }
 .live-stage .waiting {
-  display: flex;
+  /* 顶栏去掉了「中文取名」与「等待姓氏」两个块；等 live-client.tsx 的并发改动落定后，
+     把这段和下面 .dot / @keyframes live-breath 一起删掉 */
+  display: none;
   align-items: center;
   gap: 14px;
   font-family: "Noto Sans SC", "PingFang SC", system-ui, sans-serif;
