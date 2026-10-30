@@ -23,7 +23,9 @@ Two product surfaces now:
 
 - Fixed single preset account (no open registration).
 - LLM candidates + **server hard gate** (L1 anti-viral names, taboo, generation char, name length).
-- Soft prefs: default style **端庄耐看** (not exposed on form).
+- **没有「风格」维度**（2026-10-30 取消）：表单、提示词、排序、展示都不再有端庄/清雅这类标签。
+- 出处必须**回原文核验**才显示；核不过就留白，不拿「现代常用字组合」这种说法充数。
+- 具体条件仍保留：姓氏、字数、辈分字与位置、避讳、生辰、避开热门。
 - Optional bazi (default off, restrained wording).
 - Storage: local JSON snapshots under `data/` (not SQLite).
 - Independent of `jinyutreasury` runtime.
@@ -52,7 +54,7 @@ Two product surfaces now:
 | Storage | **JSON files** in `data/reports/` + `data/index.json` |
 | Default LLM | **`opendesign/deepseek-v4.1-flash`**，走本机 OpenAI 兼容网关 `http://127.0.0.1:3425/v1` |
 | Default LLM mode | `LLM_USE_FAKE=false`，本地真跑模型 |
-| Style UI | 表单**不暴露**风格卡片，固定 `default_dignified` |
+| 风格 | **已取消**（2026-10-30）。`stylePrototypeId` / 风格文案 / 关键词打分全部删除，改用 `requirements` 承载具体条件 |
 | Git | 已是 git 仓库，remote `https://github.com/betterblueblue/jinyu.git`，分支 `main` |
 
 ### LLM 演进（重要，别搞反）
@@ -109,7 +111,7 @@ tools/fit-window.ps1           # 把浏览器窗口校正成精确 9:16 客户�
 启动直播台.bat                  # 直播启动器（ASCII 编码，自动找 Edge/Chrome）
 ```
 
-**存图**：Canvas 手绘，1080 宽、高度按内容自适应（约 1800–2300）。标题「取名参考」，结构是：主名字 + **全名拼音（含姓氏）** + 3 标签 + 首推详解（寓意 / 读音 / 书写 / 出处 / 留意，开了生辰再加「生辰」）+ 2 个备选（名字 + 全名拼音 + 一句寓意 + 一行特点）。四套皮肤各自配色，竹兰用同一张背景图 `drawImage` 铺底。
+**存图**：Canvas 手绘，1080 宽、高度按内容自适应（约 1800–2300）。标题「取名参考」，结构是：主名字 + **全名拼音（含姓氏）** + 3 标签 + 首推详解（寓意 / 读音 / 书写 / 出处 / 留意，开了生辰再加「生辰」）+ 2 个备选（名字 + 全名拼音 + 一句寓意 + 一行「出处」；没有核验出处时改标「留意」）。四套皮肤各自配色，竹兰用同一张背景图 `drawImage` 铺底。
 
 **直播页排版（2026-10-30 统一）**：四套皮肤字号一致——拼音 36（400 字重、字距 0.18em）、一句话 52、详解 42 黑体、备选名 48、详解标签 26；**详解一律单栏**（双栏每行只放得下八个字，直播缩小后读不出）。开了生辰时统一降到详解 32 / 备选名 44，并收紧 sheet 下边距，避免顶到跑马灯。各皮肤只调 `--ink*` 配色，不改字号。输入态同步调过：提示语 38（字距 0.16em）、「姓氏」占位 104 / 50% 透明、性别按钮 36 加粗 500、「补充信息」「名字分析」两行 28、跑马灯 29，颜色统一压到 `ink-2`。
 
@@ -204,42 +206,38 @@ bat 里 URL 写死局域网 IP `http://192.168.31.211:9000/live`（直播在另�
 
 | 问题 | 影响 |
 |---|---|
-| 卡片左下角兰花压在备选左栏「避坑」标签上 | 花很淡，字能看清，只是叠着。**处理中**：要重出一张底部留白的 9:19 背景，替换 `public/skins/bamboo-paper.webp` |
-| 直播页详解限制 2 行、备选寓意限制 2 行 | **这是设计**，不是缺陷：直播结果页只展示概要，详细内容看存图（Canvas 版本按内容自适应高度、不截断）。**直播页详解是「为什么推荐 / 出处」，开了生辰再加「八字」一行 + 生辰（属相·季节）；音韵、字形、避坑、风格按用户要求去掉了，不要加回来**。这些字段只在存图里出现 |
+| ~~卡片左下角兰花压字~~ | **已解决**：2026-10-30 换成底部留白的竹兰背景（兰花只占左上角、竹叶只在右上角，40% 以下零墨点） |
+| 直播页详解限制 2 行、备选寓意限制 2 行 | **这是设计**，不是缺陷：直播结果页只展示概要，详细内容看存图（Canvas 版本按内容自适应高度、不截断）。**直播页详解只有「为什么推荐」（取 `composition`），开了生辰再加「八字」一行 + 生辰（属相·季节）；出处、音韵、字形、避坑、风格都不在直播页出现，不要加回来**。这些字段只在存图里出现 |
 
 ### Verifications that **passed**
 
 | Check | Command / method | Result |
 |---|---|---|
-| Unit tests | `pnpm test` | Exit 0；**49/49** passed（2026-10-30 复跑，含八字排盘 13 个用例） |
+| Unit tests | `pnpm test` | Exit 0；**83/83** passed（含八字 13、分析 29、拼音 3） |
 | Typecheck | `pnpm typecheck` | 干净 |
 | 真实生成（正式页） | 手动 + Playwright | 「沈静嘉」「陈峻岩」等，16–25s |
 | 真实生成（直播页） | Playwright 点「开始取名」 | 「苏清晏」「苏知微」「苏婉仪」等 |
 | 存图 | Playwright 拦截下载 | 1080×2068 / 2208 / 2240，四套皮肤各自配色 |
-| 历史筛选 | `/history` `/history?src=live` `/history?src=formal` | 清理后 **110 / 0 / 110**（清理前 144 / 16 / 128） |
+| 历史筛选 | `/history` `/history?src=live` `/history?src=formal` | 清理后 **114 / 0 / 114**（直播记录已全部清空） |
 | 窗口 9:16 | `cmd /c 启动直播台.bat` | `Client area: 576 x 1024 ratio 0.5625` |
 | 缩放适配 | 576×1024 / 1280×720 / 1080×1920 | `fitW/fitH` 全 true，横屏两侧纸色不裁切 |
 
 ### 数据现状
 
-`data/index.json` 与 `data/reports/` 各 **110** 条，**全部按 formal 处理**（2026-10-30 清理后实测）。
-
-2026-10-30 清过两次，都没删，挪到了 `data/_trash/`：
-
-```
-data/_trash/live-2026-10-30T06-53-46/   # 16 条 source=live 的直播测试记录
-data/_trash/fake-2026-10-30T06-59-52/   # 19 条 providerName=fake 的示例模式记录
-```
-
-每个目录里都有 `index-removed.json`（被移除的索引）+ `index-before.json`（清理前完整索引，兜底）+ 对应数量的 `<id>.json`。要恢复就把 `index-removed.json` 合并回 `index.json`，再把 json 挪回 `data/reports/`。
-
-所以现在 `/history` 是 **全部 110 / 正式取名 110 / 直播取名 0**。剩下条目按 provider 分：
+`data/index.json` 与 `data/reports/` 各 **114** 条，全部按 `formal` 处理。按 provider 分：
 
 | providerName | 条数 | 说明 |
 |---|---|---|
 | 空（没该字段） | 89 | 更早的数据 |
 | `stepfun` | 16 | 旧 StepFun 时代真跑 |
-| `magpie` | 5 | 本机网关真跑 |
+| `magpie` | 9 | 本机网关真跑 |
+
+清理过的东西都没删，全在 `data/_trash/`（16 个目录、103 个文件）：`live-*` 直播测试记录、`fake-*` 示例模式记录、
+`e2e-*` 与 `manual-*` 是跑 e2e / 手工验证产生的报告。每个目录都有 `index-removed.json`，
+要恢复就合并回 `index.json` 并把 json 挪回 `data/reports/`。
+
+**跑 e2e 会自动清理**：`global-setup.ts` 记下跑前的 id，`global-teardown.ts` 把新增的王/林/苏 报告挪进
+`data/_trash/e2e-<时间>/`，跑完 index 条数不变。
 
 ---
 
@@ -254,40 +252,39 @@ data/_trash/fake-2026-10-30T06-59-52/   # 19 条 providerName=fake 的示例模�
 
 ### Git 状态
 
-2026-10-30 已把这批工作拆成 4 个 commit 落库，工作区干净：
+`main` 与 `origin/main` 一致，工作区干净。`抖音素材/` 是用户自己的图，**未跟踪，别提交**。
 
-| commit | 内容 |
+2026-10-30 一天的提交按主题：
+
+| 主题 | 关键 commit |
 |---|---|
-| `a917005` | 报告 `source` 分源 + `GET /api/reports/[id]` + `/history` 三 tab |
-| `d37fcf3` | 生成入口透传 source + 直播未知性别男女各 3 个 |
-| `25cbf5c` | 直播取名台 `/live`（四皮肤 + 缩放 + 存图 + 启动器 + fit-window） |
-| `5e63762` | HANDOFF 补六选 + 修正过期数字 |
-| `e930b74` | HANDOFF 去掉满屏/榜单待办，记录数据清理与测试污染 |
-| 第 6 个 | `fix(store)` 路径改调用时求值，测试不再写进真实 `data/` |
-| 第 7 个 | HANDOFF 数字更新到清理后的 110 条 |
-| 第 8 个 | `feat(bazi)` 换成 lunar-javascript 真实四柱排盘 + 7 个校验用例 |
-| 第 9 个 | HANDOFF 补排盘一节 |
-| 第 10 个 | 修评审三处：旧报告标签、跨界提示、四柱进 prompt |
-| 第 11 个 | HANDOFF 记录上一轮评审修复 |
-| 第 12 个 | 修评审两处：节气在前半段漏报、不确定时兜底给单一结论（含本文档） |
-
-再往前 `5f681c1` 是 change-impact 目录改名。
+| 直播台从 0 到 1 | `25cbf5c` 四皮肤+缩放+存图；`77787c1` 竹兰底部留白背景；`49b9bed` 去掉朱红印章；`83462ab` 默认皮肤改竹兰 |
+| 报告分源 | `a917005` |
+| 直播未知性别六选 | `d37fcf3` |
+| 八字真实排盘 | `dbf7d44`；评审修复 `af599df`、`c010f0d` |
+| 名字分析 | `c91b59f` 全链路；`84d3afa` 优点不许凑数；`c758ee0` 面板文案；`5386fd0` 推理长度上限 |
+| 直播可读性 | `eb61463` 宣纸重排；`f423753` 三皮肤同步；`b235f8f` 输入态同步 |
+| 抖音安全区与等待态 | `55547c6` |
+| 去风格 + 出处核验 | `95e4835`；`1587925` 备选标签改「出处/留意」 |
+| e2e 可跑 | `421b837`；`3135ea8` 自动清理 |
 
 ### Needs user decision
 
-- 卡片上兰花压字要不要彻底解决（需 9:19 卡片专用背景）
+- **男女各三要不要提速**：12 个候选都带核验出处，一次 **1.9 分钟**（单名约 26s）。
+  三条路：只要求首推带出处 / 六选只生成 8 个候选 / 接受等待
 - Next 15.1.0 的安全告警要不要升级
 
 ---
 
 ## 4. Next steps (ordered)
 
-1. **直播档 prompt**（可选）
-   - 现在标签是拼出来的（`双字名 · 避开网红名 · 女向`）
-   - 可以给直播页单独出一个更短、更适合口播的文案模板
+1. **男女各三的等待时间**（最影响直播体验）
+   - 现状 1.9 分钟，观众要在直播间干等
+   - 先定策略（上面三条路），再动代码
 
-2. **可选质量**
-   - 直播页详解截断提示（现在直接省略号，主播可能念不全）
+2. **直播档口播文案**（可选）
+   - 现在标签是拼出来的（`双字名 · 避开网红名 · 女向`）
+   - 可以给直播页单独出一个更短、更适合口播的模板
 
 ---
 
@@ -298,7 +295,7 @@ data/_trash/fake-2026-10-30T06-59-52/   # 19 条 providerName=fake 的示例模�
 | 变量 | 实测 |
 |---|---|
 | reasoning_effort high / medium / low | 12.6 / 14.9 / 15.0 秒，**没有差别** |
-| max_tokens 4096 / 6144 / 8192 | 15.8 / 12.7 / 10.9 秒，波动来自推理长度，inish_reason 全是 stop |
+| max_tokens 4096 / 6144 / 8192 | 15.8 / 12.7 / 10.9 秒，波动来自推理长度，finish_reason 全是 stop |
 | 换 haiku-5.5 | 20.6 秒，更慢，且输出退回「读起来顺」这类套话 |
 | **提示词加「推理不超过 200 字」** | **9.0–12.1 秒（平均 ~10.5），原来 15–20 秒** |
 
@@ -319,7 +316,9 @@ data/_trash/fake-2026-10-30T06-59-52/   # 19 条 providerName=fake 的示例模�
   `src/domain/analysis/corpus.ts` 的 `verifyCitation` 逐字回原文核对；核不过就当没有出处。
   `NameDetail.origin` 只存 `${书名} · ${篇名}｜「${引文}」`，没有就在报告页/存图里整行不出现。
 - **组合依据**：候选新增 `composition`（两个字各自什么意思、合起来为什么成立）。
-  直播页「为什么推荐」、存图首推的「组合」都用它；存图备选「特点」优先用核验过的出处，其次避坑。
+  直播页「为什么推荐」、存图首推的「组合」都用它。
+- **备选那一行的标签跟内容走**：有核验出处标「出处」，没有才标「留意」（取避坑提醒），
+  两样都没有就不显示。别再用「特点」当筐——用户专门提过这个错。
 - **具体要求**：`styleNotes` 全线改名 `requirements`（表单 / NormalizedRequest / prompt / 分析回流）。
   只承载能照做的条件（避开某字、读音要亮、别太常见），不写「端庄」「清雅」这类风格形容词，
   也不再参与排序打分。
@@ -333,6 +332,10 @@ data/_trash/fake-2026-10-30T06-59-52/   # 19 条 providerName=fake 的示例模�
 
 **代价**：要求出处会让生成变慢（16–25s → 约 26s），且模型想不出可靠出处时该栏就是空的——
 这是有意的取舍，不许为了填满栏目编出处。
+
+第二次实测（`1587925` 之后）：高景舟 · 诗经·国风·邶风·二子乘舟「二子乘舟，泛泛其景」；
+备选 高振鹭（诗经·周颂臣工之什·振鹭）、高谦牧（周易·谦）也各带核验过的出处，三处标签一致。
+存图 1080×1828，首推五项：寓意 / 读音 / 书写 / 出处 / 留意。
 
 ## 5. Pitfalls — do not repeat
 
@@ -359,7 +362,7 @@ data/_trash/fake-2026-10-30T06-59-52/   # 19 条 providerName=fake 的示例模�
 ```bash
 pnpm install
 pnpm dev                 # 9000 端口
-pnpm test                # 49 个
+pnpm test                # 83 个
 pnpm typecheck
 pnpm e2e
 node scripts/probe-provider.ts   # 真实模型 + 闸门
@@ -373,11 +376,11 @@ node scripts/e2e-real-llm.mjs    # 需 dev server
 | Item | Value |
 |---|---|
 | Path | `E:\agent\jinyu` |
-| Git | 仓库 + remote，`main` 分支，工作区干净，最近 12 个 commit 见上 |
+| Git | 仓库 + remote，`main` 分支，工作区干净；当天提交见 §3 表格 |
 | Package manager | pnpm |
 | Dev server | 9000 端口（本次会话实测已在跑，PID 23396）；否则手动 `pnpm dev` / `.\start-dev.ps1` |
 | 本机局域网 IP | `192.168.31.211`（DHCP，会变） |
-| 数据 | `data/index.json` 110 条，全部按 formal；35 条清理记录在 `data/_trash/` 可恢复 |
+| 数据 | `data/index.json` 114 条，全部按 formal；103 个清理文件在 `data/_trash/`（16 个目录） |
 | 用户密钥 | `.env.local`（不要打印、不要提交） |
 | 不要删 | `docs/*`、`issues/*`、用户 `.env.local`、`data/`、`public/skins/` |
 
@@ -419,7 +422,7 @@ git status --porcelain
 ## 8. 名字分析（2026-10-30 新增）
 
 > 状态：**功能已落地，代码、语料、测试都在**。名字分析这条主链路真实模型跑通过；
-> 但 `/live` 姓氏输入框在一次自动化复查里状态没更新，**未复验**，见「待验证」一节。
+> `/live` 姓氏输入框的 hydrate 竞态已修（见 §8），工作区干净。
 > 用户 2026-10-30 决定先不验，回头自己看。
 
 ### 做什么
@@ -438,7 +441,7 @@ git status --porcelain
 
 - 「更贴合」不是万能话术：`fitAngle` 必须提到姓氏，不提就用兜底句，防止什么名字都能说「还能更贴合」
 - **不显示分数**、**不算五格**、结论放第一句、不许出现「能用/还行/总体来说」
-- 分析结果**不落盘**（过程不是交付物）；点按钮后带 `surname + tabooChars + styleNotes` 走原 `/api/generate`，硬闸门照走
+- 分析结果**不落盘**（过程不是交付物）；点按钮后带 `surname + tabooChars + requirements` 走原 `/api/generate`，硬闸门照走
 
 ### 分工：哪些算、哪些问模型
 
@@ -482,7 +485,7 @@ app/api/analyze/route.ts           # SSE：thinking / stage / done / error
 app/live/analyze-panel.tsx         # 三态面板
 app/live/analyze.css               # 面板样式（跟随四套皮肤变量）
 scripts/probe-analysis.ts          # 离线自检（不联网）
-tests/analysis.test.ts             # 23 个用例
+tests/analysis.test.ts             # 29 个用例
 tests/fixtures/corpus/             # 测试用微型语料 + 字表
 ```
 
@@ -496,12 +499,12 @@ tests/fixtures/corpus/             # 测试用微型语料 + 字表
 | 项 | 结果 |
 |---|---|
 | `pnpm typecheck` | 干净 |
-| `pnpm test` | **77/77**（含 analysis 26 个） |
+| `pnpm test` | **83/83**（含 analysis 29 个） |
 | 语料核验离线自检 | `pnpm tsx scripts/probe-analysis.ts` 全部符合预期，故意编的句子被驳回 |
 | 真实模型分析 | 高登科 → cost，3 条问题，出处「全唐诗·登科后」核验通过并折成简体 |
 | 一键改名 | 面板关闭、姓氏带过去、出「高承岳」 |
 | 576×1024 / 1080×1920 | 输入、分析中、结论、底部按钮都不溢出（截图已删，需要时重跑） |
-| `pnpm e2e` | **3 passed**（1.6m，复用 9000 上已启动的 server，跑完自动清理用例生成的报告） |
+| `pnpm e2e` | **3 passed**（3.1m；其中「男女各三」那条 1.9m，因为 12 个候选都要带出处） |
 
 ### e2e 现在怎么跑（2026-10-30 已修通）
 
@@ -511,7 +514,7 @@ tests/fixtures/corpus/             # 测试用微型语料 + 字表
 
 - 单测超时 30s → 240s：复用 server 时跑的是真实模型，一次 16–25 秒，用例里的 60–180 秒等待先前会被默认超时提前判死
 - `globalSetup` 记下 `data/index.json` 现有 id，`globalTeardown` 把新增的 王/林/苏 报告挪进 `data/_trash/e2e-<时间>/`，用户历史不被污染
-- 实测 3 passed (1.6m)，跑前跑后 index 都是 114 条
+- 实测 3 passed（3.1m），跑前跑后 index 都是 114 条
 
 ### 已修：`/live` 姓氏输入框打字后按钮仍 disabled（2026-10-30）
 
@@ -534,7 +537,7 @@ tests/fixtures/corpus/             # 测试用微型语料 + 字表
 
 - 区分了「已完成 / 未提交 / 未验证」
 - 路径和命令具体，无密钥值
-- git 状态与实测一致（4 个 commit 已提交、工作区干净），没把未验证的事写成已验证
+- git 状态与实测一致（当天改动全部已提交并推送，工作区干净），没把未验证的事写成已验证
 - 直播台的取舍（去排队、皮肤来源、窗口捕获、缩放坑）都写清楚了
 - 直播未知性别六选这一块（liveUnknownSix）单独成节，别和正式页逻辑搞混
 - 新 session 只看这个文件就能接手
