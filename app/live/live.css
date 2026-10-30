@@ -81,8 +81,8 @@
   --stage-bg: radial-gradient(120% 82% at 20% 4%, #f8fbf8 0%, #eaf2ed 28%, #dde8e3 54%, #d0ddd7 80%, #c5d5ce 100%);
   --ink: #16211d;
   --ink-name: #16211d;
-  --ink-2: #35504a;
-  --ink-3: #4b625a;
+  --ink-2: #2c4740;
+  --ink-3: #3f5b53;
   --accent: #3a574e;
   --accent-soft: rgba(58, 87, 78, 0.1);
   --hair: rgba(45, 72, 64, 0.18);
@@ -98,12 +98,13 @@
   --input-line: rgba(45, 72, 64, 0.22);
   --marquee-color: #557068;
   --fs-name: 226px;
-  --fs-py: 30px;
-  --fs-mean: 51px;
-  --fs-tag: 27px;
-  --fs-detail: 31px;
-  --fs-alt: 42px;
+  --fs-py: 36px;
+  --fs-mean: 52px;
+  --fs-tag: 30px;
+  --fs-detail: 46px;
+  --fs-alt: 48px;
   --fs-btn: 34px;
+  --fs-dlabel: 26px;
   --hero-mt: 68px;
   --details-mt: 40px;
 }
@@ -112,8 +113,8 @@
   --stage-bg: radial-gradient(120% 70% at 50% -10%, #fbfbf9 0%, #f3f3f0 38%, #ededdf 72%, #e7e7e3 100%);
   --ink: #101114;
   --ink-name: #0e1013;
-  --ink-2: #34373c;
-  --ink-3: #5e6266;
+  --ink-2: #2a2d31;
+  --ink-3: #43464b;
   --accent: #9e2b25;
   --accent-soft: rgba(158, 43, 37, 0.06);
   --hair: rgba(20, 22, 26, 0.14);
@@ -129,13 +130,13 @@
   --input-line: rgba(20, 22, 26, 0.16);
   --marquee-color: #6a6e73;
   --fs-name: 232px;
-  --fs-py: 30px;
-  --fs-mean: 50px;
-  --fs-tag: 26px;
-  --fs-detail: 30px;
-  --fs-alt: 38px;
+  --fs-py: 36px;
+  --fs-mean: 52px;
+  --fs-tag: 30px;
+  --fs-detail: 46px;
+  --fs-alt: 48px;
   --fs-btn: 30px;
-  --fs-dlabel: 22px;
+  --fs-dlabel: 26px;
   --hero-mt: 72px;
   --details-mt: 36px;
 }
@@ -146,8 +147,8 @@
   /* 新背景实测 #E0E7D6 / 亮度 231，字色再退一档，避免"印刷黑" */
   --ink: #202a1e;
   --ink-name: #1c261a;
-  --ink-2: #3a4534;
-  --ink-3: #4e5945;
+  --ink-2: #2f3a2a;
+  --ink-3: #414c39;
   --accent: #9c3a2b;
   --accent-soft: rgba(156, 58, 43, 0.08);
   --hair: rgba(35, 45, 32, 0.2);
@@ -163,13 +164,13 @@
   --input-line: rgba(35, 45, 32, 0.26);
   --marquee-color: #4e5945;
   --fs-name: 216px;
-  --fs-py: 31px;
-  --fs-mean: 50px;
-  --fs-tag: 29px;
-  --fs-detail: 31px;
-  --fs-alt: 41px;
+  --fs-py: 36px;
+  --fs-mean: 52px;
+  --fs-tag: 30px;
+  --fs-detail: 46px;
+  --fs-alt: 48px;
   --fs-btn: 35px;
-  --fs-dlabel: 23px;
+  --fs-dlabel: 26px;
   --hero-mt: 72px;
   --details-mt: 44px;
 
@@ -901,34 +902,11 @@
   overflow: hidden;
 }
 
-/* 宣纸皮肤：详解改单栏，正文用黑体大字号，直播缩到手机后还能读 */
-[data-skin="paper"] .live-stage .details {
+/* 详解统一单栏：直播缩到手机后，双栏每行只剩八个字就换行 */
+.live-stage .details {
   grid-template-columns: 1fr;
   gap: 28px;
   max-width: 940px;
-}
-
-/* 多出「八字」一行时会顶到备选，降一档字号、收紧行距与间距 */
-[data-skin="paper"] .live-stage.has-bazi .detail p {
-  font-size: 32px;
-  line-height: 1.45;
-  -webkit-line-clamp: 2;
-}
-[data-skin="paper"] .live-stage.has-bazi .details {
-  gap: 14px;
-}
-[data-skin="paper"] .live-stage.has-bazi .alt-name {
-  font-size: 44px;
-}
-[data-skin="paper"] .live-stage.has-bazi .alt-one {
-  font-size: 24px;
-  -webkit-line-clamp: 2;
-}
-[data-skin="paper"] .live-stage.has-bazi .bazi {
-  margin-top: 8px;
-}
-[data-skin="paper"] .live-stage.has-bazi .alt {
-  margin-top: 10px;
 }
 
 /* 四柱：只在开了生辰时出现，一行，压在下半部详解与备选之间 */
@@ -945,20 +923,33 @@
   letter-spacing: 0.3em;
   margin-right: 14px;
 }
-/* 多了「八字」这一行和四柱之后，下半部要腾出高度，否则备选会顶到跑马灯上 */
+
+/* 多出「八字」一行和生辰行时会顶到备选，整体降一档并收紧间距 */
 .live-stage.has-bazi .sheet {
   padding-bottom: 200px;
 }
 .live-stage.has-bazi .details {
   margin-top: 26px;
+  gap: 14px;
+}
+.live-stage.has-bazi .detail p {
+  font-size: 32px;
+  line-height: 1.45;
+  -webkit-line-clamp: 2;
 }
 .live-stage.has-bazi .bazi {
-  margin-top: 12px;
+  margin-top: 8px;
 }
 .live-stage.has-bazi .alt {
-  margin-top: 14px;
+  margin-top: 10px;
 }
-
+.live-stage.has-bazi .alt-name {
+  font-size: 44px;
+}
+.live-stage.has-bazi .alt-one {
+  font-size: 24px;
+  -webkit-line-clamp: 2;
+}
 .live-stage .alt {
   margin-top: 28px;
   display: flex;
