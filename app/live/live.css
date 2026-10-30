@@ -435,9 +435,9 @@
 .live-stage .hint {
   margin: 0;
   text-align: center;
-  font-size: 36px;
-  letter-spacing: 0.24em;
-  color: var(--ink-3);
+  font-size: 38px;
+  letter-spacing: 0.16em;
+  color: var(--ink-2);
 }
 .live-stage .field {
   display: flex;
@@ -459,11 +459,11 @@
   outline: none;
 }
 .live-stage .surname-input::placeholder {
-  font-size: 96px;
+  font-size: 104px;
   font-weight: 400;
-  letter-spacing: 0.34em;
-  color: var(--ink-3);
-  opacity: 0.42;
+  letter-spacing: 0.3em;
+  color: var(--ink-2);
+  opacity: 0.5;
 }
 .live-stage .surname-input:focus {
   border-bottom-color: var(--accent);
@@ -476,6 +476,7 @@
   position: relative;
   flex: 1;
   padding: 26px 0;
+  font-weight: 500;
   background: rgba(255, 255, 255, 0.34);
   border: 1px solid var(--hair);
   border-radius: var(--btn-radius);
@@ -582,9 +583,9 @@
   border-top: 1px dashed var(--hair);
   border-bottom: 1px dashed var(--hair);
   font-family: inherit;
-  font-size: 25px;
-  letter-spacing: 0.16em;
-  color: var(--ink-3);
+  font-size: 28px;
+  letter-spacing: 0.12em;
+  color: var(--ink-2);
   cursor: pointer;
 }
 .live-stage .extra-bar:hover {
@@ -1135,7 +1136,7 @@
 }
 .live-stage .marquee-track span {
   white-space: nowrap;
-  font-size: 27px;
+  font-size: 29px;
   letter-spacing: 0.2em;
   color: var(--marquee-color);
   line-height: 44px;
