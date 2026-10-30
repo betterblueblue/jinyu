@@ -130,6 +130,31 @@ tools/fit-window.ps1           # 把浏览器窗口校正成精确 9:16 客户�
 
 ⚠️ `StepFunProvider` 里 prompt 现在是三层嵌套分支（直播六选 / 未知性别三类 / 已知性别），改 prompt 时别只看外层一个分支。
 
+### 八字排盘改成真实历法（2026-10-30 新增，替换哈希实现）
+
+原来的 `bazi.ts` 是 `hash(生日+时辰)` 拼干支，不是排盘：违反 INTENT C08「排盘依赖规则/数据闸门侧约束」，而且时辰会连带改年月日柱，连 C14「无时辰只排年月日」都没满足。
+
+现在改用 **`lunar-javascript@1.7.7`**（纯 JS、无原生模块）：
+
+- 年柱按立春、月柱按节气切换，日柱查历法，时柱用日上起时法
+- `setSect(1)`：23 点后（夜子时）日柱归次日，与 `baby-name-skill/references/shichen-table.md` 的「早晚子时」约定一致
+- 无时辰 → 只排年月日，`precision: "six_limited"`
+- `birthHour` 兼容「巳时 9–11」「10:00」「10」三种写法；时辰文本按该时辰中点估算，精度写进 notes
+- notes 给出干支本气五行统计（不含藏干加权）
+- 模型仍只负责解释、不负责算；`StepFunProvider` 兜底文案从「四柱示意为」改成「四柱为」；报告页精度标签改成「八字 · 按节气排盘」/「六字 · 未填时辰」
+
+校验点写在 `tests/bazi.test.ts`（数据出自 `baby-name-skill/references/wanni-calendar.md`）：
+
+| 用例 | 期望 |
+|---|---|
+| 2000-01-01 日柱 | 戊午 |
+| 2024-01-01 日柱 | 甲子 |
+| 2026-04-13 日柱 | 丁巳 |
+| 2025-02-03 21:00 vs 23:00（立春 22:10） | 甲辰/丁丑 → 乙巳/戊寅 |
+| 2026-10-30 23:30 vs 22:30 | 日柱 戊寅 / 丁丑 |
+
+**仍然没解决**：时柱只有时辰级，没有出生地/真太阳时；喜忌、用神还是模型措辞，不因排盘变准。要更准得先在页面补「精确到分钟 + 出生地」。
+
 ### 竖屏适配
 
 `/live` 是 1080×1920 固定设计稿，用 `transform: scale(--s)` 适配窗口。`--s` 由 JS 按 `min(窗口宽/1080, 窗口高/1920, 1)` 算，设在 `.live-root` 上。
@@ -159,7 +184,7 @@ bat 里 URL 写死局域网 IP `http://192.168.31.211:9000/live`（直播在另�
 
 | Check | Command / method | Result |
 |---|---|---|
-| Unit tests | `pnpm test` | Exit 0；**34/34** passed（2026-10-30 复跑，比 handoff 旧版多出的 3 个是直播六选的用例） |
+| Unit tests | `pnpm test` | Exit 0；**41/41** passed（2026-10-30 复跑，含八字排盘 7 个用例） |
 | Typecheck | `pnpm typecheck` | 干净 |
 | 真实生成（正式页） | 手动 + Playwright | 「沈静嘉」「陈峻岩」等，16–25s |
 | 真实生成（直播页） | Playwright 点「开始取名」 | 「苏清晏」「苏知微」「苏婉仪」等 |
@@ -213,6 +238,8 @@ data/_trash/fake-2026-10-30T06-59-52/   # 19 条 providerName=fake 的示例模�
 | `e930b74` | HANDOFF 去掉满屏/榜单待办，记录数据清理与测试污染 |
 | 第 6 个 | `fix(store)` 路径改调用时求值，测试不再写进真实 `data/` |
 | 第 7 个 | HANDOFF 数字更新到清理后的 110 条 |
+| 第 8 个 | `feat(bazi)` 换成 lunar-javascript 真实四柱排盘 + 7 个校验用例 |
+| 第 9 个 | HANDOFF 补排盘一节 |
 
 再往前 `5f681c1` 是 change-impact 目录改名。
 
@@ -251,13 +278,15 @@ data/_trash/fake-2026-10-30T06-59-52/   # 19 条 providerName=fake 的示例模�
 | 提交 `.env.local` | 含真 key，gitignored |
 | write 工具报 `ReplaceFileW EIO` | 文件被占用时会发生；改用 PowerShell `[System.IO.File]::WriteAllText` 即可 |
 | 以为测试里的 `JINYU_DATA_DIR` 能隔离数据 | `report-store.ts` 的路径常量若是模块顶层求值，`beforeEach` 里设 env 就晚了，测试会写进真实 `data/`。已改成调用时求值，`tests/store.test.ts` 加了断言钉住 |
+| 拿哈希或随机数拼干支当排盘 | 已换成 lunar-javascript。`hash(生日+时辰)` 那种写法连年月日柱都会一起变，直接违反 INTENT C08 |
+| 直播时辰的值是「巳时 9–11」这种中文串 | `parseBirthHour` 现在认汉字时辰（取该时辰中点）。改下拉 value 前先确认排盘不需要文本，别把解析写回只认数字 |
 
 ### Useful commands
 
 ```bash
 pnpm install
 pnpm dev                 # 9000 端口
-pnpm test                # 34 个
+pnpm test                # 41 个
 pnpm typecheck
 pnpm e2e
 node scripts/probe-provider.ts   # 真实模型 + 闸门
@@ -271,7 +300,7 @@ node scripts/e2e-real-llm.mjs    # 需 dev server
 | Item | Value |
 |---|---|
 | Path | `E:\agent\jinyu` |
-| Git | 仓库 + remote，`main` 分支，工作区干净，最近 7 个 commit 见上 |
+| Git | 仓库 + remote，`main` 分支，工作区干净，最近 9 个 commit 见上 |
 | Package manager | pnpm |
 | Dev server | 9000 端口（本次会话实测已在跑，PID 23396）；否则手动 `pnpm dev` / `.\start-dev.ps1` |
 | 本机局域网 IP | `192.168.31.211`（DHCP，会变） |
