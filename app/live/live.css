@@ -53,13 +53,13 @@
   --btn-h: 92px;
   --input-line: var(--hair);
   --marquee-color: var(--ink-3);
-  --fs-name: 216px;
+  --fs-name: 184px;
   /* 直播画面缩到手机后会掉一半，拼音和正文不能再走细字重、小字号 */
   --fs-py: 36px;
   --fs-mean: 52px;
   --fs-tag: 30px;
   --fs-detail: 46px;
-  --fs-alt: 48px;
+  --fs-alt: 56px;
   --fs-btn: 35px;
   --fs-dlabel: 26px;
   --hero-mt: 64px;
@@ -97,12 +97,12 @@
   --btn-h: 96px;
   --input-line: rgba(45, 72, 64, 0.22);
   --marquee-color: #557068;
-  --fs-name: 226px;
+  --fs-name: 184px;
   --fs-py: 36px;
   --fs-mean: 52px;
   --fs-tag: 30px;
   --fs-detail: 46px;
-  --fs-alt: 48px;
+  --fs-alt: 56px;
   --fs-btn: 34px;
   --fs-dlabel: 26px;
   --hero-mt: 68px;
@@ -129,12 +129,12 @@
   --btn-h: 88px;
   --input-line: rgba(20, 22, 26, 0.16);
   --marquee-color: #6a6e73;
-  --fs-name: 232px;
+  --fs-name: 184px;
   --fs-py: 36px;
   --fs-mean: 52px;
   --fs-tag: 30px;
   --fs-detail: 46px;
-  --fs-alt: 48px;
+  --fs-alt: 56px;
   --fs-btn: 30px;
   --fs-dlabel: 26px;
   --hero-mt: 72px;
@@ -163,12 +163,12 @@
   --btn-h: 92px;
   --input-line: rgba(35, 45, 32, 0.26);
   --marquee-color: #4e5945;
-  --fs-name: 216px;
+  --fs-name: 184px;
   --fs-py: 36px;
   --fs-mean: 52px;
   --fs-tag: 30px;
   --fs-detail: 46px;
-  --fs-alt: 48px;
+  --fs-alt: 56px;
   --fs-btn: 35px;
   --fs-dlabel: 26px;
   --hero-mt: 72px;
@@ -396,28 +396,25 @@
   position: relative;
   z-index: 2;
   height: 100%;
-  padding: 92px 76px 250px;
+  /* 顶部 92px 会被抖音头像和榜单盖住，正文往下挪；底部留给评论区 */
+  padding: 150px 76px 210px;
   display: flex;
   flex-direction: column;
 }
 
-.live-stage .topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.live-stage .brand {
-  display: flex;
-  align-items: center;
-  gap: 26px;
-}
-.live-stage .brand-name {
-  font-size: 46px;
-  font-weight: 600;
+.live-stage .brand-mini {
+  position: absolute;
+  left: 26px;
+  bottom: 20px;
+  z-index: 8;
+  font-family: "Noto Serif SC", "Source Han Serif SC", "Songti SC", serif;
+  font-size: 16px;
   letter-spacing: 0.3em;
-  padding-left: 0.3em;
-  line-height: 1;
+  color: var(--ink-3);
+  opacity: 0.55;
+  pointer-events: none;
 }
+
 .live-stage .pane {
   display: none;
   flex: 1;
@@ -689,29 +686,12 @@
   color: var(--ink-3);
   min-height: 34px;
 }
-.live-stage .gen-lines {
-  display: flex;
-  flex-direction: column;
-  gap: 32px;
-  min-height: 460px;
-  justify-content: center;
-}
-.live-stage .gen-line {
-  margin: 0;
-  font-size: 35px;
-  line-height: 1.8;
-  letter-spacing: 0.05em;
-  color: var(--ink-3);
-  opacity: 0.35;
-  animation: live-fade 0.45s ease both;
-}
-.live-stage .gen-line.last {
+.live-stage .gen-stage {
+  margin: 36px 0 0;
+  text-align: center;
+  font-size: 34px;
+  letter-spacing: 0.18em;
   color: var(--ink-2);
-  opacity: 1;
-}
-@keyframes live-fade {
-  from { opacity: 0; transform: translateY(12px); }
-  to { opacity: 1; transform: none; }
 }
 .live-stage .bar {
   height: 6px;
@@ -885,7 +865,8 @@
 .live-stage .detail .label {
   display: block;
   font-size: var(--fs-dlabel);
-  letter-spacing: 0.24em;
+  font-weight: 600;
+  letter-spacing: 0.1em;
   color: var(--accent);
   margin-bottom: 6px;
 }
@@ -996,7 +977,7 @@
 }
 .live-stage .alt-py {
   font-family: "Noto Sans SC", "PingFang SC", system-ui, sans-serif;
-  font-size: 26px;
+  font-size: 30px;
   font-weight: 400;
   letter-spacing: 0.1em;
   color: var(--ink-2);

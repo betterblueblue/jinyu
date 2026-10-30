@@ -82,12 +82,11 @@ function extraText(e: Extra): string {
   return p.join(" · ");
 }
 
-/** 把模型的连续推理文本切成一句一句，字幕区只显示最近几句 */
-function splitSentences(text: string): string[] {
-  return text
-    .split(/[。！？\n]+/)
-    .map((s) => s.trim())
-    .filter((s) => s.length > 3);
+/** 等待时只给观众看真实阶段，不展示模型推理 */
+function stageText(stage: string): string {
+  if (stage === "filter") return "正在筛选";
+  if (stage === "assemble") return "正在整理结果";
+  return "正在准备名字";
 }
 
 function toShow(report: ReportDocument): ShowData {
@@ -97,11 +96,11 @@ function toShow(report: ReportDocument): ShowData {
   const surname = report.request.surname;
   const givenOf = (full: string) => (full.startsWith(surname) ? full.slice(surname.length) : full);
 
-  // 直播页：只留观众几秒能看懂的。大字那句已经是寓意，这里换成「为什么推荐」避免重复
+  // 直播页：只留观众几秒能看懂的。大字那句已经是寓意，这里换成「为什么推荐」避免重复；
+  // 出处留给主播口头讲或存图，直播画面纵向空间不够
   const rowsFor = (n: NameDetail): [string, string][] => {
     const all: [string, string][] = [
       ["为什么推荐", n.styleFit || n.meaning],
-      ["出处", n.origin],
       // 开了生辰才给这一项，模型/兜底都会写 baziFit
       ...(n.baziFit ? ([["八字", n.baziFit]] as [string, string][]) : []),
     ];
@@ -307,7 +306,7 @@ export function LiveClient() {
   const [draft, setDraft] = useState("");
   const [extra, setExtra] = useState<Extra>(EMPTY_EXTRA);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [thinking, setThinking] = useState<string[]>([]);
+  const [stage, setStage] = useState<string>("");
   const [progress, setProgress] = useState(0);
   const [show, setShow] = useState<ShowData | null>(null);
   const [ready, setReady] = useState(false);
@@ -364,7 +363,7 @@ export function LiveClient() {
     }
     busy.current = true;
     setPhase("generating");
-    setThinking([]);
+    setStage("");
     setProgress(0);
     setError(null);
 
@@ -419,13 +418,12 @@ export function LiveClient() {
               continue;
             }
             if (evt === "thinking") {
-              acc += String(payload.text ?? "");
-              // 模型推理里会夹英文碎片，只留中文句子给观众看
-              const zh = splitSentences(acc).filter((s) => /[\u4e00-\u9fa5]/.test(s));
-              setThinking(zh.slice(-6));
-              setProgress((p) => Math.min(92, p + 0.8));
+              // 原始推理里有英文、有还没定的名字，不给观众看；只留进度
+              setProgress((p) => Math.min(60, p + 0.4));
             } else if (evt === "stage") {
-              setProgress((p) => Math.max(p, 62));
+              const next = String(payload.stage ?? "");
+              setStage(next);
+              setProgress((p) => Math.max(p, next === "assemble" ? 85 : 55));
             } else if (evt === "done") {
               reportId = String(payload.reportId ?? "");
             } else if (evt === "error") {
@@ -475,7 +473,7 @@ export function LiveClient() {
   const resetToInput = useCallback(() => {
     setShow(null);
     setReady(false);
-    setThinking([]);
+    setStage("");
     setProgress(0);
     setDraft("");
     // 直播是连续换观众：性别与补充条件（字数/辈分/避讳/生辰）一起清零，
@@ -738,11 +736,7 @@ export function LiveClient() {
           <div className="rail">JINYU · NAMING STUDIO</div>
 
           <main className={`sheet ${drawerOpen ? "dim" : ""}`}>
-            <header className="topbar">
-              <div className="brand">
-                <div className="brand-name">瑾瑜</div>
-              </div>
-            </header>
+            {/* 品牌不再放顶部：抖音头像和榜单会压住它，挪到底部左下角的小标 */}
 
             {/* 输入态 */}
             <section className={`pane pane-input ${phase === "input" ? "on" : ""}`}>
@@ -824,13 +818,7 @@ export function LiveClient() {
               <p className="gen-extra">
                 {extraText(extra) || "默认档：双字名 · 端庄风格 · 避开网红名"}
               </p>
-              <div className="gen-lines">
-                {thinking.map((line, i) => (
-                  <p key={`${line}-${i}`} className={`gen-line ${i === thinking.length - 1 ? "last" : ""}`}>
-                    {line}
-                  </p>
-                ))}
-              </div>
+              <p className="gen-stage">{stageText(stage)}</p>
               <div className="bar">
                 <i style={{ width: `${progress}%` }} />
               </div>
@@ -925,7 +913,6 @@ export function LiveClient() {
                           <div className="alt-item" key={a.n}>
                             <span className="alt-name">{a.n}</span>
                             <span className="alt-py">{a.py}</span>
-                            <span className="alt-one">{a.one}</span>
                           </div>
                         ))}
                       </div>
@@ -1088,6 +1075,8 @@ export function LiveClient() {
               完成，回到取名
             </button>
           </div>
+
+          <span className="brand-mini" aria-hidden="true">瑾瑜</span>
 
           <button type="button" className="skin-btn" onClick={cycleSkin}>
             换肤 · {SKIN_LABEL[skin]} · S
