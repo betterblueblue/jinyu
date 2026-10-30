@@ -122,9 +122,13 @@ function toShow(report: ReportDocument): ShowData {
     n: n.fullName,
     py: fullNamePinyin(surname, givenOf(n.fullName)).text,
     one: n.meaning,
-    // 备选简解：一句话已经写了寓意，这里只补一句特点（没有特点就退到注意事项）
-    // 备选只留一句：有核验出处就给出处，没有就退到避坑提醒
-    rows: [["特点", n.origin || n.pitfalls]].filter((r) => Boolean(r[1])) as [string, string][],
+    // 一句话已经写了寓意，这一行只补出处：有核验出处就标「出处」，没有才标「留意」。
+    // 标签必须跟内容一致——不能拿「特点」当筐去装出处。
+    rows: (n.origin
+      ? [["出处", n.origin]]
+      : n.pitfalls
+        ? [["留意", n.pitfalls]]
+        : []) as [string, string][],
   });
   const groupFor = (fullNames?: string[]): ShowAlt[] =>
     (fullNames ?? [])
