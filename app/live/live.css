@@ -416,46 +416,6 @@
   padding-left: 0.3em;
   line-height: 1;
 }
-.live-stage .brand-sub {
-  /* 已从顶栏移除，见 .waiting 上的说明 */
-  display: none;
-  font-family: "Noto Sans SC", "PingFang SC", system-ui, sans-serif;
-  font-size: 21px;
-  font-weight: 300;
-  letter-spacing: 0.34em;
-  color: var(--ink-3);
-  padding-left: 26px;
-  border-left: 1px solid var(--hair-2);
-  line-height: 1.2;
-}
-.live-stage .waiting {
-  /* 顶栏去掉了「中文取名」与「等待姓氏」两个块；等 live-client.tsx 的并发改动落定后，
-     把这段和下面 .dot / @keyframes live-breath 一起删掉 */
-  display: none;
-  align-items: center;
-  gap: 14px;
-  font-family: "Noto Sans SC", "PingFang SC", system-ui, sans-serif;
-  font-size: 26px;
-  font-weight: 300;
-  letter-spacing: 0.14em;
-  color: var(--ink-2);
-  font-variant-numeric: tabular-nums;
-  padding: 12px 24px;
-  border: 1px solid var(--hair-2);
-  border-radius: 2px;
-}
-.live-stage .dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: var(--accent);
-  animation: live-breath 2.8s ease-in-out infinite;
-}
-@keyframes live-breath {
-  0%, 100% { opacity: 0.35; }
-  50% { opacity: 1; }
-}
-
 .live-stage .pane {
   display: none;
   flex: 1;

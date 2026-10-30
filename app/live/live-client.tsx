@@ -656,17 +656,6 @@ export function LiveClient() {
             <header className="topbar">
               <div className="brand">
                 <div className="brand-name">瑾瑜</div>
-                <div className="brand-sub">中文取名</div>
-              </div>
-              <div className="waiting">
-                <span className="dot" />
-                {curSurname ? (
-                  <>
-                    <span>{curSurname}</span> 待取名
-                  </>
-                ) : (
-                  "等待姓氏"
-                )}
               </div>
             </header>
 
