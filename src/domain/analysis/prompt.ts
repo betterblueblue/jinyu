@@ -43,7 +43,7 @@ export interface RawAnalysis {
   citations?: unknown;
   closing?: string;
   fitAngle?: string;
-  regenBrief?: { tabooChars?: unknown; styleNotes?: unknown; avoidPopular?: unknown };
+  regenBrief?: { tabooChars?: unknown; requirements?: unknown; avoidPopular?: unknown };
 }
 
 const KIND_WHITELIST = new Set(["phonology", "glyph", "meaning", "gender", "era", "popularity"]);
@@ -139,11 +139,12 @@ export function buildAnalysisMessages(input: AnalysisPromptInput): ChatMessage[]
       "",
       "【regenBrief】",
       "tabooChars：这个名字里应当避开、改名时不要再用的字（有问题的那几个）。",
-      "styleNotes：一句话，说明新名该往哪个方向走，具体到能执行。",
+      "requirements：新名要执行的具体要求，例如「避开某字」「读音要亮、别连着一串同调」「别太常见」。",
+      "只写能照做的条件，不写「端庄」「清雅」「大气」这类风格形容词——风格这个维度已经取消。",
       "avoidPopular：这个名字是否因为太常见需要避开热门字。",
       "",
       "JSON 格式：",
-      '{"headline":"...","goodPoints":["...","..."],"issues":[{"kind":"phonology","severity":"cost","text":"...","hint":"..."}],"citations":[{"source":"诗经","piece":"周南·桃夭","quote":"桃之夭夭，灼灼其华","gloss":"..."}],"closing":"...","fitAngle":"","regenBrief":{"tabooChars":[],"styleNotes":"","avoidPopular":false}}',
+      '{"headline":"...","goodPoints":["...","..."],"issues":[{"kind":"phonology","severity":"cost","text":"...","hint":"..."}],"citations":[{"source":"诗经","piece":"周南·桃夭","quote":"桃之夭夭，灼灼其华","gloss":"..."}],"closing":"...","fitAngle":"","regenBrief":{"tabooChars":[],"requirements":"","avoidPopular":false}}',
     ].join("\n"),
   };
 

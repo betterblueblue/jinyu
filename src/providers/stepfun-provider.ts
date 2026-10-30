@@ -1,5 +1,4 @@
 import type { NormalizedRequest, RawCandidate } from "@/domain/types";
-import { getStylePrototype } from "@/config/style-prototypes";
 import { buildBaziSummary } from "@/domain/bazi";
 import { extractJson, streamChat, type ChatMessage, type ChatClientOptions } from "./chat";
 import type { CandidateGenerationOptions, CandidateProvider } from "./types";
@@ -38,7 +37,6 @@ export class StepFunProvider implements CandidateProvider {
     options?: CandidateGenerationOptions,
   ): Promise<RawCandidate[]> {
     const liveUnknownSix = Boolean(options?.liveUnknownSix && req.gender === "unknown");
-    const proto = getStylePrototype(req.stylePrototypeId);
     // 四柱先算好再交给模型：模型只解释，不自己推干支
     const bazi = req.baziEnabled ? buildBaziSummary(req) : null;
     const baziSummary = bazi && bazi.ok ? bazi.summary : null;
@@ -50,10 +48,10 @@ export class StepFunProvider implements CandidateProvider {
       '"pinyin":"标准拼音，含声调，如 shū yǎo"',
       '"phonology":""',
       '"glyph":""',
-      '"meaning":""',
-      '"origin":""',
+      '"meaning":"这个名整体是什么意思，具体到字，不写空话"',
+      '"composition":"这两个字各自什么意思、合起来为什么成立，一两句"',
+      '"citation":{"source":"书名，仅限给定书目","piece":"篇名，如 周南·桃夭","quote":"原文连续片段，至少五字，一字不差","gloss":"一句话说这个名怎么用这句，20 字内"}',
       '"pitfalls":""',
-      '"styleFit":"该名与所选风格的具体呼应，两三字到一句，忌空话套话（如：温润端方/清朗利落/书卷气）"',
     ];
     if (req.baziEnabled) {
       candidateFields.push('"baziFit":"与生辰气质的呼应（一两句，温和不作定论）"');
@@ -83,8 +81,7 @@ export class StepFunProvider implements CandidateProvider {
           generationChar: req.generationChar,
           generationPosition: req.generationPosition,
           tabooChars: req.tabooChars,
-          style: proto.softPrompt,
-          styleNotes: req.styleNotes,
+          ...(req.requirements ? { requirements: req.requirements } : {}),
           avoidPopular: req.avoidPopular,
           birthStatus: req.birthStatus,
           ...(req.baziEnabled
@@ -102,7 +99,7 @@ export class StepFunProvider implements CandidateProvider {
           attempt,
           count: liveUnknownSix ? 12 : req.gender === "unknown" ? 8 : 6,
           instruction:
-            "请生成多个候选「名」（不含姓）。若有辈分字必须按位置包含。不要使用避讳字。最终只输出 JSON。" +
+            "请生成多个候选「名」（不含姓）。若有辈分字必须按位置包含。不要使用避讳字。citation 必须是具体古典书目的原文：quote 一字不差，source 只用给定的 catalog。没有可靠出处就不要编，也不要写「现代常用字组合」「成词义」这类说法——系统会拿原文逐字核对，核不过整条丢掉。最终只输出 JSON。" +
             (liveUnknownSix
               ? "性别未知（直播男女分组）：生成 12 个候选，男向 6 个、女向 6 个，供服务端各精选 3 个。genderLean 只能填 male 或 female，禁止 neutral，不要生成中性名；两组名字不得重复，每个名字都要有明确的男向或女向气质。"
               : req.gender === "unknown"
@@ -180,9 +177,9 @@ function parseCandidates(content: string): RawCandidate[] {
         phonology: c.phonology,
         glyph: c.glyph,
         meaning: c.meaning,
-        origin: c.origin,
+        composition: c.composition,
+        citation: c.citation,
         pitfalls: c.pitfalls,
-        styleFit: c.styleFit,
         baziFit: c.baziFit,
       }));
   } catch {

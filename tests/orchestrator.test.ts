@@ -7,83 +7,67 @@ import type { CandidateProvider } from "@/providers/types";
 import type { GatedCandidate, NormalizedRequest } from "@/domain/types";
 
 describe("rankSoft", () => {
-  it("保留模型原文 styleFit，不覆盖成模板句", () => {
+  it("有核验出处的候选排前，没有出处的不会被补写", () => {
     const n = normalizeRequest({ surname: "王", gender: "male" });
     expect(n.ok).toBe(true);
     if (!n.ok) return;
-    const req: NormalizedRequest = n.value;
 
     const cands: GatedCandidate[] = [
       {
         givenName: "清让",
         fullName: "王清让",
         genderLean: "male",
-        styleFit: "温润端方，谦和有礼",
         meaning: "清正谦逊",
-        origin: "",
       },
       {
         givenName: "知夏",
         fullName: "王知夏",
         genderLean: "male",
-        styleFit: "", // 模型没给 styleFit
         meaning: "明朗温暖",
-        origin: "",
+        verifiedCitation: {
+          source: "诗经",
+          piece: "周南·桃夭",
+          quote: "桃之夭夭",
+          line: "桃之夭夭，灼灼其华。",
+        },
       },
     ];
 
-    const ranked = rankSoft(cands, req).ranked;
-    const byName = Object.fromEntries(ranked.map((c) => [c.givenName, c.styleFit]));
-    // 有原文 → 保留原文
-    expect(byName["清让"]).toBe("温润端方，谦和有礼");
-    // 无原文且命中关键词（meaning 含「端」不命中，但「端庄」关键词需字面）→ 走模板兜底
-    expect(byName["知夏"]).toMatch(/端庄耐看|贴近/);
+    const { ranked, notes } = rankSoft(cands, n.value);
+    // 后来那个名字有核验出处，往前排
+    expect(ranked[0]!.givenName).toBe("知夏");
+    // 没有出处的不补占位说明
+    expect(notes.join("")).not.toContain("示例");
   });
 
-  it("无模型原文且未命中关键词时用贴近兜底", () => {
+  it("组合依据写具体的加分，空话不加分", () => {
     const n = normalizeRequest({ surname: "王", gender: "male" });
     expect(n.ok).toBe(true);
     if (!n.ok) return;
-    const cands: GatedCandidate[] = [
-      {
-        givenName: "云帆",
-        fullName: "王云帆",
-        genderLean: "male",
-        styleFit: "",
-        meaning: "开阔远大",
-        origin: "",
-      },
-    ];
-    const ranked = rankSoft(cands, n.value).ranked;
-    expect(ranked[0]!.styleFit).toMatch(/贴近|端庄耐看/);
-  });
 
-  it("关键词打分不含 styleFit（避免模型复述风格名导致全部命中）", () => {
-    const n = normalizeRequest({ surname: "王", gender: "male" });
-    expect(n.ok).toBe(true);
-    if (!n.ok) return;
     const cands: GatedCandidate[] = [
-      {
-        givenName: "甲",
-        fullName: "王甲",
-        genderLean: "male",
-        styleFit: "契合端庄耐看的风格要求", // styleFit 含关键词，但 meaning 不含
-        meaning: "开阔远大",
-        origin: "",
-      },
+      { givenName: "甲", fullName: "王甲", genderLean: "male", composition: "寓意美好" },
       {
         givenName: "乙",
         fullName: "王乙",
         genderLean: "male",
-        styleFit: "清朗利落",
-        meaning: "温润端庄，稳重有礼", // meaning 真含关键词
-        origin: "",
+        composition: "清指水澄澈，让指谦让；合起来是水清而人不争的意思。",
       },
     ];
-    const ranked = rankSoft(cands, n.value).ranked;
-    // 乙的 meaning 真含「端庄」→ 命中关键词加分，应排前
-    // 甲的 styleFit 含「端庄」但 meaning 不含 → 不得分，应排后
+    const { ranked } = rankSoft(cands, n.value);
     expect(ranked[0]!.givenName).toBe("乙");
+  });
+
+  it("一个出处都没核过时，说明里讲清楚，不编一个出来", () => {
+    const n = normalizeRequest({ surname: "王", gender: "male" });
+    expect(n.ok).toBe(true);
+    if (!n.ok) return;
+
+    const cands: GatedCandidate[] = [
+      { givenName: "甲", fullName: "王甲", genderLean: "male", meaning: "开阔" },
+    ];
+    const { notes } = rankSoft(cands, n.value);
+    expect(notes.join("")).toContain("出处一栏留白");
   });
 });
 
@@ -170,8 +154,7 @@ describe("runGeneration", () => {
           meaning: "m",
           origin: "o",
           pitfalls: "p",
-          styleFit: "s",
-        }));
+          }));
       },
     };
 
@@ -207,8 +190,7 @@ describe("runGeneration", () => {
           meaning: "m",
           origin: "o",
           pitfalls: "p",
-          styleFit: "s",
-        });
+          });
         return [
           mk("清和", "neutral"),
           mk("知微", "neutral"),
@@ -250,8 +232,7 @@ describe("runGeneration", () => {
           meaning: "m",
           origin: "o",
           pitfalls: "p",
-          styleFit: "s",
-        });
+          });
         return [
           mk("景行", "male"),
           mk("怀瑾", "female"),

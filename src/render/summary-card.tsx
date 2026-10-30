@@ -44,7 +44,7 @@ export function detailRows(n: NameDetail, showBazi: boolean): SummaryDetailRow[]
     { term: "寓意", def: n.meaning },
     { term: "出处", def: n.origin },
     { term: "避坑", def: n.pitfalls },
-    { term: "风格", def: n.styleFit },
+    { term: "组合", def: n.composition },
   ].filter((r) => r.def && r.def.trim());
   if (showBazi && n.baziFit && n.baziFit.trim()) {
     rows.push({ term: "八字契合", def: n.baziFit.trim() });

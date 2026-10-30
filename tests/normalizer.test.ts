@@ -35,7 +35,7 @@ describe("normalizeRequest", () => {
     if (r.ok) {
       expect(r.value.nameLength).toBe("two");
       expect(r.value.avoidPopular).toBe(true);
-      expect(r.value.stylePrototypeId).toBe("default_dignified");
+      expect(r.value.requirements).toBeUndefined();
       expect(r.value.birthStatus).toBe("born");
     }
   });

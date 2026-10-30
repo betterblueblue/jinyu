@@ -10,7 +10,6 @@ const baseReq: NormalizedRequest = {
   baziEnabled: false,
   generationPosition: "first",
   tabooChars: [],
-  stylePrototypeId: "default_dignified",
   avoidPopular: true,
   isPreparationName: false,
 };

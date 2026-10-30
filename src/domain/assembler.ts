@@ -16,7 +16,8 @@ export interface AssembleInput {
   ranked: GatedCandidate[];
   primaryIndex: number;
   eliminated: EliminationNote[];
-  styleNotes: string[];
+  /** 排序阶段要告诉用户的说明（重名、出处缺失、具体要求） */
+  notes: string[];
   relaxations: string[];
   stages: string[];
   bazi?: BaziSummary | null;
@@ -123,7 +124,7 @@ export function assembleReport(input: AssembleInput): ReportDocument {
     ranked,
     primaryIndex,
     eliminated,
-    styleNotes,
+    notes,
     relaxations,
     stages,
     bazi,
@@ -145,9 +146,13 @@ export function assembleReport(input: AssembleInput): ReportDocument {
     phonology: c.phonology || "读音与声调宜在家庭内试叫确认。",
     glyph: c.glyph || "字形宜工整好写，避免生僻难认。",
     meaning: c.meaning || "寓意宜具体，忌空话套话。",
-    origin: c.origin || "出处为提示生成，请自行核验。",
+    // 出处只放核验通过的：书名·篇名 + 原文整行；没有就留白，不补「提示生成」这类占位
+    origin: c.verifiedCitation
+      ? `${c.verifiedCitation.source}${c.verifiedCitation.piece ? ` · ${c.verifiedCitation.piece}` : ""}｜「${c.verifiedCitation.quote}」`
+      : "",
+    composition: c.composition || "",
+    ...(c.verifiedCitation ? { citation: c.verifiedCitation } : {}),
     pitfalls: c.pitfalls || "未见明显硬伤记录；仍建议家人试念。",
-    styleFit: c.styleFit || styleNotes[0] || "默认端庄耐看方向。",
     baziFit: c.baziFit || undefined,
     l2Hot: Boolean(c.l2Hot),
   }));
@@ -183,7 +188,7 @@ export function assembleReport(input: AssembleInput): ReportDocument {
         ? "性别未知时男向与女向均有备选；得知实际性别后建议从对应分组收窄。"
         : "性别未知，当前备选较少；得知实际性别后建议针对性再取一两个名字。"
       : "",
-    ...styleNotes,
+    ...notes,
   ]
     .filter(Boolean)
     .join("\n");

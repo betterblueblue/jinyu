@@ -91,7 +91,7 @@ export interface AnalysisResult {
   fitAngle?: string;
   regenBrief: {
     tabooChars: string[];
-    styleNotes: string;
+    requirements: string;
     avoidPopular: boolean;
   };
   facts: AnalysisFacts;

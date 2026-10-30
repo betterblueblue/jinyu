@@ -13,7 +13,6 @@ function req(over: Partial<NormalizedRequest> = {}): NormalizedRequest {
     birthHour: undefined,
     generationPosition: "first",
     tabooChars: [],
-    stylePrototypeId: "default_dignified",
     avoidPopular: true,
     isPreparationName: false,
     ...over,

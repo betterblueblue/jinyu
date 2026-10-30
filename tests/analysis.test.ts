@@ -129,7 +129,7 @@ describe("分析拼装", () => {
     ],
     citations: [],
     closing: "这处不改会一直跟着。",
-    regenBrief: { tabooChars: ["伟"], styleNotes: "收一点，别喊口号", avoidPopular: true },
+    regenBrief: { tabooChars: ["伟"], requirements: "收一点，别喊口号", avoidPopular: true },
   };
 
   it("有硬伤就判 hard，并据约束给改名清单", async () => {
@@ -191,7 +191,7 @@ describe("分析拼装", () => {
         citations: [],
         closing: "要往前走一步是在贴合上。",
         fitAngle: "还能更独特一点。",
-        regenBrief: { tabooChars: [], styleNotes: "贴姓", avoidPopular: false },
+        regenBrief: { tabooChars: [], requirements: "贴姓", avoidPopular: false },
       }),
     );
     expect(out.ok).toBe(true);
@@ -282,7 +282,7 @@ describe("分析拼装", () => {
         ],
         citations: [],
         closing: "想改的话动一个字就够。",
-        regenBrief: { tabooChars: ["曦"], styleNotes: "笔画收一点", avoidPopular: true },
+        regenBrief: { tabooChars: ["曦"], requirements: "笔画收一点", avoidPopular: true },
       }),
     );
     expect(out.ok).toBe(true);

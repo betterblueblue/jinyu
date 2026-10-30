@@ -15,7 +15,7 @@ function makeName(over: Partial<NameDetail>): NameDetail {
     meaning: "言语晏晏，喻温和从容",
     origin: "《诗经·卫风·氓》",
     pitfalls: "晏字不常见但易认",
-    styleFit: "端庄耐看",
+    composition: "清指水澄澈，让指谦让；合起来水清而不争。",
     l2Hot: false,
     ...over,
   };
@@ -37,8 +37,7 @@ function makeReport(over: Partial<ReportDocument> = {}): ReportDocument {
       baziEnabled: true,
       generationPosition: "first",
       tabooChars: [],
-      stylePrototypeId: "default_dignified",
-      avoidPopular: true,
+          avoidPopular: true,
       isPreparationName: false,
     },
     stages: [],
@@ -65,7 +64,7 @@ function makeReport(over: Partial<ReportDocument> = {}): ReportDocument {
 
 describe("detailRows", () => {
   it("包含六个基础字段且按序排列，空字段被过滤", () => {
-    const n = makeName({ phonology: "   ", glyph: "结构平稳", styleFit: "" });
+    const n = makeName({ phonology: "   ", glyph: "结构平稳", composition: "" });
     const rows = detailRows(n, false);
     const terms = rows.map((r) => r.term);
     expect(terms).toEqual(["字形", "寓意", "出处", "避坑"]);
@@ -103,19 +102,19 @@ describe("buildSummaryCardElement", () => {
   });
 
   it("长风格描述（模型原文）完整进入元素树，不被截断或过滤", () => {
-    const longStyleFit =
+    const longComposition =
       "笔画简洁好写，读音清亮，自带书卷气的端庄质感，远离烂大街模板。同时字形疏朗、结构平稳，日常称呼朗朗上口，整体契合端庄耐看的默认方向，落笔不落俗套。";
     const report = makeReport({
       names: [
-        makeName({ fullName: "王语晏", givenName: "语晏", isPrimary: true, styleFit: longStyleFit }),
-        makeName({ fullName: "王清和", givenName: "清和", styleFit: longStyleFit }),
+        makeName({ fullName: "王语晏", givenName: "语晏", isPrimary: true, composition: longComposition }),
+        makeName({ fullName: "王清和", givenName: "清和", composition: longComposition }),
       ],
     });
     const tree = JSON.stringify(buildSummaryCardElement(report));
     // 长文本完整保留（整段原文在树里出现，未被截断）
-    expect(tree).toContain(longStyleFit);
-    // 且 styleFit 非空时 detailRows 不把它过滤掉
+    expect(tree).toContain(longComposition);
+    // 且组合依据非空时 detailRows 不把它过滤掉
     const rows = detailRows(report.names[0]!, false);
-    expect(rows.find((r) => r.term === "风格")?.def).toBe(longStyleFit);
+    expect(rows.find((r) => r.term === "组合")?.def).toBe(longComposition);
   });
 });

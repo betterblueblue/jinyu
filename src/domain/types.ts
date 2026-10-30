@@ -3,13 +3,6 @@ export type BirthStatus = "born" | "unborn";
 export type NameLengthMode = "two" | "one";
 export type GenerationCharPosition = "first" | "second" | "any";
 
-export type StylePrototypeId =
-  | "classical_elegant"
-  | "natural_clear"
-  | "grand_dignified"
-  | "modern_clean"
-  | "default_dignified";
-
 export interface NamingFormInput {
   surname: string;
   gender: Gender;
@@ -22,8 +15,8 @@ export interface NamingFormInput {
   generationChar?: string;
   generationPosition?: GenerationCharPosition;
   tabooChars?: string;
-  stylePrototypeId?: StylePrototypeId | "";
-  styleNotes?: string;
+  /** 具体要求（避开某字、读音偏好、其它可执行条件），不是风格标签 */
+  requirements?: string;
   avoidPopular?: boolean;
 }
 
@@ -39,8 +32,7 @@ export interface NormalizedRequest {
   generationChar?: string;
   generationPosition: GenerationCharPosition;
   tabooChars: string[];
-  stylePrototypeId: StylePrototypeId;
-  styleNotes?: string;
+  requirements?: string;
   avoidPopular: boolean;
   isPreparationName: boolean;
 }
@@ -53,16 +45,38 @@ export interface RawCandidate {
   phonology?: string;
   glyph?: string;
   meaning?: string;
-  origin?: string;
+  /** 字与字的组合依据：两个字各自什么意思、合起来为什么成立 */
+  composition?: string;
+  /** 模型给出的出处，服务端逐字核验，核不过就丢掉 */
+  citation?: NameCitation;
   pitfalls?: string;
-  styleFit?: string;
   /** 开启八字时模型输出的与生辰气质的呼应（克制表述），未开启时为 undefined */
   baziFit?: string;
+}
+
+/** 模型给出的出处（未核验） */
+export interface NameCitation {
+  source?: string;
+  piece?: string;
+  quote?: string;
+  gloss?: string;
+}
+
+/** 回原文逐字核验通过的出处 */
+export interface VerifiedCitation {
+  source: string;
+  piece?: string;
+  quote: string;
+  /** 核验时从语料里带出的原文整行 */
+  line?: string;
+  gloss?: string;
 }
 
 export interface GatedCandidate extends RawCandidate {
   fullName: string;
   l2Hot?: boolean;
+  /** 通过核验的出处；核不过就没有这个字段 */
+  verifiedCitation?: VerifiedCitation;
   eliminated?: boolean;
   eliminateReasons?: string[];
 }
@@ -102,9 +116,11 @@ export interface NameDetail {
   phonology: string;
   glyph: string;
   meaning: string;
+  /** 只放核验通过的出处（书名·篇名 + 原文整行）；没有可靠出处时为空字符串 */
   origin: string;
+  composition: string;
+  citation?: VerifiedCitation;
   pitfalls: string;
-  styleFit: string;
   baziFit?: string;
   l2Hot: boolean;
 }

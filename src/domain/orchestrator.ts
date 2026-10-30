@@ -2,6 +2,7 @@ import { assembleReport } from "./assembler";
 import { applyHardGate, assertNoForbiddenPadding } from "./gate";
 import { buildBaziSummary } from "./bazi";
 import { rankSoft } from "./soft-ranker";
+import { verifyCitation } from "./analysis/corpus";
 import type { CandidateProvider } from "@/providers/types";
 import type { GatedCandidate, GenerationResult, NormalizedRequest } from "./types";
 
@@ -49,7 +50,6 @@ export async function runGeneration(
       // A+: relax soft only — allow L2 as primary, note style hard-fit relaxed
       allowL2Primary = true;
       relaxations.push("L2 可进入首推");
-      relaxations.push("风格硬贴合");
       // re-rank later with allowL2Primary; no hard-rule relaxation
     }
 
@@ -67,7 +67,19 @@ export async function runGeneration(
       };
     }
 
-    const ranked = rankSoft(gate.passed, req, { allowL2Primary });
+    // 出处一律回原文核验，核不过就当没有——不拿模糊说法充数
+    const withCitations = gate.passed.map((c) => {
+      if (!c.citation?.quote) return c;
+      const outcome = verifyCitation({
+        source: c.citation.source,
+        piece: c.citation.piece,
+        quote: c.citation.quote,
+        gloss: c.citation.gloss,
+      });
+      return outcome.ok ? { ...c, verifiedCitation: outcome.citation } : c;
+    });
+
+    const ranked = rankSoft(withCitations, req, { allowL2Primary });
     assertNoForbiddenPadding(ranked.ranked, req);
 
     stage = "assemble";
@@ -90,7 +102,7 @@ export async function runGeneration(
       ranked: ranked.ranked,
       primaryIndex: ranked.primaryIndex,
       eliminated: gate.eliminated,
-      styleNotes: ranked.styleNotes,
+      notes: ranked.notes,
       relaxations,
       stages,
       bazi: baziResult.summary,

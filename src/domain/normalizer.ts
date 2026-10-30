@@ -1,14 +1,5 @@
 import { z } from "zod";
-import type { NamingFormInput, NormalizedRequest, StylePrototypeId } from "./types";
-
-const styleIds = [
-  "classical_elegant",
-  "natural_clear",
-  "grand_dignified",
-  "modern_clean",
-  "default_dignified",
-  "",
-] as const;
+import type { NamingFormInput, NormalizedRequest } from "./types";
 
 export const namingFormSchema = z.object({
   surname: z.string().trim().min(1, "请填写姓氏"),
@@ -24,8 +15,7 @@ export const namingFormSchema = z.object({
   generationChar: z.string().optional(),
   generationPosition: z.enum(["first", "second", "any"]).optional(),
   tabooChars: z.string().optional(),
-  stylePrototypeId: z.enum(styleIds).optional(),
-  styleNotes: z.string().optional(),
+  requirements: z.string().optional(),
   avoidPopular: z.boolean().optional(),
 });
 
@@ -114,8 +104,6 @@ export function normalizeRequest(input: NamingFormInput): NormalizeResult {
     };
   }
 
-  const stylePrototypeId = (data.stylePrototypeId || "default_dignified") as StylePrototypeId;
-
   const value: NormalizedRequest = {
     surname,
     gender: data.gender,
@@ -128,8 +116,7 @@ export function normalizeRequest(input: NamingFormInput): NormalizeResult {
     generationChar,
     generationPosition: data.generationPosition ?? "first",
     tabooChars,
-    stylePrototypeId,
-    styleNotes: data.styleNotes?.trim() || undefined,
+    requirements: data.requirements?.trim() || undefined,
     avoidPopular,
     isPreparationName: birthStatus === "unborn",
   };

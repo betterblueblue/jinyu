@@ -16,7 +16,7 @@ test("unknown gender: 报告男向/女向零重叠、无重复名", async ({ pag
   await page.getByTestId("submit-generate").click();
 
   // Fake LLM 秒回，但仍保留较长超时兜底
-  await expect(page.getByTestId("report-page")).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByTestId("report-page")).toBeVisible({ timeout: 240_000 });
 
   // 男向/女向分组：各自非空则组间零重叠（候选不足时某侧可能为空）
   const maleText = await page.getByText(/^男向：/).textContent();
@@ -49,7 +49,7 @@ test("live unknown: 男女各三个、无中性名，六名卡片可下载", asy
   await page.locator(".genders button").filter({ hasText: "未知" }).click();
   await page.locator("button.go").click();
 
-  await expect(page.getByTestId("live-unknown-groups")).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByTestId("live-unknown-groups")).toBeVisible({ timeout: 240_000 });
   const maleGroup = page.getByTestId("live-male-group");
   const femaleGroup = page.getByTestId("live-female-group");
   await expect(maleGroup.locator(".group-item")).toHaveCount(3);

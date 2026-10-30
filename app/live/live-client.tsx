@@ -100,7 +100,7 @@ function toShow(report: ReportDocument): ShowData {
   // 出处留给主播口头讲或存图，直播画面纵向空间不够
   const rowsFor = (n: NameDetail): [string, string][] => {
     const all: [string, string][] = [
-      ["为什么推荐", n.styleFit || n.meaning],
+      ["为什么推荐", n.composition || n.meaning],
       // 开了生辰才给这一项，模型/兜底都会写 baziFit
       ...(n.baziFit ? ([["八字", n.baziFit]] as [string, string][]) : []),
     ];
@@ -123,7 +123,8 @@ function toShow(report: ReportDocument): ShowData {
     py: fullNamePinyin(surname, givenOf(n.fullName)).text,
     one: n.meaning,
     // 备选简解：一句话已经写了寓意，这里只补一句特点（没有特点就退到注意事项）
-    rows: [["特点", n.styleFit || n.pitfalls]].filter((r) => Boolean(r[1])) as [string, string][],
+    // 备选只留一句：有核验出处就给出处，没有就退到避坑提醒
+    rows: [["特点", n.origin || n.pitfalls]].filter((r) => Boolean(r[1])) as [string, string][],
   });
   const groupFor = (fullNames?: string[]): ShowAlt[] =>
     (fullNames ?? [])
@@ -354,7 +355,7 @@ export function LiveClient() {
 
   /** 从名字分析带过来的约束：姓氏已定、要避开的字、定向要求 */
   const generate = useCallback(
-    async (override?: { surname?: string; gender?: Gender; taboo?: string; notes?: string }) => {
+    async (override?: { surname?: string; gender?: Gender; taboo?: string; requirements?: string }) => {
     if (busy.current) return;
     const surname = (override?.surname ?? draft).trim();
     if (!surname) {
@@ -379,7 +380,7 @@ export function LiveClient() {
           generationChar: extra.genChar || undefined,
           generationPosition: extra.genPos,
           tabooChars: override?.taboo || extra.taboo || undefined,
-          styleNotes: override?.notes || undefined,
+          requirements: override?.requirements || undefined,
           baziEnabled: extra.bazi && Boolean(extra.birthDate),
           birthDate: extra.birthDate || undefined,
           birthHour: extra.birthHour || undefined,
@@ -456,7 +457,7 @@ export function LiveClient() {
 
   /** 分析完直接把结论当约束送进取名：姓氏带过去，问题转成避讳和定向要求 */
   const regenFromAnalysis = useCallback(
-    (brief: { surname: string; gender: Gender; tabooChars: string[]; styleNotes: string; avoidPopular: boolean }) => {
+    (brief: { surname: string; gender: Gender; tabooChars: string[]; requirements: string; avoidPopular: boolean }) => {
       setAnalyzeOpen(false);
       setDraft(brief.surname);
       setGender(brief.gender);
@@ -464,7 +465,7 @@ export function LiveClient() {
         surname: brief.surname,
         gender: brief.gender,
         taboo: brief.tabooChars.join(""),
-        notes: brief.styleNotes,
+        requirements: brief.requirements,
       });
     },
     [generate],
@@ -816,7 +817,7 @@ export function LiveClient() {
                 正在为 <em>{curSurname}</em> 取名
               </p>
               <p className="gen-extra">
-                {extraText(extra) || "默认档：双字名 · 端庄风格 · 避开网红名"}
+                {extraText(extra) || "默认档：双字名 · 避开网红名"}
               </p>
               <p className="gen-stage">{stageText(stage)}</p>
               <div className="bar">

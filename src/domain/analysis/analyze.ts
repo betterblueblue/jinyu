@@ -282,7 +282,7 @@ export async function runAnalysis(
     }
   }
 
-  const styleNotesRaw = typeof raw.regenBrief?.styleNotes === "string" ? raw.regenBrief.styleNotes : "";
+  const requirementsRaw = typeof raw.regenBrief?.requirements === "string" ? raw.regenBrief.requirements : "";
   const result: AnalysisResult = {
     id: nanoid(10),
     createdAt: new Date().toISOString(),
@@ -298,7 +298,7 @@ export async function runAnalysis(
     ...(fitAngle ? { fitAngle } : {}),
     regenBrief: {
       tabooChars: [...taboo].slice(0, 4),
-      styleNotes: cleanLine(styleNotesRaw, 60) || "声音更亮，避开同调字",
+      requirements: cleanLine(requirementsRaw, 60) || "声音更亮，避开同调字",
       avoidPopular: raw.regenBrief?.avoidPopular === true || verdict !== "fit",
     },
     facts: local.facts,

@@ -80,7 +80,7 @@ export class FakeAnalysisProvider implements AnalysisProvider {
       ],
       closing: "想更耐听，动末字就够了，前面不用碰。",
       fitAngle: "",
-      regenBrief: { tabooChars: [], styleNotes: "声音更亮，避开同调字", avoidPopular: false },
+      regenBrief: { tabooChars: [], requirements: "声音更亮，避开同调字", avoidPopular: false },
     };
   }
 }

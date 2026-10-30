@@ -1,32 +1,39 @@
-import { getStylePrototype } from "@/config/style-prototypes";
 import type { GatedCandidate, NormalizedRequest } from "./types";
 
 export interface RankResult {
   ranked: GatedCandidate[];
-  styleNotes: string[];
+  /** 排序过程中需要让用户知道的说明（不再有风格贴合之类的措辞） */
+  notes: string[];
   primaryIndex: number;
 }
 
 /**
- * Soft ranking: style keyword fit + L2 demotion when avoidPopular.
- * Never hard-fails; may leave style mismatch notes.
+ * 软排序。
+ *
+ * 没有「风格」之后，能用来排序的只剩可核实的信号：
+ *   1. 出处是否通过原文核验（核过的名字，出处能拿给家人查）
+ *   2. 组合依据写没写具体（能指到两个字的关系，而不是一句好话）
+ *   3. 模型给的原始顺序（同名同分时保持稳定）
+ *   4. 重名/性别倾向的扣分（规则层已经能查的部分）
+ *
+ * 永远不硬性淘汰，只调顺序。
  */
 export function rankSoft(
   candidates: GatedCandidate[],
   req: NormalizedRequest,
   options?: { allowL2Primary?: boolean },
 ): RankResult {
-  const proto = getStylePrototype(req.stylePrototypeId);
-  const keywords = proto.keywords;
-  const styleNotes: string[] = [];
+  const notes: string[] = [];
 
   const scored = candidates.map((c, index) => {
     let score = 100 - index;
-    // 关键词匹配用 meaning/origin/givenName，不含 styleFit：
-    // styleFit 是模型对风格的复述（几乎必含风格名），混入会让所有候选都命中、打分失去区分度
-    const blob = `${c.meaning ?? ""}${c.origin ?? ""}${c.givenName}`;
-    const hits = keywords.filter((k) => blob.includes(k));
-    score += hits.length * 8;
+
+    // 有核验过的出处，可信度明显更高
+    if (c.verifiedCitation) score += 15;
+
+    // 组合依据够具体才加分，防止「寓意美好」这类空话蹭分
+    const composition = (c.composition ?? "").trim();
+    if (composition.length >= 12) score += 6;
 
     if (c.l2Hot) {
       if (req.avoidPopular && !options?.allowL2Primary) {
@@ -39,28 +46,20 @@ export function rankSoft(
     if (req.gender === "male" && c.genderLean === "female") score -= 15;
     if (req.gender === "female" && c.genderLean === "male") score -= 15;
 
-    return { c, score, hits };
+    return { c, score };
   });
 
   scored.sort((a, b) => b.score - a.score);
 
-  const ranked = scored.map((s) => {
-    // 保留模型原文 styleFit（更具体）；模型没给时才用风格原型兜底，避免全部套同一模板句
-    const fit =
-      s.c.styleFit && s.c.styleFit.trim()
-        ? s.c.styleFit.trim()
-        : s.hits.length > 0
-          ? `与「${proto.name}」方向有呼应（${s.hits.join("、")}）`
-          : `已尽量贴近「${proto.name}」；贴合有限时仍保留可用推荐。`;
-    return { ...s.c, styleFit: fit };
-  });
+  const ranked = scored.map((s) => s.c);
 
-  const weak = scored.filter((s) => s.hits.length === 0).length;
-  if (weak > 0 && candidates.length > 0) {
-    styleNotes.push(`部分名字与「${proto.name}」贴合有限，仍保留完整推荐并在逐名中说明。`);
+  const withCitation = ranked.filter((c) => c.verifiedCitation).length;
+  if (withCitation === 0 && ranked.length > 0) {
+    notes.push("这批名字里没有能核到原文出处的，出处一栏留白，不做补写。");
   }
-  if (req.styleNotes) {
-    styleNotes.push(`用户补充偏好：${req.styleNotes}`);
+
+  if (req.requirements) {
+    notes.push(`按要求：${req.requirements}`);
   }
 
   let primaryIndex = 0;
@@ -69,5 +68,5 @@ export function rankSoft(
     if (nonL2 >= 0) primaryIndex = nonL2;
   }
 
-  return { ranked, styleNotes, primaryIndex };
+  return { ranked, notes, primaryIndex };
 }

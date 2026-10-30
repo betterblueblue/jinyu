@@ -22,7 +22,7 @@ interface Props {
     surname: string;
     gender: Gender;
     tabooChars: string[];
-    styleNotes: string;
+    requirements: string;
     avoidPopular: boolean;
   }) => void;
 }
@@ -352,7 +352,7 @@ export function AnalyzePanel({ open, onClose, onRegenerate }: Props) {
                   surname: result.split.surname,
                   gender: result.input.gender,
                   tabooChars: result.regenBrief.tabooChars,
-                  styleNotes: result.regenBrief.styleNotes,
+                  requirements: result.regenBrief.requirements,
                   avoidPopular: result.regenBrief.avoidPopular,
                 })
               }

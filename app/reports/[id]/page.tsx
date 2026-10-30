@@ -250,9 +250,10 @@ function NameCard({ n, report }: { n: NameDetail; report: ReportDocument }) {
         <Item term="音韵" def={n.phonology} />
         <Item term="字形" def={n.glyph} />
         <Item term="寓意" def={n.meaning} />
-        <Item term="出处" def={n.origin} />
+        {n.composition ? <Item term="组合" def={n.composition} /> : null}
+        {/* 出处只显示核验通过的；没有可靠出处就整行不出现，不拿模糊说法补位 */}
+        {n.origin ? <Item term="出处" def={n.origin} /> : null}
         <Item term="避坑" def={n.pitfalls} />
-        <Item term="风格" def={n.styleFit} />
         {report.bazi && n.baziFit ? <Item term="八字契合" def={n.baziFit} /> : null}
       </dl>
     </div>

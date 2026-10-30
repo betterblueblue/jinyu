@@ -54,10 +54,9 @@ export class FakeProvider implements CandidateProvider {
         pinyin: `${name} 拼音示例`,
         phonology: `${name} 读音顺口，声调宜试念。`,
         glyph: `${name} 字形端正，笔画适中。`,
-        meaning: `${name} 寓意端庄耐看，具体可结合家风理解。`,
-        origin: `提示生成示例出处，与「书卷」「清朗」等方向可呼应。`,
+        meaning: `${name} 示例模式：这里会写具体的字义与整体意思。`,
+        composition: "示例模式：这里会写两个字各自的意思，以及合起来为什么成立。",
         pitfalls: "无明显谐音硬伤（示例）。",
-        styleFit: "端庄耐看",
         ...extra,
       };
     };
