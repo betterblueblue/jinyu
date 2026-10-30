@@ -164,33 +164,30 @@ bat 里 URL 写死局域网 IP `http://192.168.31.211:9000/live`（直播在另�
 | 真实生成（正式页） | 手动 + Playwright | 「沈静嘉」「陈峻岩」等，16–25s |
 | 真实生成（直播页） | Playwright 点「开始取名」 | 「苏清晏」「苏知微」「苏婉仪」等 |
 | 存图 | Playwright 拦截下载 | 1080×2068 / 2208 / 2240，四套皮肤各自配色 |
-| 历史筛选 | `/history` `/history?src=live` `/history?src=formal` | 清理后 **129 / 0 / 129**（清理前 144 / 16 / 128） |
+| 历史筛选 | `/history` `/history?src=live` `/history?src=formal` | 清理后 **110 / 0 / 110**（清理前 144 / 16 / 128） |
 | 窗口 9:16 | `cmd /c 启动直播台.bat` | `Client area: 576 x 1024 ratio 0.5625` |
 | 缩放适配 | 576×1024 / 1280×720 / 1080×1920 | `fitW/fitH` 全 true，横屏两侧纸色不裁切 |
 
 ### 数据现状
 
-`data/index.json` 与 `data/reports/` 各 **129** 条，**全部按 formal 处理**（2026-10-30 清理后实测）。
+`data/index.json` 与 `data/reports/` 各 **110** 条，**全部按 formal 处理**（2026-10-30 清理后实测）。
 
-2026-10-30 清掉过 16 条 `source=live` 的直播测试记录，没有删，挪到了：
+2026-10-30 清过两次，都没删，挪到了 `data/_trash/`：
 
 ```
-data/_trash/live-2026-10-30T06-53-46/
-  ├─ 16 个 <id>.json       # 原报告
-  ├─ index-removed.json     # 被移除的 16 条索引
-  └─ index-before.json      # 清理前的完整索引（兜底）
+data/_trash/live-2026-10-30T06-53-46/   # 16 条 source=live 的直播测试记录
+data/_trash/fake-2026-10-30T06-59-52/   # 19 条 providerName=fake 的示例模式记录
 ```
 
-要恢复就把 `index-removed.json` 合并回 `index.json`，16 个 json 挪回 `data/reports/`。
+每个目录里都有 `index-removed.json`（被移除的索引）+ `index-before.json`（清理前完整索引，兜底）+ 对应数量的 `<id>.json`。要恢复就把 `index-removed.json` 合并回 `index.json`，再把 json 挪回 `data/reports/`。
 
-所以现在 `/history` 是 **全部 129 / 正式取名 129 / 直播取名 0**。剩下条目按 provider 分：
+所以现在 `/history` 是 **全部 110 / 正式取名 110 / 直播取名 0**。剩下条目按 provider 分：
 
 | providerName | 条数 | 说明 |
 |---|---|---|
-| `fake` | 19 | **全是赵姓男的测试垃圾**，每跑一次 `pnpm test` 多一条，原因见 Pitfalls |
-| `magpie` | 5 | 本机网关真跑 |
-| `stepfun` | 16 | 旧 StepFun 时代真跑 |
 | 空（没该字段） | 89 | 更早的数据 |
+| `stepfun` | 16 | 旧 StepFun 时代真跑 |
+| `magpie` | 5 | 本机网关真跑 |
 
 ---
 
@@ -213,13 +210,14 @@ data/_trash/live-2026-10-30T06-53-46/
 | `d37fcf3` | 生成入口透传 source + 直播未知性别男女各 3 个 |
 | `25cbf5c` | 直播取名台 `/live`（四皮肤 + 缩放 + 存图 + 启动器 + fit-window） |
 | `5e63762` | HANDOFF 补六选 + 修正过期数字 |
-| 第 5 个 | HANDOFF 去掉满屏/榜单待办，记录数据清理与测试污染 bug |
+| `e930b74` | HANDOFF 去掉满屏/榜单待办，记录数据清理与测试污染 |
+| 第 6 个 | `fix(store)` 路径改调用时求值，测试不再写进真实 `data/` |
+| 第 7 个 | HANDOFF 数字更新到清理后的 110 条 |
 
 再往前 `5f681c1` 是 change-impact 目录改名。
 
 ### Needs user decision
 
-- `fake` 那 19 条测试垃圾要不要也挪进 `data/_trash/`
 - 卡片上兰花压字要不要彻底解决（需 9:19 卡片专用背景）
 - Next 15.1.0 的安全告警要不要升级
 
@@ -227,15 +225,11 @@ data/_trash/live-2026-10-30T06-53-46/
 
 ## 4. Next steps (ordered)
 
-1. **修 store 的测试污染**（真 bug，优先）
-   - `src/store/report-store.ts:5` 在模块顶层就把 `DATA_DIR` 求值完了，`tests/store.test.ts` 却在 `beforeEach` 才设 `JINYU_DATA_DIR`，来不及 → 每次 `pnpm test` 往真实 `data/` 塞一条「赵 / 男 / fake」
-   - 改法：`DATA_DIR` 改成函数、调用时读 env（以后任何测试都能用 env 隔离）；补一条断言防回退
-
-2. **直播档 prompt**（可选）
+1. **直播档 prompt**（可选）
    - 现在标签是拼出来的（`双字名 · 避开网红名 · 女向`）
    - 可以给直播页单独出一个更短、更适合口播的文案模板
 
-3. **可选质量**
+2. **可选质量**
    - 直播页详解截断提示（现在直接省略号，主播可能念不全）
 
 ---
@@ -256,7 +250,7 @@ data/_trash/live-2026-10-30T06-53-46/
 | 假设页面在 1080×1920 下好看就够了 | 直播窗口是 576×1024 或更小，必须在小窗口验证 |
 | 提交 `.env.local` | 含真 key，gitignored |
 | write 工具报 `ReplaceFileW EIO` | 文件被占用时会发生；改用 PowerShell `[System.IO.File]::WriteAllText` 即可 |
-| 以为测试里的 `JINYU_DATA_DIR` 能隔离数据 | `report-store.ts` 的 `DATA_DIR` 是模块顶层常量，`beforeEach` 里设 env 已经晚了，测试会写进真实 `data/`。已积 19 条赵男 fake 记录 |
+| 以为测试里的 `JINYU_DATA_DIR` 能隔离数据 | `report-store.ts` 的路径常量若是模块顶层求值，`beforeEach` 里设 env 就晚了，测试会写进真实 `data/`。已改成调用时求值，`tests/store.test.ts` 加了断言钉住 |
 
 ### Useful commands
 
@@ -277,11 +271,11 @@ node scripts/e2e-real-llm.mjs    # 需 dev server
 | Item | Value |
 |---|---|
 | Path | `E:\agent\jinyu` |
-| Git | 仓库 + remote，`main` 分支，工作区干净，最近 5 个 commit 见上 |
+| Git | 仓库 + remote，`main` 分支，工作区干净，最近 7 个 commit 见上 |
 | Package manager | pnpm |
 | Dev server | 9000 端口（本次会话实测已在跑，PID 23396）；否则手动 `pnpm dev` / `.\start-dev.ps1` |
 | 本机局域网 IP | `192.168.31.211`（DHCP，会变） |
-| 数据 | `data/index.json` 129 条，全部按 formal；16 条直播记录在 `data/_trash/` 可恢复 |
+| 数据 | `data/index.json` 110 条，全部按 formal；35 条清理记录在 `data/_trash/` 可恢复 |
 | 用户密钥 | `.env.local`（不要打印、不要提交） |
 | 不要删 | `docs/*`、`issues/*`、用户 `.env.local`、`data/`、`public/skins/` |
 
