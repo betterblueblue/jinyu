@@ -800,6 +800,16 @@
   color: var(--ink-3);
   text-transform: lowercase;
 }
+/* 多音姓氏/生僻字读音的核对提示，压在拼音下面一行小字 */
+.live-stage .pinyin-hint {
+  margin: 10px 0 0;
+  font-family: "Noto Sans SC", "PingFang SC", system-ui, sans-serif;
+  font-size: 18px;
+  font-weight: 300;
+  letter-spacing: 0.06em;
+  color: var(--ink-3);
+  opacity: 0.8;
+}
 .live-stage .meaning {
   margin: 44px 0 0;
   font-size: var(--fs-mean);

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { NameDetail, ReportDocument } from "@/domain/types";
+import { fullNamePinyin } from "@/domain/pinyin-name";
 import { AnalyzePanel } from "./analyze-panel";
 import "./live.css";
 
@@ -29,10 +30,16 @@ interface ShowAlt {
 interface ShowData {
   surname: string;
   full: string;
+  /** 全名拼音（含姓氏） */
   py: string;
+  /** 多音姓氏或未收录字的核对提示 */
+  pyHint?: string;
   one: string;
   tags: string[];
+  /** 直播页详解：寓意 / 出处（+ 八字） */
   rows: [string, string][];
+  /** 存图详解：首推给足六项，家人拿回去慢慢看 */
+  cardRows: [string, string][];
   alts: ShowAlt[];
   /** 开了生辰时带上四柱，直播页和存图都要显示 */
   bazi?: string;
@@ -87,23 +94,37 @@ function toShow(report: ReportDocument): ShowData {
   const primary =
     report.names.find((n) => n.fullName === report.overview.primaryName) ?? report.names[0];
   const alts = report.names.filter((n) => n.fullName !== primary.fullName).slice(0, 2);
+  const surname = report.request.surname;
+  const givenOf = (full: string) => (full.startsWith(surname) ? full.slice(surname.length) : full);
+
+  // 直播页：只留观众几秒能看懂的。大字那句已经是寓意，这里换成「为什么推荐」避免重复
   const rowsFor = (n: NameDetail): [string, string][] => {
     const all: [string, string][] = [
-      ["寓意", n.meaning],
+      ["为什么推荐", n.styleFit || n.meaning],
       ["出处", n.origin],
       // 开了生辰才给这一项，模型/兜底都会写 baziFit
       ...(n.baziFit ? ([["八字", n.baziFit]] as [string, string][]) : []),
     ];
     return all.filter((r) => Boolean(r[1]));
   };
+  // 存图：首推详解，家人拿回去慢慢看
+  const cardRowsFor = (n: NameDetail): [string, string][] => {
+    const all: [string, string][] = [
+      ["寓意", n.meaning],
+      ["读音", n.phonology],
+      ["书写", n.glyph],
+      ["出处", n.origin],
+      ["留意", n.pitfalls],
+      ...(n.baziFit ? ([["生辰", n.baziFit]] as [string, string][]) : []),
+    ];
+    return all.filter((r) => Boolean(r[1]));
+  };
   const toAlt = (n: NameDetail): ShowAlt => ({
     n: n.fullName,
-    py: n.pinyin ?? "",
+    py: fullNamePinyin(surname, givenOf(n.fullName)).text,
     one: n.meaning,
-    rows: [
-      ["寓意", n.meaning],
-      ["出处", n.origin],
-    ].filter((r) => Boolean(r[1])) as [string, string][],
+    // 备选简解：一句话已经写了寓意，这里只补一句特点（没有特点就退到注意事项）
+    rows: [["特点", n.styleFit || n.pitfalls]].filter((r) => Boolean(r[1])) as [string, string][],
   });
   const groupFor = (fullNames?: string[]): ShowAlt[] =>
     (fullNames ?? [])
@@ -118,10 +139,13 @@ function toShow(report: ReportDocument): ShowData {
         }
       : undefined;
 
+  const primaryPy = fullNamePinyin(surname, givenOf(primary.fullName));
+
   return {
-    surname: report.request.surname,
+    surname,
     full: primary.fullName,
-    py: primary.pinyin ?? "",
+    py: primaryPy.text,
+    ...(primaryPy.hint ? { pyHint: primaryPy.hint } : {}),
     // 用名字本身的寓意做"一句"，oneLiner 更像摘要标题，不适合当主标语
     one: (primary.meaning || report.overview.oneLiner || "").replace(/\s+/g, ""),
     tags: [
@@ -136,6 +160,7 @@ function toShow(report: ReportDocument): ShowData {
             : "中性",
     ],
     rows: rowsFor(primary),
+    cardRows: cardRowsFor(primary),
     alts: alts.map(toAlt),
     // 直播观众看不懂干支：只说属相和出生季节
     ...(report.bazi?.readable
@@ -220,7 +245,7 @@ function buildGroupedCard(show: ShowData, skin: Skin, bgImage: HTMLImageElement 
   x.fillText("瑾瑜", sx, sy + 58);
   x.fillStyle = C.ink3;
   x.font = `300 21px ${SANS}`;
-  x.fillText("男女分组推荐", sx + 136, sy + 58);
+  x.fillText("取名参考 · 男女各三", sx + 136, sy + 58);
 
   x.textAlign = "center";
   x.fillStyle = C.ink2;
@@ -270,7 +295,7 @@ function buildGroupedCard(show: ShowData, skin: Skin, bgImage: HTMLImageElement 
   x.textAlign = "center";
   x.fillStyle = C.ink3;
   x.font = `300 20px ${SANS}`;
-  x.fillText("瑾瑜 · 中文取名 · 男女各三", W / 2, H - 72);
+  x.fillText("瑾瑜 · 中文取名 · 取名参考 · 男女各三", W / 2, H - 72);
   return cv;
 }
 
@@ -523,7 +548,7 @@ export function LiveClient() {
     if (!probe) return;
 
     probe.font = `400 26px ${SERIF}`;
-    const mainRows = show.rows.map((r) => ({ label: r[0], lines: wrapText(probe, r[1], colW) }));
+    const mainRows = show.cardRows.map((r) => ({ label: r[0], lines: wrapText(probe, r[1], colW) }));
     let lh = 0;
     let rh = 0;
     mainRows.forEach((r, i) => {
@@ -547,7 +572,11 @@ export function LiveClient() {
 
     const nameY = 470;
     const baziExtra = show.bazi ? 56 : 0;
-    const H = Math.max(1440, Math.ceil(796 + mainH + 60 + baziExtra + 54 + altMax + 140));
+    // 存图不画大字那句（和「寓意」重复），所以标签和详解整体上移
+    const tagsY = show.pyHint ? 648 : 612;
+    const dividerY = tagsY + 46;
+    const rowsTop = dividerY + 56;
+    const H = Math.max(1440, Math.ceil(rowsTop + mainH + 60 + baziExtra + 54 + altMax + 140));
     const cv = document.createElement("canvas");
     cv.width = W;
     cv.height = H;
@@ -577,36 +606,39 @@ export function LiveClient() {
     x.fillText("瑾瑜", sx, sy + 58);
     x.fillStyle = C.ink3;
     x.font = `300 21px ${SANS}`;
-    x.fillText("一次正式命名报告", sx + 136, sy + 58);
+    x.fillText("取名参考", sx + 136, sy + 58);
 
     x.textAlign = "center";
     x.fillStyle = C.ink;
     x.font = `500 172px ${SERIF}`;
     x.fillText(show.full, W / 2, nameY);
     x.fillStyle = C.ink3;
-    x.font = `200 32px ${SANS}`;
-    x.fillText(show.py, W / 2, 546);
-    // 寓意一行放下：超宽就缩字号，最小 26px（真实数据的寓意可能二十多字）
-    x.fillStyle = C.ink2;
-    let oneSize = 44;
-    x.font = `400 ${oneSize}px ${SERIF}`;
-    while (oneSize > 26 && x.measureText(show.one).width > W - 300) {
-      oneSize -= 2;
-      x.font = `400 ${oneSize}px ${SERIF}`;
+    // 全名拼音（含姓氏）比原来长，超宽就缩
+    let pySize = 32;
+    x.font = `200 ${pySize}px ${SANS}`;
+    while (pySize > 20 && x.measureText(show.py).width > W - 320) {
+      pySize -= 2;
+      x.font = `200 ${pySize}px ${SANS}`;
     }
-    x.fillText(show.one, W / 2, 628);
+    x.fillText(show.py, W / 2, 546);
+    if (show.pyHint) {
+      x.fillStyle = C.ink3;
+      x.font = `300 18px ${SANS}`;
+      x.fillText(show.pyHint, W / 2, 586);
+    }
+    // 存图里「寓意」已经作为独立一段，这里不再重复大字那句
     x.fillStyle = C.ink2;
     x.font = `300 24px ${SANS}`;
-    x.fillText(show.tags.join("   ·   "), W / 2, 694);
+    x.fillText(show.tags.join("   ·   "), W / 2, tagsY);
 
     x.strokeStyle = C.line;
     x.lineWidth = 1;
     x.beginPath();
-    x.moveTo(M, 740);
-    x.lineTo(W - M, 740);
+    x.moveTo(M, dividerY);
+    x.lineTo(W - M, dividerY);
     x.stroke();
 
-    const cy = [796, 796];
+    const cy = [rowsTop, rowsTop];
     mainRows.forEach((r, i) => {
       const col = i % 2;
       const cx = M + col * (colW + 70);
@@ -621,12 +653,12 @@ export function LiveClient() {
       cy[col] = y + 40 + r.lines.length * 44 + 26;
     });
 
-    const div2 = 796 + mainH + (show.bazi ? 60 : 20);
+    const div2 = rowsTop + mainH + (show.bazi ? 60 : 20);
     if (show.bazi) {
       x.textAlign = "center";
       x.fillStyle = C.ink3;
       x.font = `400 22px ${SERIF}`;
-      x.fillText(`生辰 ${show.bazi}`, W / 2, 796 + mainH + 34);
+      x.fillText(`生辰 ${show.bazi}`, W / 2, rowsTop + mainH + 34);
     }
     x.strokeStyle = C.line;
     x.beginPath();
@@ -668,7 +700,7 @@ export function LiveClient() {
     x.textAlign = "center";
     x.fillStyle = C.ink3;
     x.font = `300 20px ${SANS}`;
-    x.fillText("瑾瑜 · 中文取名 · 一次正式命名报告", W / 2, H - 86);
+    x.fillText("瑾瑜 · 中文取名 · 取名参考", W / 2, H - 86);
 
     cv.toBlob((b) => {
       if (!b) return;
@@ -851,6 +883,11 @@ export function LiveClient() {
                       <p className="pinyin reveal" style={{ ["--d" as string]: "200ms" }}>
                         {show.py}
                       </p>
+                      {show.pyHint && (
+                        <p className="pinyin-hint reveal" style={{ ["--d" as string]: "300ms" }}>
+                          {show.pyHint}
+                        </p>
+                      )}
                       <p className="meaning reveal" style={{ ["--d" as string]: "600ms" }}>
                         {show.one}
                       </p>

@@ -21,6 +21,7 @@
     "lunar-javascript": "^1.7.7",
     "nanoid": "^5.1.5",
     "next": "15.1.0",
+    "pinyin-pro": "^3.29.5",
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "satori": "^0.12.1",
