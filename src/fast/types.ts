@@ -12,7 +12,7 @@ export interface FastFormInput {
   surname?: string;
   gender?: string;
   birthday?: string;
-  /** 这一场已经给过的名字，取名时避开（最多取前 12 个） */
+  /** 这一场已经给过的名字，取名时避开（服务端最多留最近 20 个） */
   recent?: string[];
 }
 
@@ -46,6 +46,23 @@ export interface FastCandidate {
   hotChar: boolean;
 }
 
+/** 排查用：模型给了几个、过闸几个、每个被拦的原因。页面不展示，探针打出来看 */
+export interface FastDebug {
+  /** 模型返回的候选数 */
+  drafted: number;
+  /** 过闸且没重名的 */
+  kept: number;
+  /** 带原句的候选数（line 非空），这个数决定出处够不够 */
+  withLine: number;
+  /** 推理字数：3–5 秒的预算主要花在这上面 */
+  reasoningChars: number;
+  /** 首字到达毫秒数：网关排队的地板 */
+  firstTokenMs: number;
+  /** 是否因为截断/解析失败重跑过一次 */
+  retried: boolean;
+  dropped: { name: string; reasons: string[] }[];
+}
+
 export interface FastSuccess {
   ok: true;
   surname: string;
@@ -56,12 +73,21 @@ export interface FastSuccess {
   baziLine?: string;
   tookMs: number;
   notes: string[];
+  debug?: FastDebug;
 }
 
 export interface FastFailure {
   ok: false;
   code: "BAD_INPUT" | "NO_CANDIDATE" | "UPSTREAM";
   message: string;
+  /** NO_CANDIDATE 时带上，看是模型给少了还是全被闸门拦了 */
+  debug?: FastDebug;
 }
+
+/** 精简直播：真实发生过的阶段。加载页只许显示这些，不许演 */
+export type FastStageEvent =
+  | { stage: "draft"; drafted: number }
+  | { stage: "gate"; drafted: number; kept: number; dropped: { name: string; reasons: string[] }[] }
+  | { stage: "cite"; withLine: number; missing: number };
 
 export type FastResult = FastSuccess | FastFailure;

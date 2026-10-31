@@ -1,10 +1,10 @@
 import { buildBaziSummary } from "@/domain/bazi";
 import { fullNamePinyin } from "@/domain/pinyin-name";
-import { citeFromLine, findAdjacentCitation, locateCitation } from "./cite";
+import { citeFromLine, locateCitation } from "./cite";
 import { checkFastCandidate } from "./gate";
 import { normalizeFastInput } from "./normalize";
 import { createFastProvider } from "./provider";
-import type { FastCandidate, FastFormInput, FastResult } from "./types";
+import type { FastCandidate, FastFormInput, FastResult, FastStageEvent } from "./types";
 
 /**
  * 精简版主流程：校验 → 排盘（可选）→ 一次生成 → 闸门 → 截出处 → 排序。
@@ -14,10 +14,10 @@ import type { FastCandidate, FastFormInput, FastResult } from "./types";
 
 const KEEP_MIN = 3;
 const ALTERNATIVES_MAX = 3;
-/** 这一场最多带多少个「已经给过」的名字给模型 */
-const RECENT_MAX = 12;
+/** 这一场最多带多少个「已经给过」的名字（每轮最多记 4 个，20 个≈最近 5 轮） */
+const RECENT_MAX = 20;
 
-/** 只收两字汉字名字，去重、截断 */
+/** 只收两字汉字名字，去重；超出上限时保留**最近**的，先给过的先忘 */
 function sanitizeRecent(recent: unknown): string[] {
   if (!Array.isArray(recent)) return [];
   const out: string[] = [];
@@ -27,12 +27,31 @@ function sanitizeRecent(recent: unknown): string[] {
     if (!/^[\u4e00-\u9fff]{2}$/.test(name)) continue;
     if (out.includes(name)) continue;
     out.push(name);
-    if (out.length >= RECENT_MAX) break;
+  }
+  // 客户端按旧→新传上来，这里必须留尾部：留头部会先把这一场刚念过的名字丢掉
+  return out.length > RECENT_MAX ? out.slice(-RECENT_MAX) : out;
+}
+
+/** 仅供测试：这一场已给过的名字，超上限时留最近的 */
+export const __sanitizeRecent = sanitizeRecent;
+
+/** 同一批候选之间不重复用字；重复的丢掉，除非丢到不够 KEEP_MIN */
+function dedupeChars(list: FastCandidate[]): FastCandidate[] {
+  const used = new Set<string>();
+  const out: FastCandidate[] = [];
+  for (const c of list) {
+    const chars = [...c.givenName];
+    if (chars.some((ch) => used.has(ch))) continue;
+    for (const ch of chars) used.add(ch);
+    out.push(c);
   }
   return out;
 }
 
-export async function runFast(input: FastFormInput): Promise<FastResult> {
+export async function runFast(
+  input: FastFormInput,
+  onStage?: (e: FastStageEvent) => void,
+): Promise<FastResult> {
   const started = Date.now();
   const normalized = normalizeFastInput(input);
   if (!normalized.ok) return normalized;
@@ -68,17 +87,24 @@ export async function runFast(input: FastFormInput): Promise<FastResult> {
       message: err instanceof Error ? err.message : "生成失败",
     };
   }
+  onStage?.({ stage: "draft", drafted: raw.length });
 
   const notes: string[] = [];
   const seen = new Set<string>();
   const kept: FastCandidate[] = [];
+  const dropped: { name: string; reasons: string[] }[] = [];
+  let withLine = 0;
 
   for (const c of raw) {
     const name = c.givenName.trim();
     if (seen.has(name)) continue;
     const verdict = checkFastCandidate(name, req.surname);
-    if (!verdict.keep) continue;
+    if (!verdict.keep) {
+      dropped.push({ name, reasons: verdict.reasons });
+      continue;
+    }
     seen.add(name);
+    if (c.line) withLine++;
 
     const py = fullNamePinyin(req.surname, name);
     kept.push({
@@ -98,18 +124,32 @@ export async function runFast(input: FastFormInput): Promise<FastResult> {
     });
   }
 
+  const debugInfo = {
+    drafted: raw.length,
+    kept: kept.length,
+    withLine,
+    reasoningChars: provider.lastDraft.reasoningChars,
+    firstTokenMs: provider.lastDraft.firstTokenMs,
+    retried: provider.lastDraft.retried,
+    dropped,
+  };
+  onStage?.({ stage: "gate", drafted: raw.length, kept: kept.length, dropped });
+
   if (kept.length < KEEP_MIN) {
     return {
       ok: false,
       code: "NO_CANDIDATE",
       message: `可用名字不足（只剩 ${kept.length} 个），请再点一次`,
+      debug: debugInfo,
     };
   }
 
   // 这一场给过的名字不再出（提示词说了模型偶尔还会给）。过滤后不够 3 个就不敢过滤了，
   // 直播里宁可重复一次，也不能没名字可念。
-  const fresh = recent.length ? kept.filter((c) => !recent.includes(c.givenName)) : kept;
-  const pool = fresh.length >= KEEP_MIN ? fresh : kept;
+  const distinct = dedupeChars(kept);
+  const base = distinct.length >= KEEP_MIN ? distinct : kept;
+  const fresh = recent.length ? base.filter((c) => !recent.includes(c.givenName)) : base;
+  const pool = fresh.length >= KEEP_MIN ? fresh : base;
 
   // 排序：有出处优先，其次非热门字，最后保模型原序
   const ranked = pool
@@ -128,15 +168,8 @@ export async function runFast(input: FastFormInput): Promise<FastResult> {
 
   const [head, ...rest] = ranked as [FastCandidate, ...FastCandidate[]];
 
-  // 备选先补本地出处：只认「两字相邻」的原词，毫秒级，不合格就留白
-  const restFilled = rest.map((c) =>
-    c.citation ? c : ((): FastCandidate => {
-      const local = findAdjacentCitation(c.givenName);
-      return local ? { ...c, citation: local } : c;
-    })(),
-  );
-
-  // 首推没出处：先让模型补一次（质量更好），仍没有再用本地相邻兜底
+  // 首推没出处：让模型补一次，核过才用。核不过就留白——
+  // 本地「两字相邻」兜底已删：它截出来的句子近一半不能当众念（隔逗号、跨词、缺字方块）。
   let primary = head;
   if (!primary.citation) {
     try {
@@ -152,24 +185,22 @@ export async function runFast(input: FastFormInput): Promise<FastResult> {
       /* 补不到继续往下走 */
     }
   }
-  if (!primary.citation) {
-    const local = findAdjacentCitation(primary.givenName);
-    if (local) primary = { ...primary, citation: local };
-  }
 
-  const finalAll = [primary, ...restFilled];
+  const finalAll = [primary, ...rest];
   const missing = finalAll.filter((c) => !c.citation).length;
   notes.length = 0;
   if (missing) notes.push(`${missing} 个名字没核到可引的古籍原文，出处留白`);
+  onStage?.({ stage: "cite", withLine: finalAll.length - missing, missing });
 
   return {
     ok: true,
     surname: req.surname,
     gender: req.gender,
     primary,
-    alternatives: restFilled.slice(0, ALTERNATIVES_MAX),
+    alternatives: rest.slice(0, ALTERNATIVES_MAX),
     ...(baziLine ? { baziLine } : {}),
     tookMs: Date.now() - started,
     notes,
+    debug: debugInfo,
   };
 }

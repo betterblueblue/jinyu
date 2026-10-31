@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { normalizeFastInput } from "@/fast/normalize";
 import { checkFastCandidate } from "@/fast/gate";
 import { __displayableQuote, citeFromLine, locateCitation } from "@/fast/cite";
+import { __sanitizeRecent } from "@/fast/run";
 
 describe("精简版输入校验", () => {
   it("只填姓和性别就能过，不补任何默认值", () => {
@@ -51,6 +52,39 @@ describe("精简版闸门", () => {
     // 雷云帆 → lei yun… 「雷雨」不算坏词，不能误伤
     expect(checkFastCandidate("云帆", "雷").keep).toBe(true);
   });
+
+  it("姓与名首字连读成常用词的也拦（拼音不同音，只能按字判）", () => {
+    // 沈 是「沉」的异体：shěn / chén 拼音不一样，坏词表抓不到
+    expect(checkFastCandidate("默然", "沈").keep).toBe(false);
+    expect(checkFastCandidate("思远", "沈").keep).toBe(false);
+    // 同姓但没撞上那几个字，照常放行
+    expect(checkFastCandidate("清和", "沈").keep).toBe(true);
+  });
+
+  it("姓与名首字同音直接拦，不依赖坏词表", () => {
+    // 王望舒 → wang wang…，林临风 → lin lin…
+    expect(checkFastCandidate("望舒", "王").keep).toBe(false);
+    expect(checkFastCandidate("临风", "林").keep).toBe(false);
+    // 复姓看末字：欧阳 + 阳
+    expect(checkFastCandidate("阳春", "欧阳").keep).toBe(false);
+    // 不同音照常放行
+    expect(checkFastCandidate("望舒", "苏").keep).toBe(true);
+  });
+});
+
+describe("这一场已给过的名字", () => {
+  it("超过上限时保留最近的，最早给过的先忘", () => {
+    const names = Array.from({ length: 25 }, (_, i) => `名${String.fromCharCode(0x4e00 + i)}`);
+    const kept = __sanitizeRecent(names);
+    expect(kept).toHaveLength(20);
+    expect(kept[0]).toBe(names[5]);
+    expect(kept.at(-1)).toBe(names[24]);
+  });
+
+  it("不是两个汉字的、重复的都剔掉", () => {
+    expect(__sanitizeRecent(["清和", "清和", "苏清和", "a", 42])).toEqual(["清和"]);
+    expect(__sanitizeRecent("不是数组")).toEqual([]);
+  });
 });
 
 describe("篇名 → 原文", () => {
@@ -94,6 +128,12 @@ describe("引文展示闸门", () => {
     expect(__displayableQuote("声噭兮清和，音晏衍兮要婬")).toBe(false);
     expect(__displayableQuote("名位未霑身欲老，诗书宁救眼前贫")).toBe(false);
     expect(__displayableQuote("孰两东门之可芜")).toBe(true); // 不含禁字，靠人判
+  });
+
+  it("语料缺字方块、表外生僻字也不给观众看", () => {
+    expect(__displayableQuote("□万卷诗书宁愤穷")).toBe(false);
+    expect(__displayableQuote("郡带女𡡓名，民康境亦宁")).toBe(false);
+    expect(__displayableQuote("四月清和雨乍晴")).toBe(true);
   });
 
   it("正常句子照常放行", () => {

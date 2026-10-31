@@ -30,8 +30,18 @@ export interface FastClientOptions {
   model: string;
 }
 
+/** 一次 draft 的耗时构成：推理字数是 3–5 秒预算里唯一还能压的部分 */
+export interface DraftStats {
+  reasoningChars: number;
+  firstTokenMs: number;
+  retried: boolean;
+  finishReason: string | null;
+}
+
 export class FastProvider {
   private readonly client: ChatClientOptions;
+  /** 最近一次 draft 的耗时构成，写给 run.ts 的 debug，不进提示词、不影响结果 */
+  lastDraft: DraftStats = { reasoningChars: 0, firstTokenMs: -1, retried: false, finishReason: null };
 
   constructor(opts: FastClientOptions) {
     // reasoning_effort 必须显式 low。实测（同一提示词，2026-10-31）：
@@ -49,11 +59,23 @@ export class FastProvider {
 
     const first = await streamChat(this.client, { messages, maxTokens: MAX_TOKENS });
     let list = parseFast(first.content);
+    this.lastDraft = {
+      reasoningChars: first.reasoningChars,
+      firstTokenMs: first.firstTokenMs,
+      retried: false,
+      finishReason: first.finishReason,
+    };
 
     if (list.length === 0 || first.finishReason === "length") {
       const retry = await streamChat(this.client, { messages, maxTokens: RETRY_MAX_TOKENS });
       const retryList = parseFast(retry.content);
       if (retryList.length > list.length) list = retryList;
+      this.lastDraft = {
+        reasoningChars: this.lastDraft.reasoningChars + retry.reasoningChars,
+        firstTokenMs: retry.firstTokenMs,
+        retried: true,
+        finishReason: retry.finishReason,
+      };
     }
 
     if (!list.length) {

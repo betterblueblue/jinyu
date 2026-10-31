@@ -41,6 +41,13 @@ async function main() {
     const ms = Date.now() - t;
     if (!r.ok) {
       console.log(`#${i} FAIL(${r.code}) ${ms}ms ${r.message}`);
+      if (r.debug) {
+        console.log(
+          `   gate: 给 ${r.debug.drafted} 过 ${r.debug.kept} 带句 ${r.debug.withLine}｜拦: ${
+            r.debug.dropped.map((x) => `${x.name}(${x.reasons.join("/")})`).join("  ") || "—"
+          }`,
+        );
+      }
       continue;
     }
     const all = [r.primary, ...r.alternatives];
@@ -53,6 +60,18 @@ async function main() {
       console.log(`     cite: ${cite}`);
     }
     if (r.notes.length) console.log(`   notes: ${r.notes.join(" / ")}`);
+    // gate 拦了什么、模型给了几条原句、推理吃了多少字：没有这几行，
+    // 就看不出代码是在帮忙还是在误杀，也分不清慢是推理还是网关排队
+    if (r.debug) {
+      const d = r.debug;
+      const reason = d.dropped.length
+        ? d.dropped.map((x) => `${x.name}(${x.reasons.join("/")})`).join("  ")
+        : "—";
+      console.log(
+        `   gate: 给 ${d.drafted} 过 ${d.kept} 带句 ${d.withLine}｜拦: ${reason}` +
+          `\n   cost: 首字 ${d.firstTokenMs}ms 推理 ${d.reasoningChars} 字${d.retried ? " 重跑过一次" : ""}`,
+      );
+    }
   }
 }
 

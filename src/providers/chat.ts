@@ -22,6 +22,15 @@ export interface ChatClientOptions {
 const DEFAULT_TIMEOUT_MS = 240_000;
 const IDLE_TIMEOUT_MS = 90_000;
 
+export interface ChatStreamResult {
+  content: string;
+  finishReason: string | null;
+  /** 推理增量累计的字数。3–5 秒的预算全花在这上面，必须能看到 */
+  reasoningChars: number;
+  /** 第一个增量（推理或正文）到达的毫秒数，网关排队的地板 */
+  firstTokenMs: number;
+}
+
 export async function streamChat(
   client: ChatClientOptions,
   args: {
@@ -31,7 +40,7 @@ export async function streamChat(
     timeoutMs?: number;
     idleTimeoutMs?: number;
   },
-): Promise<{ content: string; finishReason: string | null }> {
+): Promise<ChatStreamResult> {
   const url = `${client.baseUrl.replace(/\/$/, "")}/chat/completions`;
   const controller = new AbortController();
   const totalTimer = setTimeout(() => controller.abort(), args.timeoutMs ?? DEFAULT_TIMEOUT_MS);
@@ -70,9 +79,12 @@ export async function streamChat(
 
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
+    const t0 = Date.now();
     let buffer = "";
     let content = "";
     let finishReason: string | null = null;
+    let reasoningChars = 0;
+    let firstTokenMs = -1;
 
     while (true) {
       const { value, done } = await reader.read();
@@ -100,7 +112,11 @@ export async function streamChat(
           }
           const delta = ev.choices?.[0]?.delta;
           const thinking = delta?.reasoning_content ?? delta?.reasoning;
-          if (thinking) args.onThinking?.(thinking);
+          if (firstTokenMs < 0 && (thinking || delta?.content)) firstTokenMs = Date.now() - t0;
+          if (thinking) {
+            reasoningChars += thinking.length;
+            args.onThinking?.(thinking);
+          }
           if (delta?.content) content += delta.content;
           if (ev.choices?.[0]?.finish_reason) {
             finishReason = ev.choices[0].finish_reason;
@@ -109,7 +125,7 @@ export async function streamChat(
       }
     }
 
-    return { content: content.trim(), finishReason };
+    return { content: content.trim(), finishReason, reasoningChars, firstTokenMs };
   } catch (err) {
     if (controller.signal.aborted) throw new Error("LLM 生成超时，请重试");
     throw err;

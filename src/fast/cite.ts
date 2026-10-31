@@ -117,55 +117,28 @@ function segmentsOf(label: string): string[] {
     .filter(Boolean);
 }
 
-/** 原文里第 foldedPos 个汉字所在的原始下标 */
-function originalIndex(line: string, foldedPos: number): number {
-  let count = -1;
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i]!;
-    if (/[\u4e00-\u9fff]/.test(ch)) {
-      count++;
-      if (count === foldedPos) return i;
-    }
-  }
-  return -1;
-}
+/** 只认「一个字一个句读」的分句：。！？；…，、：都算句读边界 */
+const CLAUSE_SPLIT = /(?<=[。！？；…，、：])/;
 
 /**
- * 截引文：优先「同一句里含两字」且最短的那句；否则在原文里按两字位置开窗。
- * 无论哪条路，返回的都是原文的连续片段。
+ * 截引文：只在**同一个分句**里找两字按顺序出现，挑最短的那句。
+ *
+ * 2026-10-31 改过：原来只按句号分句，逗号两边会被当成相邻（语宁 ←「不与华池语，宁将浴室论」），
+ * 还留了一条「整行开窗」兜底，会截出跨句的碎片。两条都删了——找不到同一分句里的两字，
+ * 就返回 null，让调用方留白。
  */
 function extractQuote(body: string, chars: [string, string]): string | null {
   const [a, b] = chars;
-  const rawLines = body.split("\n");
-
   let best: string | null = null;
 
-  for (const raw of rawLines) {
-    const folded = foldText(raw);
-    const ia = folded.indexOf(a);
-    if (ia < 0) continue;
-    const ib = folded.lastIndexOf(b);
-    if (ib <= ia) continue;
-
-    // 按句切开，挑最短的、同时含两字的句子
-    for (const seg of raw.split(/(?<=[。！？；…])/)) {
+  for (const raw of body.split("\n")) {
+    for (const seg of raw.split(CLAUSE_SPLIT)) {
       const foldedSeg = foldText(seg);
       const pa = foldedSeg.indexOf(a);
       const pb = foldedSeg.lastIndexOf(b);
-      if (pa >= 0 && pb > pa) {
-        const text = seg.trim();
-        if (text && (!best || text.length < best.length)) best = text;
-      }
-    }
-
-    // 整行兜底：按两字位置开窗，保证是连续片段
-    if (!best) {
-      const from = originalIndex(raw, Math.max(0, ia - 6));
-      const to = originalIndex(raw, Math.min(folded.length - 1, ib + 6));
-      if (from >= 0 && to > from) {
-        const text = raw.slice(from, to + 1).trim();
-        if (text && (!best || text.length < best.length)) best = text;
-      }
+      if (pa < 0 || pb <= pa) continue;
+      const text = seg.trim();
+      if (text && (!best || text.length < best.length)) best = text;
     }
   }
 
@@ -256,18 +229,27 @@ export function locateCitation(
 }
 
 /**
- * 引文展示闸门：出现这些字的那一句，不适合当着观众念出来。
+ * 引文展示闸门：出现这些字、或者出现方块/表外生僻字的那一句，不适合当着观众念出来。
  *
  * 2026-10-31 实测的漏网句：清和 →「声噭𫍥兮清和，音晏衍兮要婬」、
  *                      书宁 →「名位未霑身欲老，诗书宁救眼前贫」、
  *                      知夏 →「曾不知夏之为丘兮，孰两东门之可芜」。
- * 只挡明显不能念的（淫靡、丧亡、贫贱、病痛、鬼怪），**不判断用得对不对**——
+ * 第二轮又抓到两条：书宁 →「□万卷诗书宁愤穷」（语料缺字方块）、
+ *                 亦宁 →「郡带女𡡓名，民康境亦宁」（表外生僻字，直播念不出来）。
+ *
+ * 只挡明显不能念的（淫靡、丧亡、贫贱、病痛、鬼怪、方块字、表外字），**不判断用得对不对**——
  * 那句「桃之夭夭被理解成逃跑」核不出来。宁可留白，也不能让这种句子进直播。
  */
-const QUOTE_BLOCK = /[婬淫丧亡死病痛哀哭泪冢墓鬼妖罪祸灾贫贱寡囚奴]/;
+const QUOTE_BLOCK = /[婬淫丧亡死病痛哀哭泪冢墓鬼妖罪祸灾贫贱寡囚奴]/
 
 function displayableQuote(text: string): boolean {
-  return Boolean(text) && !QUOTE_BLOCK.test(text);
+  if (!text) return false;
+  if (QUOTE_BLOCK.test(text)) return false;
+  // 语料缺口方块、替换符、扩展 A / 扩展 B 以后的生僻字（𡡓 这类），直播张不开口
+  return ![...text].some((ch) => {
+    const cp = ch.codePointAt(0)!;
+    return ch === "□" || cp === 0xfffd || cp > 0xffff || (cp >= 0x3400 && cp <= 0x4dbf);
+  });
 }
 
 /** 仅供测试：引文展示闸门 */
@@ -349,65 +331,3 @@ export function citeFromLine(
   return null;
 }
 
-/**
- * 最后一招：模型给不出篇名时，自己去经部里找「这两个字挨在一起」的原句。
- *
- * 只认相邻——「知夏」在「曾不知夏之为丘兮」里也同句出现，但那是巧合，
- * 拿它当出处就是编。两字相邻才是「这个词真出现在书里」的硬证据。
- *
- * 限定书目顺序：经部 > 诗文 > 词赋。找到第一句就返回，找不到就 null。
- */
-const ADJACENT_ORDER = [
-  "shijing",
-  "chuci",
-  "lunyu",
-  "daxue",
-  "zhongyong",
-  "mengzi",
-  "zhouyi",
-  "shangshu",
-  "liji",
-  "zuozhuan",
-  "tangshi300",
-  "qianjiashi",
-  "quantangshi",
-  "songci",
-];
-export function findAdjacentCitation(givenName: string): FastCitation | null {
-  if (!givenName || [...givenName].length !== 2) return null;
-  const folded = foldText(givenName);
-
-  for (const sid of ADJACENT_ORDER) {
-    const hit = scanSourceForWord(sid, folded);
-    if (hit) {
-      return {
-        source: SOURCE_LABEL[hit.piece.s] ?? "",
-        piece: toSimplified(hit.piece.title),
-        quote: toSimplified(hit.text),
-        line: toSimplified(hit.text),
-      };
-    }
-  }
-  return null;
-}
-
-/** 在一部书里找含该词的最短句子；找不到返回 null */
-function scanSourceForWord(sid: string, folded: string): { piece: Piece; text: string } | null {
-  for (const piece of piecesOf(sid)) {
-    // 系辞被并进「未济（卦六十四）」这一篇，篇名不可信，兜底不从这里取
-    if (piece.foldedTitle.includes("未济")) continue;
-    let best: { piece: Piece; text: string } | null = null;
-    for (const raw of piece.body.split("\n")) {
-      if (!foldText(raw).includes(folded)) continue;
-      for (const seg of raw.split(/(?<=[。！？；…])/)) {
-        if (!foldText(seg).includes(folded)) continue;
-        const text = seg.trim();
-        if (text.length < 4 || text.length > 30) continue;
-        if (!displayableQuote(toSimplified(text))) continue;
-        if (!best || text.length < best.text.length) best = { piece, text };
-      }
-    }
-    if (best) return best;
-  }
-  return null;
-}

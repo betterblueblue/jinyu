@@ -52,9 +52,31 @@ export interface FastGateVerdict {
   homophone?: string;
 }
 
+/**
+ * 姓本身就是某个常用字的异体/同形，名首字一撞，连读就成那个词。
+ *
+ * 沈是「沉」的异体：沈默→沉默、沈思→沉思、沈重→沉重……这些**拼音并不相同**
+ * （shěn / chén），上面 BAD_PREFIX 那套拼音前缀比对抓不到，只能按字拦。
+ * 2026-10-31 抓到的模型推理原文里，它自己在逐个躲这批字（默、思、重、香、阳……），
+ * 说明这是直播真会念错的坑，删了提示词第 7 条之后必须由这里接手。
+ *
+ * 扩法：谁发现新的就加一行，键是姓，值是「名首字」的集合。
+ */
+const SURNAME_CHAR_TRAP: Record<string, ReadonlySet<string>> = {
+  沈: new Set(["默", "思", "重", "香", "睡", "浮", "着", "稳", "淀", "沦", "迷", "溺", "痛"]),
+};
+
+function flatSyllables(text: string, surnameMode = false): string[] {
+  const out = pinyin(text, {
+    toneType: "none",
+    type: "array",
+    ...(surnameMode ? { surname: "head" as const } : {}),
+  });
+  return (Array.isArray(out) ? out : [out]).map((s) => String(s).toLowerCase());
+}
+
 function flatPinyin(text: string): string {
-  const out = pinyin(text, { toneType: "none", type: "array" });
-  return (Array.isArray(out) ? out : [out]).map(String).join("").toLowerCase();
+  return flatSyllables(text).join("");
 }
 
 export function checkFastCandidate(givenName: string, surname: string): FastGateVerdict {
@@ -79,6 +101,18 @@ export function checkFastCandidate(givenName: string, surname: string): FastGate
   const homophone = BAD_PREFIX.has(head) ? head : BAD_PREFIX.has(full) ? full : undefined;
   if (homophone) {
     reasons.push("连姓读起来不雅");
+  }
+  // 姓的末字音节 与 名首字音节 相同（王望、林临、欧阳阳）→ 连念两遍同一个音。
+  // 坏词表只有十几个词，这一条是不查词表也拦得住的那一半。
+  const surnameTail = flatSyllables(surname.trim(), true).at(-1);
+  const givenHead = flatSyllables([...name][0] ?? "").at(0);
+  if (surnameTail && givenHead && surnameTail === givenHead) {
+    reasons.push("姓与名首字同音");
+  }
+  // 姓与名首字连读成常用词（沈 + 默 = 沉默），按字拦，不按音
+  const trap = SURNAME_CHAR_TRAP[surname.trim()];
+  if (trap && trap.has([...name][0] ?? "")) {
+    reasons.push("姓与名首字连读成常用词");
   }
 
   return { keep: reasons.length === 0, reasons, hotChar, ...(homophone ? { homophone } : {}) };
