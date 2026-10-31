@@ -14,6 +14,7 @@ import type { LibraryEntry, LibraryFile } from "./review-types";
  *   3. 配观众的姓过直播闸门（src/fast/gate.ts，和模型起的名字同一道：谐音、忌字、撞名都没有，打分不低于 90）
  *   4. 有出处的排前面；都有或都没有时分高的排前面；再一样就随机，免得每场开头都是同一个
  * 挑不到返回 null，调用方用模型起的名字。备选仍由模型起：库现在只有几十个，四个都从库里出，一场八九轮就用完了。
+ * 只有模型这一轮出错、或者能用的不够时，备选才从库里补（src/fast/run.ts 的 fillFromLibrary）。
  *
  * 库文件按修改时间缓存：重新发布（scripts/library/publish.ts）以后，下一轮就用新库，不用重启服务。
  * 文件不在或读坏了都当空库，直播照常走模型。
@@ -118,13 +119,19 @@ function toCandidate(e: LibraryEntry, surname: string, hotChar: boolean): FastCa
   };
 }
 
-export function pickLibraryCandidate(
+/**
+ * 按上面的顺序挑最多 count 个。挑多个时（模型这一轮出错或给得不够，要从库里补）彼此不撞字，
+ * 也不和 avoidChars 里的字撞（同一轮模型已经给出的名字）。
+ */
+export function pickLibraryCandidates(
   entries: readonly LibraryEntry[],
   surname: string,
   gender: FastGender,
   recent: readonly string[],
+  count: number,
   random: () => number = Math.random,
-): FastCandidate | null {
+  avoidChars: Iterable<string> = [],
+): FastCandidate[] {
   const used = new Set(recent);
   const pool = entries
     .filter((e) => (e.gender === gender || e.gender === "neutral") && !used.has(e.givenName))
@@ -136,9 +143,25 @@ export function pickLibraryCandidate(
       if (a.e.grade !== b.e.grade) return b.e.grade - a.e.grade;
       return a.r - b.r;
     });
+  const out: FastCandidate[] = [];
+  const takenChars = new Set<string>(avoidChars);
   for (const { e } of pool) {
+    if (out.length >= count) break;
+    if ([...e.givenName].some((ch) => takenChars.has(ch))) continue;
     const verdict = checkFastCandidate(e.givenName, surname, gender);
-    if (verdict.keep) return toCandidate(e, surname, verdict.hotChar);
+    if (!verdict.keep) continue;
+    out.push(toCandidate(e, surname, verdict.hotChar));
+    for (const ch of e.givenName) takenChars.add(ch);
   }
-  return null;
+  return out;
+}
+
+export function pickLibraryCandidate(
+  entries: readonly LibraryEntry[],
+  surname: string,
+  gender: FastGender,
+  recent: readonly string[],
+  random: () => number = Math.random,
+): FastCandidate | null {
+  return pickLibraryCandidates(entries, surname, gender, recent, 1, random)[0] ?? null;
 }

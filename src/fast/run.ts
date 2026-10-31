@@ -1,18 +1,21 @@
 import seedChars from "@/config/seed-chars.json";
 import { buildBaziSummary } from "@/domain/bazi";
 import { fullNamePinyin } from "@/domain/pinyin-name";
-import { loadLibrary, pickLibraryCandidate } from "@/library/live-pick";
+import { loadLibrary, pickLibraryCandidate, pickLibraryCandidates } from "@/library/live-pick";
 import { citeFromLine, locateCitation } from "./cite";
 import { checkFastCandidate } from "./gate";
 import { normalizeFastInput } from "./normalize";
-import { createFastProvider } from "./provider";
+import { createFastProvider, type FastProvider } from "./provider";
 import { pickSeeds } from "./seeds";
 import {
   FAST_RECENT_MAX,
   type FastCandidate,
+  type FastDebug,
   type FastFormInput,
+  type FastRequest,
   type FastResult,
   type FastStageEvent,
+  type FastSuccess,
 } from "./types";
 
 /**
@@ -105,6 +108,33 @@ function alternativesBeside(primary: FastCandidate, ranked: readonly FastCandida
   return [...apart, ...others.filter((c) => !apart.includes(c))].slice(0, ALTERNATIVES_MAX);
 }
 
+/**
+ * 模型这一轮没出来（报错、超时、没配好钥匙），或者过了闸的不够三个时，用名字库补齐，不让这一轮白等。
+ * 首推从库里出，模型过了闸的名字当备选，缺几个从库里补几个；这一场给过的都不再出。
+ * 加起来还不够三个，返回 null，照旧报失败。
+ */
+function fillFromLibrary(
+  req: FastRequest,
+  recent: readonly string[],
+  modelKept: readonly FastCandidate[],
+): { primary: FastCandidate; alternatives: FastCandidate[] } | null {
+  // 和正常一轮一样：首推是库里的，模型过了闸的当备选，库只补缺口，省着用
+  const model = modelKept.filter((c) => !recent.includes(c.givenName)).slice(0, ALTERNATIVES_MAX);
+  const fromLib = pickLibraryCandidates(
+    loadLibrary(),
+    req.surname,
+    req.gender,
+    [...recent, ...model.map((c) => c.givenName)],
+    1 + ALTERNATIVES_MAX - model.length,
+    Math.random,
+    model.flatMap((c) => [...c.givenName]),
+  );
+  const ordered = fromLib.length ? [fromLib[0]!, ...model, ...fromLib.slice(1)] : model;
+  if (ordered.length < KEEP_MIN) return null;
+  const primary = ordered[0]!;
+  return { primary, alternatives: alternativesBeside(primary, ordered) };
+}
+
 /** 同一批候选之间不重复用字；重复的丢掉，除非丢到不够 KEEP_MIN */
 function dedupeChars(list: FastCandidate[]): FastCandidate[] {
   const used = new Set<string>();
@@ -152,16 +182,31 @@ export async function runFast(
   const backup = pickSeeds(req.gender, req.surname, recent, Math.random, new Set(main.seeds));
   const bazi = baziPillars ? { baziPillars } : {};
 
-  const provider = createFastProvider();
+  const fallback = (
+    filled: { primary: FastCandidate; alternatives: FastCandidate[] },
+    note: string,
+    debug?: FastDebug,
+  ): FastSuccess => ({
+    ok: true,
+    surname: req.surname,
+    gender: req.gender,
+    ...filled,
+    ...(baziLine ? { baziLine } : {}),
+    tookMs: Date.now() - started,
+    notes: [note],
+    ...(debug ? { debug } : {}),
+  });
+
+  let provider: FastProvider;
   let raw;
   try {
+    provider = createFastProvider();
     raw = await provider.draft(req, { ...main, ...bazi }, { ...backup, ...bazi });
   } catch (err) {
-    return {
-      ok: false,
-      code: "UPSTREAM",
-      message: err instanceof Error ? err.message : "生成失败",
-    };
+    const message = err instanceof Error ? err.message : "生成失败";
+    const filled = fillFromLibrary(req, recent, []);
+    if (filled) return fallback(filled, `模型这一轮没出来（${message}），名字都来自名字库`);
+    return { ok: false, code: "UPSTREAM", message };
   }
   onStage?.({ stage: "draft", drafted: raw.length });
   const { seeds, avoid, tired } = provider.lastDraft.hedgeWon ? backup : main;
@@ -219,6 +264,8 @@ export async function runFast(
   onStage?.({ stage: "gate", drafted: raw.length, kept: kept.length, dropped });
 
   if (kept.length < KEEP_MIN) {
+    const filled = fillFromLibrary(req, recent, kept);
+    if (filled) return fallback(filled, `模型这一轮只有 ${kept.length} 个能用，其余从名字库补`, debugInfo);
     return {
       ok: false,
       code: "NO_CANDIDATE",
