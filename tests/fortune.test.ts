@@ -213,6 +213,48 @@ describe("表单校验", () => {
     if (r.ok) expect(r.input.minute).toBeNull();
   });
 
+  it("农历生日换算成公历，闰月单独算，跨年的腊月落到下一年", () => {
+    const lunar = (y: number, m: number, d: number, leap = false) =>
+      validateFortuneInput(
+        { ...base, birthDate: "", calendar: "lunar", lunarYear: y, lunarMonth: m, lunarDay: d, lunarLeap: leap },
+        NOW,
+      );
+    const plain = lunar(1990, 5, 15);
+    expect(plain.ok && plain.input.date).toEqual({ year: 1990, month: 6, day: 7 });
+    expect(plain.ok && plain.input.lunar?.text).toBe("1990 年五月十五");
+    const leap = lunar(1990, 5, 15, true);
+    expect(leap.ok && leap.input.date).toEqual({ year: 1990, month: 7, day: 7 });
+    expect(leap.ok && leap.input.lunar?.text).toBe("1990 年闰五月十五");
+    const lastMonth = lunar(1990, 12, 20);
+    expect(lastMonth.ok && lastMonth.input.date).toEqual({ year: 1991, month: 2, day: 4 });
+  });
+
+  it("农历日期不存在时说清楚哪里不对", () => {
+    const lunar = (over: Record<string, unknown>) =>
+      validateFortuneInput({ ...base, birthDate: "", calendar: "lunar", lunarYear: 1990, lunarMonth: 5, lunarDay: 15, ...over }, NOW);
+    const noLeap = lunar({ lunarYear: 1991, lunarLeap: true });
+    expect(!noLeap.ok && noLeap.message).toContain("农历 1991 年没有闰五月");
+    const shortMonth = lunar({ lunarMonth: 4, lunarDay: 30 });
+    expect(!shortMonth.ok && shortMonth.message).toContain("农历 1990 年四月只有 29 天");
+    const missing = lunar({ lunarDay: "" });
+    expect(!missing.ok && missing.message).toContain("请选择农历出生日期");
+    // 农历 2026 年腊月初一是公历 2027 年 1 月，晚于「现在」
+    const future = lunar({ lunarYear: 2026, lunarMonth: 12, lunarDay: 1 });
+    expect(!future.ok && future.message).toBe("出生时间不能晚于现在");
+  });
+
+  it("填农历时，排盘说明第一条写明换算出的公历", () => {
+    const r = validateFortuneInput(
+      { ...base, birthDate: "", calendar: "lunar", lunarYear: 1990, lunarMonth: 5, lunarDay: 15, lunarLeap: true },
+      NOW,
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const chart = computeChart(r.input, NOW);
+    expect(chart.notes[0]).toBe("你填的是农历 1990 年闰五月十五，换算成公历是 1990 年 7 月 7 日。");
+    expect(chart.lunarDate).toBe("一九九〇年闰五月十五");
+  });
+
   it("缺性别、日期不存在、未来时间、只选到省都拒绝", () => {
     expect(validateFortuneInput({ ...base, gender: "unknown" }, NOW).ok).toBe(false);
     expect(validateFortuneInput({ ...base, birthDate: "1990-02-30" }, NOW).ok).toBe(false);

@@ -251,6 +251,9 @@ export function computeChart(input: FortuneInput, now: Date = new Date()): Fortu
       t.equationMinutes,
     )}（当天的均时差）= ${formatLocal(t.trueSolar)}。`,
   ];
+  if (input.lunar) {
+    notes.unshift(`你填的是农历 ${input.lunar.text}，换算成公历是 ${clock.year} 年 ${clock.month} 月 ${clock.day} 日。`);
+  }
   if (t.dst) {
     notes.push(
       `你填的 ${formatLocal(clock)} 在 ${clock.year} 年夏令时期间，那时钟表比北京标准时快 1 小时，已先减去 1 小时。`,

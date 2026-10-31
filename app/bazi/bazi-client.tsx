@@ -11,13 +11,29 @@ import "./bazi.css";
 const ELEMENTS: Element[] = ["木", "火", "土", "金", "水"];
 const WX: Record<Element, string> = { 木: "wood", 火: "fire", 土: "earth", 金: "metal", 水: "water" };
 const HOURS = Array.from({ length: 24 }, (_, h) => h);
+/** 农历年月日的选项；换算和「这年有没有这个闰月、这个月有没有三十」由服务端查 */
+const LUNAR_YEARS = Array.from({ length: new Date().getFullYear() - 1900 }, (_, i) => new Date().getFullYear() - i);
+const LUNAR_MONTHS = ["正", "二", "三", "四", "五", "六", "七", "八", "九", "十", "冬", "腊"];
+const LUNAR_DAYS = [
+  ...["一", "二", "三", "四", "五", "六", "七", "八", "九", "十"].map((d) => `初${d}`),
+  ...["一", "二", "三", "四", "五", "六", "七", "八", "九"].map((d) => `十${d}`),
+  "二十",
+  ...["一", "二", "三", "四", "五", "六", "七", "八", "九"].map((d) => `廿${d}`),
+  "三十",
+];
 
 type Status = "idle" | "charting" | "reading" | "done";
 
 interface Payload {
   name: string;
   gender: string;
+  /** solar 用 birthDate；lunar 用 lunarYear / lunarMonth / lunarDay / lunarLeap，服务端换算成公历 */
+  calendar: "solar" | "lunar";
   birthDate: string;
+  lunarYear?: number;
+  lunarMonth?: number;
+  lunarDay?: number;
+  lunarLeap?: boolean;
   birthHour: number;
   birthMinute: number | null;
   placeCode: string;
@@ -31,7 +47,12 @@ function todayText(): string {
 export function BaziClient() {
   const [name, setName] = useState("");
   const [gender, setGender] = useState<"" | "male" | "female">("");
+  const [calendar, setCalendar] = useState<"solar" | "lunar">("solar");
   const [birthDate, setBirthDate] = useState("");
+  const [lunarYear, setLunarYear] = useState("");
+  const [lunarMonth, setLunarMonth] = useState("");
+  const [lunarDay, setLunarDay] = useState("");
+  const [lunarLeap, setLunarLeap] = useState(false);
   const [birthHour, setBirthHour] = useState("");
   const [birthMinute, setBirthMinute] = useState("");
   const [province, setProvince] = useState("");
@@ -163,7 +184,16 @@ export function BaziClient() {
     const payload: Payload = {
       name,
       gender,
-      birthDate,
+      calendar,
+      ...(calendar === "lunar"
+        ? {
+            birthDate: "",
+            lunarYear: Number(lunarYear),
+            lunarMonth: Number(lunarMonth),
+            lunarDay: Number(lunarDay),
+            lunarLeap,
+          }
+        : { birthDate }),
       birthHour: Number(birthHour),
       birthMinute: birthMinute.trim() === "" ? null : Number(birthMinute),
       placeCode,
@@ -211,18 +241,106 @@ export function BaziClient() {
                 <option value="female">女</option>
               </select>
             </Field>
-            <Field label="公历出生日期">
-              <input
-                required
-                type="date"
-                min="1901-01-01"
-                max={todayText()}
-                value={birthDate}
-                onChange={(e) => setBirthDate(e.target.value)}
-                className="field-input"
-                data-testid="bazi-date"
-              />
-            </Field>
+            <div className="flex flex-col gap-2 text-xs tracking-[0.12em] text-outline">
+              <div className="flex items-center justify-between gap-3">
+                <span>出生日期</span>
+                <span className="flex gap-4 tracking-normal" role="radiogroup" aria-label="历法">
+                  {(["solar", "lunar"] as const).map((c) => (
+                    <label key={c} className="flex cursor-pointer items-center gap-1.5 text-sm text-on-surface-variant">
+                      <input
+                        type="radio"
+                        name="calendar"
+                        value={c}
+                        checked={calendar === c}
+                        onChange={() => setCalendar(c)}
+                        className="accent-gold"
+                        data-testid={`bazi-calendar-${c}`}
+                      />
+                      {c === "solar" ? "公历" : "农历"}
+                    </label>
+                  ))}
+                </span>
+              </div>
+              {calendar === "solar" ? (
+                <input
+                  required
+                  type="date"
+                  min="1901-01-01"
+                  max={todayText()}
+                  value={birthDate}
+                  onChange={(e) => setBirthDate(e.target.value)}
+                  className="field-input"
+                  aria-label="公历出生日期"
+                  data-testid="bazi-date"
+                />
+              ) : (
+                <>
+                  <div className="grid grid-cols-3 gap-2">
+                    <select
+                      required
+                      value={lunarYear}
+                      onChange={(e) => setLunarYear(e.target.value)}
+                      className="field-input"
+                      aria-label="农历年"
+                      data-testid="bazi-lunar-year"
+                    >
+                      <option value="" disabled>
+                        年
+                      </option>
+                      {LUNAR_YEARS.map((y) => (
+                        <option key={y} value={y}>
+                          {y} 年
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      required
+                      value={lunarMonth}
+                      onChange={(e) => setLunarMonth(e.target.value)}
+                      className="field-input"
+                      aria-label="农历月"
+                      data-testid="bazi-lunar-month"
+                    >
+                      <option value="" disabled>
+                        月
+                      </option>
+                      {LUNAR_MONTHS.map((m, i) => (
+                        <option key={m} value={i + 1}>
+                          {m}月
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      required
+                      value={lunarDay}
+                      onChange={(e) => setLunarDay(e.target.value)}
+                      className="field-input"
+                      aria-label="农历日"
+                      data-testid="bazi-lunar-day"
+                    >
+                      <option value="" disabled>
+                        日
+                      </option>
+                      {LUNAR_DAYS.map((d, i) => (
+                        <option key={d} value={i + 1}>
+                          {d}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <label className="flex cursor-pointer items-center gap-2 text-sm tracking-normal text-on-surface-variant">
+                    <input
+                      type="checkbox"
+                      checked={lunarLeap}
+                      onChange={(e) => setLunarLeap(e.target.checked)}
+                      className="accent-gold"
+                      data-testid="bazi-lunar-leap"
+                    />
+                    生在闰月（比如闰五月）才勾
+                  </label>
+                </>
+              )}
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <Field label="几点">
                 <select

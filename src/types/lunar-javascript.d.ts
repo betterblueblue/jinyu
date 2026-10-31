@@ -20,6 +20,8 @@ declare module "lunar-javascript" {
   }
 
   export class Lunar {
+    /** 农历年月日；闰月的月份传负数（闰五月 = -5）。日期不存在时抛错 */
+    static fromYmd(year: number, month: number, day: number): Lunar;
     getEightChar(): EightChar;
     getSolar(): Solar;
     /** 如「一九九〇」 */
@@ -38,6 +40,19 @@ declare module "lunar-javascript" {
   export class JieQi {
     getName(): string;
     getSolar(): Solar;
+  }
+
+  export class LunarYear {
+    static fromYear(year: number): LunarYear;
+    /** 这一年闰几月，没有闰月是 0 */
+    getLeapMonth(): number;
+  }
+
+  export class LunarMonth {
+    /** 闰月的月份传负数；这个月不存在时返回 null */
+    static fromYm(year: number, month: number): LunarMonth | null;
+    /** 这个月有几天（29 或 30） */
+    getDayCount(): number;
   }
 
   export class EightChar {

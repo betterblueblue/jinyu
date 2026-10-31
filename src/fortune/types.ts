@@ -13,12 +13,14 @@ export type PillarKey = "year" | "month" | "day" | "time";
 export interface FortuneInput {
   name: string;
   gender: Gender;
-  /** 公历，按出生证上的钟表时间（北京时间）填 */
+  /** 公历，按出生证上的钟表时间（北京时间）填；填的是农历时，这里是换算出来的公历 */
   date: { year: number; month: number; day: number };
   hour: number;
   /** null = 只知道几点，不知道几分 */
   minute: number | null;
   placeCode: string;
+  /** 用户填的是农历时记下原样，排盘说明里写一句换算；text 如「1990 年闰五月十五」 */
+  lunar?: { year: number; month: number; day: number; leap: boolean; text: string };
 }
 
 export interface Place {
