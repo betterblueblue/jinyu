@@ -39,10 +39,15 @@ export async function streamChat(
     onThinking?: (chunk: string) => void;
     timeoutMs?: number;
     idleTimeoutMs?: number;
+    /** 调用方主动取消（精简版补发时，输掉的那一路要停掉，别白占网关） */
+    signal?: AbortSignal;
   },
 ): Promise<ChatStreamResult> {
   const url = `${client.baseUrl.replace(/\/$/, "")}/chat/completions`;
   const controller = new AbortController();
+  const onCallerAbort = () => controller.abort();
+  if (args.signal?.aborted) controller.abort();
+  else args.signal?.addEventListener("abort", onCallerAbort, { once: true });
   const totalTimer = setTimeout(() => controller.abort(), args.timeoutMs ?? DEFAULT_TIMEOUT_MS);
   let idleTimer: ReturnType<typeof setTimeout> | null = null;
   const pokeIdle = () => {
@@ -127,11 +132,13 @@ export async function streamChat(
 
     return { content: content.trim(), finishReason, reasoningChars, firstTokenMs };
   } catch (err) {
+    if (args.signal?.aborted) throw new Error("LLM 请求已取消");
     if (controller.signal.aborted) throw new Error("LLM 生成超时，请重试");
     throw err;
   } finally {
     clearTimeout(totalTimer);
     if (idleTimer) clearTimeout(idleTimer);
+    args.signal?.removeEventListener("abort", onCallerAbort);
   }
 }
 

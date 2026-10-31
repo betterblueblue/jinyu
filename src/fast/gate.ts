@@ -2,6 +2,7 @@ import { pinyin } from "pinyin-pro";
 import l1Templates from "@/config/l1-templates.json";
 import l2Chars from "@/config/l2-chars.json";
 import forbiddenChars from "@/config/forbidden-chars.json";
+import badHomophones from "@/config/bad-homophones.json";
 
 /**
  * 精简版闸门：只查机器能确定的事，不调模型、不看语感。
@@ -43,6 +44,9 @@ const BAD_PREFIX = new Set([
   "bendan", // 笨蛋
   "hunzhang", // 混账
   "weishengjin", // 魏生津 → 卫生巾（三音节，走全名比对）
+  // 打分榜的坏词表（流产、肚子疼、无耻、马子、孙子……）一并拦：
+  // 打分榜「重新起名」走的就是这里，起出来的名字被观众拿回去打分，不能又是同一个谐音
+  ...(badHomophones as { py: string }[]).map((b) => b.py),
 ]);
 
 export interface FastGateVerdict {
@@ -77,6 +81,22 @@ function flatSyllables(text: string, surnameMode = false): string[] {
 
 function flatPinyin(text: string): string {
   return flatSyllables(text).join("");
+}
+
+/**
+ * 这个字放在名字第一个字时会不会和姓撞：连姓谐音坏词、和姓同音、连读成常用词。
+ *
+ * 抽起手字时用（seeds.ts）：模型可能把起手字放在名字第一个字，撞了姓这一轮就白给一个候选。
+ * 判法和 checkFastCandidate 里对「名首字」的三条一致。
+ */
+export function firstCharConflict(ch: string, surname: string): boolean {
+  const s = surname.trim();
+  if (!s || !ch) return false;
+  if (BAD_PREFIX.has(flatPinyin(`${s}${ch}`))) return true;
+  const tail = flatSyllables(s, true).at(-1);
+  const first = flatSyllables(ch).at(0);
+  if (tail && first && tail === first) return true;
+  return SURNAME_CHAR_TRAP[s]?.has(ch) ?? false;
 }
 
 export function checkFastCandidate(givenName: string, surname: string): FastGateVerdict {

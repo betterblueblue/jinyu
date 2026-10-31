@@ -818,7 +818,8 @@
   line-height: 1.5;
   padding: var(--tag-pad);
   background: var(--tag-bg);
-  border-radius: 999px;
+  /* 宣纸、竹兰是细竖线分隔，不能带圆角：999px 会把左边框画成一道弧 */
+  border-radius: 0;
   border-left: 1px solid var(--hair-2);
 }
 .live-stage .tags li:first-child {
@@ -833,6 +834,7 @@
 }
 [data-skin="celadon"] .live-stage .tags li {
   border: 0;
+  border-radius: 999px;
   padding: var(--tag-pad);
 }
 [data-skin="silver"] .live-stage .tags li {
@@ -1431,6 +1433,17 @@
   color: var(--ink-3);
   opacity: 0.85;
 }
+/* 揭晓页最后一行，和存图底部同一句 */
+.live-stage .credit {
+  margin: 22px 0 0;
+  text-align: center;
+  font-family: "Noto Sans SC", "PingFang SC", system-ui, sans-serif;
+  font-size: 18px;
+  font-weight: 300;
+  letter-spacing: 0.16em;
+  color: var(--ink-3);
+  opacity: 0.85;
+}
 /* 逐字音节 + 声调 */
 .live-stage .pinyin .syl {
   display: inline-block;
@@ -1446,7 +1459,8 @@
 .live-stage .pinyin .syl:last-child {
   margin-right: 0;
 }
-.live-stage .pinyin .tone {
+.live-stage .pinyin .tone,
+.live-stage .alt-py .tone {
   font-style: normal;
   font-size: 0.62em;
   vertical-align: super;

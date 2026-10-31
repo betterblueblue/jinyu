@@ -30,15 +30,29 @@ async function main() {
   const surname = process.env.SURNAME ?? "沈";
   const gender = (process.env.GENDER ?? "female") as "male" | "female";
   // 模拟「这一场已经给过」：逗号分隔，如 RECENT=令仪,知微
-  const recent = (process.env.RECENT ?? "")
+  let recent = (process.env.RECENT ?? "")
     .split(/[,\s]+/)
     .map((s) => s.trim())
     .filter(Boolean);
+  // SESSION=1：像直播页一样，每轮把给出的名字记进 recent，模拟同一场连续出名
+  const session = process.env.SESSION === "1";
+  // BIRTHDAY=2026-03-15：带生日跑（排盘 + 四柱进提示词）
+  const birthday = process.env.BIRTHDAY?.trim();
+  const shownAll: string[] = [];
+  const msAll: number[] = [];
+  let hedgedRounds = 0;
+  let hedgeWonRounds = 0;
+  let okRounds = 0;
+  let primaryWithZi = 0;
+  let shownWithZi = 0;
 
   for (let i = 1; i <= rounds; i++) {
     const t = Date.now();
-    const r = await runFast({ surname, gender, ...(recent.length ? { recent } : {}) });
+    const r = await runFast({ surname, gender, ...(birthday ? { birthday } : {}), ...(recent.length ? { recent } : {}) });
     const ms = Date.now() - t;
+    msAll.push(ms);
+    if (r.debug?.hedged) hedgedRounds++;
+    if (r.debug?.hedgeWon) hedgeWonRounds++;
     if (!r.ok) {
       console.log(`#${i} FAIL(${r.code}) ${ms}ms ${r.message}`);
       if (r.debug) {
@@ -52,14 +66,24 @@ async function main() {
     }
     const all = [r.primary, ...r.alternatives];
     const withCite = all.filter((c) => c.citation).length;
-    console.log(`#${i} ${ms}ms cite ${withCite}/${all.length}`);
+    console.log(`#${i} ${ms}ms cite ${withCite}/${all.length}${r.baziLine ? ` 生辰:${r.baziLine}` : ""}`);
+    okRounds++;
+    if (r.primary.charSource) primaryWithZi++;
     for (const c of all) {
       const cite = c.citation ? `${c.citation.source}·${c.citation.piece}｜${c.citation.quote}` : "—";
+      const zi = c.charSource ? `「${c.charSource.char}」字见${c.charSource.from}｜${c.charSource.line}` : "—";
+      if (c.charSource) shownWithZi++;
       console.log(`   ${c.fullName} (${c.pinyin}) ${c.hotChar ? "[hot]" : ""}`);
       console.log(`     why: ${c.why}`);
       console.log(`     cite: ${cite}`);
+      console.log(`     字出: ${zi}`);
     }
     if (r.notes.length) console.log(`   notes: ${r.notes.join(" / ")}`);
+    if (session) {
+      const justGiven = all.map((c) => c.givenName);
+      shownAll.push(...justGiven);
+      recent = [...recent.filter((n) => !justGiven.includes(n)), ...justGiven];
+    }
     // gate 拦了什么、模型给了几条原句、推理吃了多少字：没有这几行，
     // 就看不出代码是在帮忙还是在误杀，也分不清慢是推理还是网关排队
     if (r.debug) {
@@ -69,9 +93,32 @@ async function main() {
         : "—";
       console.log(
         `   gate: 给 ${d.drafted} 过 ${d.kept} 带句 ${d.withLine}｜拦: ${reason}` +
-          `\n   cost: 首字 ${d.firstTokenMs}ms 推理 ${d.reasoningChars} 字${d.retried ? " 重跑过一次" : ""}`,
+          `\n   cost: 首字 ${d.firstTokenMs}ms 推理 ${d.reasoningChars} 字${d.retried ? " 重跑过一次" : ""}` +
+          `${d.hedged ? (d.hedgeWon ? " 补发那一路先回" : " 补发过、原来那路先回") : ""}` +
+          `\n   seed: ${d.seeds.join("")}${d.avoid.length ? `｜提醒别再出: ${d.avoid.join(" ")}` : ""}` +
+          `${d.tired.length ? `｜配字别用: ${d.tired.join("")}` : ""}`,
       );
     }
+  }
+
+  if (session && shownAll.length) {
+    const distinct = new Set(shownAll).size;
+    const sorted = [...msAll].sort((a, b) => a - b);
+    // 名字不重样以后，还要看用字扎不扎堆（「又是 X 宁」）
+    const charCount = new Map<string, number>();
+    for (const n of shownAll) for (const ch of n) charCount.set(ch, (charCount.get(ch) ?? 0) + 1);
+    const topChars = [...charCount.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
+    const { default: seedChars } = await import("../src/config/seed-chars.json");
+    const table = new Set([...seedChars.female, ...seedChars.male]);
+    const offTable = shownAll.filter((n) => [...n].some((ch) => !table.has(ch)));
+    console.log(
+      `\n同一场 ${rounds} 轮：给出 ${shownAll.length} 个名字，不同的 ${distinct} 个，重复 ${shownAll.length - distinct} 个；` +
+        `耗时中位 ${sorted[Math.floor((sorted.length - 1) / 2)]}ms，最慢 ${sorted.at(-1)}ms，超 5 秒 ${msAll.filter((m) => m > 5000).length} 轮` +
+        `\n用得最多的字：${topChars.map(([ch, n]) => `${ch}×${n}`).join(" ")}` +
+        `\n用了字表外的字：${offTable.length} 个${offTable.length ? `（${offTable.join(" ")}）` : ""}` +
+        `\n补发 ${hedgedRounds} 轮，其中补发那一路先回 ${hedgeWonRounds} 轮` +
+        `\n字出：首推 ${primaryWithZi}/${okRounds} 轮有，全部名字 ${shownWithZi}/${shownAll.length} 个有`,
+    );
   }
 }
 

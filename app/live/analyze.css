@@ -30,7 +30,7 @@
   color: var(--accent);
 }
 
-/* 名字分析面板：盖在直播台上的一层纸，四套皮肤共用同一套变量 */
+/* 名字打分面板：盖在直播台上的一层纸，四套皮肤共用同一套变量 */
 
 .live-stage .ap {
   position: absolute;
@@ -67,6 +67,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 20px;
   padding-bottom: 28px;
   border-bottom: 1px solid var(--hair);
   flex: none;
@@ -75,8 +76,10 @@
   display: flex;
   align-items: center;
   gap: 22px;
+  min-width: 0;
 }
 .live-stage .ap-seal {
+  flex: none;
   width: 64px;
   height: 64px;
   display: grid;
@@ -88,118 +91,158 @@
   line-height: 1;
 }
 .live-stage .ap-name {
+  flex: none;
   font-size: 42px;
   font-weight: 600;
   letter-spacing: 0.18em;
 }
 .live-stage .ap-sub {
   font-family: "Noto Sans SC", system-ui, sans-serif;
-  font-size: 21px;
+  font-size: 19px;
   font-weight: 300;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.08em;
+  line-height: 1.5;
   color: var(--ink-3);
   padding-left: 22px;
   border-left: 1px solid var(--hair-2);
 }
+.live-stage .ap-top-actions {
+  flex: none;
+  display: flex;
+  gap: 14px;
+}
 .live-stage .ap-close {
-  padding: 14px 26px;
+  padding: 14px 24px;
   background: transparent;
   border: 1px solid var(--hair);
   border-radius: var(--btn-radius);
   font-family: inherit;
-  font-size: 24px;
-  letter-spacing: 0.18em;
+  font-size: 23px;
+  letter-spacing: 0.14em;
   color: var(--ink-2);
   cursor: pointer;
+  white-space: nowrap;
 }
 .live-stage .ap-close:hover {
   border-color: var(--accent);
   color: var(--accent);
 }
 
-.live-stage .ap-body {
-  position: relative;
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
+/* ---------- 录入：一行一位观众 ---------- */
+.live-stage .ap-entry {
+  flex: none;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 18px;
+  padding: 30px 0 12px;
 }
-
-/* ---------- 输入 ---------- */
-.live-stage .ap-input {
-  justify-content: flex-start;
-  gap: 26px;
-  padding: 56px 12px 0;
-}
-.live-stage .ap-label {
-  font-family: "Noto Sans SC", system-ui, sans-serif;
-  font-size: 23px;
-  font-weight: 300;
-  letter-spacing: 0.22em;
-  color: var(--ink-3);
-}
-.live-stage .ap-label em {
-  font-style: normal;
-  letter-spacing: 0.06em;
-  opacity: 0.6;
-  margin-left: 12px;
-}
-.live-stage .ap-name-input {
-  width: 100%;
-  padding: 6px 0 20px;
+.live-stage .ap-entry-name {
+  min-width: 0;
+  padding: 4px 0 12px;
   background: transparent;
   border: 0;
   border-bottom: 1px solid var(--input-line);
   border-radius: 0;
-  text-align: center;
   font-family: inherit;
-  font-size: 116px;
+  font-size: 64px;
   font-weight: 600;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.12em;
   color: var(--ink-name);
   outline: none;
 }
-.live-stage .ap-name-input::placeholder {
-  font-size: 62px;
+.live-stage .ap-entry-name::placeholder {
+  font-size: 38px;
   font-weight: 400;
-  letter-spacing: 0.3em;
+  letter-spacing: 0.2em;
   color: var(--ink-3);
-  opacity: 0.38;
+  opacity: 0.45;
 }
-.live-stage .ap-name-input:focus {
+.live-stage .ap-entry-name:focus {
   border-bottom-color: var(--accent);
+  /* 全局的方框焦点环在直播画面上像个对话框，这里只留下划线变色 */
+  box-shadow: none;
+}
+.live-stage .ap-entry-genders {
+  display: flex;
+  gap: 10px;
+}
+.live-stage .ap-entry-genders button {
+  padding: 16px 18px;
+  background: rgba(255, 255, 255, 0.32);
+  border: 1px solid var(--hair);
+  border-radius: var(--btn-radius);
+  font-family: inherit;
+  font-size: 28px;
+  letter-spacing: 0.12em;
+  color: var(--ink-2);
+  cursor: pointer;
+  transition: all 0.16s ease-out;
+}
+.live-stage .ap-entry-genders button em {
+  font-style: normal;
+  font-size: 17px;
+  margin-left: 6px;
+  opacity: 0.55;
+}
+.live-stage .ap-entry-genders button.on {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.live-stage .ap-entry-go {
+  padding: 18px 34px;
+  background: var(--btn-bg);
+  color: var(--btn-color);
+  border: 0;
+  border-radius: var(--btn-radius);
+  font-family: inherit;
+  font-size: 32px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  cursor: pointer;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.18),
+    0 3px 0 rgba(29, 26, 22, 0.2);
+}
+.live-stage .ap-entry-go:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
 }
 
 .live-stage .ap-split {
+  flex: none;
   display: flex;
-  flex-direction: column;
-  gap: 12px;
+  flex-wrap: wrap;
   align-items: center;
+  gap: 8px 18px;
+  min-height: 40px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--hair);
   font-family: "Noto Sans SC", system-ui, sans-serif;
-  font-size: 24px;
+  font-size: 21px;
   font-weight: 300;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   color: var(--ink-3);
 }
 .live-stage .ap-split b {
   font-family: inherit;
   font-weight: 500;
   color: var(--accent);
-  padding: 0 6px;
+  padding: 0 4px;
 }
 .live-stage .ap-split-alt {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 14px;
-  font-size: 21px;
+  gap: 12px;
 }
 .live-stage .ap-split-alt button {
-  padding: 8px 18px;
+  padding: 6px 16px;
   background: transparent;
   border: 1px dashed var(--hair);
   border-radius: var(--btn-radius);
   font-family: inherit;
-  font-size: 21px;
+  font-size: 20px;
   color: var(--ink-2);
   cursor: pointer;
 }
@@ -208,52 +251,319 @@
   color: var(--accent);
 }
 
-.live-stage .ap-genders {
-  display: flex;
-  gap: 20px;
+/* ---------- 打分榜 ---------- */
+.live-stage .ap-board {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  margin: 0;
+  padding: 8px 0;
+  list-style: none;
+  scrollbar-width: none;
 }
-.live-stage .ap-genders button {
-  flex: 1;
-  padding: 24px 0;
-  background: rgba(255, 255, 255, 0.32);
-  border: 1px solid var(--hair);
-  border-radius: var(--btn-radius);
-  font-family: inherit;
+.live-stage .ap-board::-webkit-scrollbar {
+  display: none;
+}
+.live-stage .ap-board-empty {
+  padding: 80px 0;
+  text-align: center;
   font-size: 34px;
   letter-spacing: 0.22em;
-  color: var(--ink-2);
-  cursor: pointer;
-  transition: all 0.16s ease-out;
+  color: var(--ink-3);
 }
-.live-stage .ap-genders button.on {
+.live-stage .ap-row {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) 104px minmax(0, 1.3fr);
+  align-items: baseline;
+  gap: 18px;
+  padding: 16px 14px;
+  border-bottom: 1px dashed var(--hair-2);
+  cursor: pointer;
+  animation: ap-row-in 0.24s ease-out;
+}
+@keyframes ap-row-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.live-stage .ap-row.on {
   background: var(--accent-soft);
-  border-color: var(--accent);
+  box-shadow: inset 4px 0 0 var(--accent);
+}
+.live-stage .ap-row-no {
+  font-family: "Noto Sans SC", system-ui, sans-serif;
+  font-size: 20px;
+  letter-spacing: 0.1em;
+  color: var(--ink-3);
+}
+.live-stage .ap-row-name {
+  font-size: 50px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.live-stage .ap-row-name b {
+  font-weight: 600;
+  color: var(--accent);
+}
+.live-stage .ap-row-score {
+  font-size: 50px;
+  font-weight: 600;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.live-stage .ap-row-verdict {
+  font-size: 36px;
+  letter-spacing: 0.06em;
+  color: var(--ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.live-stage .ap-row.b-change .ap-row-score,
+.live-stage .ap-row.b-change .ap-row-verdict {
   color: var(--accent);
 }
 
-.live-stage .ap-date {
-  width: 100%;
-  padding: 22px 26px;
-  background: rgba(255, 255, 255, 0.32);
-  border: 1px solid var(--hair);
+/* ---------- 选中那一行的详情 ---------- */
+.live-stage .ap-detail {
+  flex: 1.3 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 26px 6px 10px;
+  border-top: 1px solid var(--hair);
+  scrollbar-width: none;
+}
+.live-stage .ap-detail::-webkit-scrollbar {
+  display: none;
+}
+.live-stage .ap-detail-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 8px 24px;
+}
+.live-stage .ap-detail-name {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 56px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--ink-name);
+}
+.live-stage .ap-detail-py {
+  display: flex;
+  gap: 14px;
+  font-family: "Noto Sans SC", system-ui, sans-serif;
+  font-size: 22px;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+}
+.live-stage .ap-detail-py sup {
+  font-size: 13px;
+  margin-left: 2px;
+}
+.live-stage .ap-detail-score {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  color: var(--ink);
+}
+.live-stage .ap-detail-score b {
+  font-size: 96px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.live-stage .ap-detail-score span {
+  font-size: 30px;
+  letter-spacing: 0.1em;
+  color: var(--ink-2);
+}
+.live-stage .ap-detail-score.b-change b,
+.live-stage .ap-detail-score.b-change span {
+  color: var(--accent);
+}
+.live-stage .ap-detail-math {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-family: "Noto Sans SC", system-ui, sans-serif;
+  font-size: 21px;
+  font-weight: 300;
+  letter-spacing: 0.1em;
+  color: var(--ink-3);
+}
+
+.live-stage .ap-deds {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.live-stage .ap-deds li {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 14px;
+  padding: 16px 20px;
+  background: rgba(255, 255, 255, 0.22);
+  border-left: 3px solid var(--accent);
+}
+.live-stage .ap-deds b {
+  font-family: "Noto Sans SC", system-ui, sans-serif;
+  font-size: 28px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+.live-stage .ap-deds span {
+  font-size: 29px;
+  line-height: 1.6;
+  color: var(--ink);
+}
+
+.live-stage .ap-folk {
+  font-size: 26px;
+  color: var(--ink-2);
+}
+.live-stage .ap-folk summary {
+  cursor: pointer;
+  font-family: "Noto Sans SC", system-ui, sans-serif;
+  font-size: 22px;
+  letter-spacing: 0.2em;
+  color: var(--ink-3);
+}
+.live-stage .ap-folk p {
+  margin: 12px 0 0;
+  padding-left: 20px;
+  border-left: 1px solid var(--hair);
+  line-height: 1.65;
+}
+
+.live-stage .ap-actions {
+  display: flex;
+  gap: 16px;
+}
+.live-stage .ap-act {
+  flex: 1;
+  padding: 24px 0;
+  background: var(--btn-bg);
+  color: var(--btn-color);
+  border: 0;
   border-radius: var(--btn-radius);
   font-family: inherit;
-  font-size: 30px;
-  letter-spacing: 0.12em;
-  color: var(--ink);
-  outline: none;
-  color-scheme: light;
+  font-size: 32px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  cursor: pointer;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.18),
+    0 3px 0 rgba(29, 26, 22, 0.2);
 }
-.live-stage .ap-date::-webkit-datetime-edit {
+.live-stage .ap-act.ghost {
+  background: transparent;
+  color: var(--ink-2);
+  border: 1px solid var(--hair);
+  font-weight: 400;
+  box-shadow: none;
+}
+.live-stage .ap-act:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.live-stage .ap-wait {
+  margin: 0;
+  font-family: "Noto Sans SC", system-ui, sans-serif;
+  font-size: 24px;
+  font-weight: 300;
+  letter-spacing: 0.1em;
   color: var(--ink-3);
-  font-family: inherit;
 }
-.live-stage .ap-date::-webkit-calendar-picker-indicator {
-  opacity: 0.45;
+
+/* 打分之后的下一步：先问能不能只改字、建议重新起名 */
+.live-stage .ap-next {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.live-stage .ap-next-why {
+  margin: 0;
+  font-size: 27px;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+.live-stage .ap-next-ask {
+  margin: 0;
+  font-size: 30px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.live-stage .ap-fixes {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.live-stage .ap-fixes button {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto 80px auto minmax(0, 1fr);
+  align-items: baseline;
+  gap: 18px;
+  padding: 18px 22px;
+  background: rgba(255, 255, 255, 0.28);
+  border: 1px solid var(--hair);
+  border-radius: var(--btn-radius);
+  text-align: left;
+  font-family: inherit;
+  color: var(--ink);
   cursor: pointer;
 }
-.live-stage .ap-date:focus {
+.live-stage .ap-fixes button.on {
   border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.live-stage .ap-fix-name {
+  font-size: 44px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+.live-stage .ap-fix-score {
+  font-size: 40px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+.live-stage .ap-fix-change {
+  font-family: "Noto Sans SC", system-ui, sans-serif;
+  font-size: 22px;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.live-stage .ap-fix-why {
+  font-size: 26px;
+  line-height: 1.5;
+  color: var(--ink-2);
 }
 
 .live-stage .ap-error {
@@ -265,60 +575,16 @@
   color: var(--accent);
 }
 
-/* ---------- 主按钮 ---------- */
-.live-stage .ap-go {
+/* ---------- 详细解读：等待 ---------- */
+.live-stage .ap-deep-wait {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  width: 100%;
-  padding: 38px 0 34px;
-  background: var(--btn-bg);
-  color: var(--btn-color);
-  border: 0;
-  border-radius: var(--btn-radius);
-  font-family: inherit;
-  cursor: pointer;
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.18),
-    0 3px 0 rgba(29, 26, 22, 0.2);
-  transition: transform 0.12s ease-out, opacity 0.2s ease-out;
-}
-.live-stage .ap-go-main {
-  font-size: 44px;
-  font-weight: 600;
-  letter-spacing: 0.26em;
-  padding-left: 0.26em;
-  line-height: 1;
-}
-.live-stage .ap-go-hint {
-  font-family: "Noto Sans SC", system-ui, sans-serif;
-  font-size: 21px;
-  font-weight: 300;
-  letter-spacing: 0.14em;
-  opacity: 0.62;
-}
-.live-stage .ap-go:active {
-  transform: translateY(3px);
-}
-.live-stage .ap-go.is-empty {
-  opacity: 0.3;
-  cursor: not-allowed;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
-}
-
-/* ---------- 分析中 ---------- */
-.live-stage .ap-analyzing {
-  justify-content: center;
-  gap: 30px;
-  padding: 0 20px;
+  gap: 18px;
 }
 .live-stage .ap-stage {
   margin: 0;
-  text-align: center;
-  font-size: 40px;
-  letter-spacing: 0.24em;
+  font-size: 30px;
+  letter-spacing: 0.2em;
   color: var(--ink-2);
 }
 .live-stage .ap-bar {
@@ -333,13 +599,11 @@
   transition: width 0.4s ease-out;
 }
 .live-stage .ap-think {
-  max-height: 420px;
-  overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
   font-family: "Noto Sans SC", system-ui, sans-serif;
-  font-size: 26px;
+  font-size: 24px;
   font-weight: 300;
   line-height: 1.7;
   color: var(--ink-3);
@@ -349,19 +613,17 @@
   opacity: 0.86;
 }
 
-/* ---------- 结论 ---------- */
-.live-stage .ap-result {
-  overflow-y: auto;
-  padding: 36px 12px 44px;
-  gap: 34px;
-  scrollbar-width: none;
-}
-.live-stage .ap-result::-webkit-scrollbar {
-  display: none;
+/* ---------- 详细解读：结论 ---------- */
+.live-stage .ap-deep {
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+  padding-top: 26px;
+  border-top: 1px dashed var(--hair);
 }
 .live-stage .ap-headline {
   margin: 0;
-  font-size: 46px;
+  font-size: 40px;
   font-weight: 600;
   line-height: 1.5;
   letter-spacing: 0.02em;
@@ -396,7 +658,7 @@
 .live-stage .ap-good li {
   position: relative;
   padding-left: 30px;
-  font-size: 31px;
+  font-size: 30px;
   line-height: 1.7;
   color: var(--ink-2);
 }
@@ -422,14 +684,14 @@
 }
 .live-stage .ap-issue-text {
   margin: 0;
-  font-size: 31px;
+  font-size: 30px;
   line-height: 1.72;
   color: var(--ink);
 }
 .live-stage .ap-issue-hint {
   margin: 14px 0 0;
   font-family: "Noto Sans SC", system-ui, sans-serif;
-  font-size: 25px;
+  font-size: 24px;
   font-weight: 300;
   line-height: 1.65;
   color: var(--ink-3);
@@ -437,7 +699,7 @@
 
 .live-stage .ap-fit {
   margin: 0;
-  font-size: 31px;
+  font-size: 30px;
   line-height: 1.75;
   color: var(--ink-2);
 }
@@ -478,30 +740,46 @@
   margin: 0;
   padding-top: 22px;
   border-top: 1px dashed var(--hair);
-  font-size: 32px;
+  font-size: 30px;
   line-height: 1.7;
   color: var(--ink-2);
 }
 
-/* ---------- 结论页底部 ---------- */
-.live-stage .ap-foot {
-  flex: none;
+/* 「整个换新名」：走完整版取名 */
+.live-stage .ap-go {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding-top: 26px;
-  border-top: 1px solid var(--hair);
-}
-.live-stage .ap-again {
-  padding: 18px 0;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 30px 0 28px;
   background: transparent;
-  border: 0;
+  color: var(--ink-2);
+  border: 1px solid var(--hair);
+  border-radius: var(--btn-radius);
   font-family: inherit;
-  font-size: 24px;
-  letter-spacing: 0.18em;
-  color: var(--ink-3);
   cursor: pointer;
+  transition: transform 0.12s ease-out;
 }
-.live-stage .ap-again:hover {
+.live-stage .ap-go-main {
+  font-size: 34px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  padding-left: 0.22em;
+  line-height: 1;
+}
+.live-stage .ap-go-hint {
+  font-family: "Noto Sans SC", system-ui, sans-serif;
+  font-size: 21px;
+  font-weight: 300;
+  letter-spacing: 0.12em;
+  opacity: 0.7;
+}
+.live-stage .ap-go:active {
+  transform: translateY(3px);
+}
+.live-stage .ap-go:hover {
+  border-color: var(--accent);
   color: var(--accent);
 }

@@ -2,12 +2,14 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { NameDetail, ReportDocument } from "@/domain/types";
-import type {
-  FastCandidate,
-  FastCitation,
-  FastFailure,
-  FastFormInput,
-  FastSuccess,
+import {
+  FAST_RECENT_MAX,
+  type FastCandidate,
+  type FastCharSource,
+  type FastCitation,
+  type FastFailure,
+  type FastFormInput,
+  type FastSuccess,
 } from "@/fast/types";
 import { fullNamePinyin, nameSyllables, type NameSyllable } from "@/domain/pinyin-name";
 import { AnalyzePanel } from "./analyze-panel";
@@ -51,6 +53,8 @@ interface ShowData {
   tags: string[];
   /** 首推的引文证据；没有就是没核到，不用凑 */
   cite?: ShowCite;
+  /** 首推的字出：和引文证据放同一个位置，有引文时不出 */
+  charSource?: FastCharSource;
   /** 解释行：读音、生辰这类。屏幕上和存图里同一份 */
   cardRows: [string, string][];
   alts: ShowAlt[];
@@ -206,6 +210,7 @@ function fastToShow(data: FastSuccess, no: number, sessionGiven: number): ShowDa
     primary.hotChar ? "偏热门" : "避开网红名",
     data.gender === "male" ? "男向" : "女向",
   ];
+  const cite = toCite(primary.givenName, primary.citation);
 
   return {
     no,
@@ -217,7 +222,9 @@ function fastToShow(data: FastSuccess, no: number, sessionGiven: number): ShowDa
     syl: nameSyllables(primary.fullName),
     one: primary.why,
     tags,
-    cite: toCite(primary.givenName, primary.citation),
+    cite,
+    // 模型给了整名出处、核过了，就用引文证据；没有才用字出（只说一个字出自哪）
+    ...(!cite && primary.charSource ? { charSource: primary.charSource } : {}),
     // 出处单独做成证据块（引文 + 篇名 + 核验方式），拼音在大字下面那行，
     // 所以这里没有重复项；开生辰时才有内容
     cardRows: [] as [string, string][],
@@ -387,7 +394,7 @@ function buildGroupedCard(show: ShowData, skin: Skin, bgImage: HTMLImageElement 
   x.textAlign = "center";
   x.fillStyle = C.ink3;
   x.font = `300 20px ${SANS}`;
-  x.fillText("瑾瑜 · 中文取名 · 取名参考 · 男女各三", W / 2, H - 72);
+  x.fillText("名字由瑾瑜起草 · 男女各三", W / 2, H - 72);
   return cv;
 }
 
@@ -413,7 +420,7 @@ export function LiveClient() {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const busy = useRef(false);
   const bgImage = useRef<HTMLImageElement | null>(null);
-  /** 这一场已经给过的名字（最多 20 个，约最近 5 轮），随请求带给精简版去重 */
+  /** 这一场已经给过的名字（整场都记，最多 FAST_RECENT_MAX 个），随请求带给精简版：去重、抽起手字都靠它 */
   const recentRef = useRef<string[]>([]);
 
   /* 竹兰背景图预加载：导出卡片时要同步画进 canvas */
@@ -451,7 +458,7 @@ export function LiveClient() {
 
   /** 从名字分析带过来的约束：姓氏已定、要避开的字、定向要求 */
   const generate = useCallback(
-    async (override?: { surname?: string; gender?: Gender; taboo?: string; requirements?: string }) => {
+    async (override?: { surname?: string; gender?: Gender; birthday?: string; taboo?: string; requirements?: string }) => {
     if (busy.current) return;
     const surname = (override?.surname ?? draft).trim();
     if (!surname) {
@@ -475,10 +482,12 @@ export function LiveClient() {
       if (picked === "unknown") {
         throw new Error("先选性别：按 1 男 / 2 女，再点开始取名");
       }
+      // 打分榜「重新起名」会传空串：那位观众没报生日，不能带上直播台上一位的
+      const bday = override?.birthday ?? birthday;
       const body: FastFormInput = {
         surname,
         gender: picked,
-        ...(birthday ? { birthday } : {}),
+        ...(bday ? { birthday: bday } : {}),
         ...(recentRef.current.length ? { recent: recentRef.current } : {}),
       };
       const res = await fetch("/api/fast?stream=1", {
@@ -549,7 +558,7 @@ export function LiveClient() {
         (n) => /^[\u4e00-\u9fff]{2}$/.test(n),
       );
       const keepOld = recentRef.current.filter((n) => !justGiven.includes(n));
-      recentRef.current = [...keepOld, ...justGiven].slice(-20);
+      recentRef.current = [...keepOld, ...justGiven].slice(-FAST_RECENT_MAX);
       setCardNo((n) => n + 1);
       setProgress(100);
       setReady(false);
@@ -672,6 +681,17 @@ export function LiveClient() {
     },
     [generateFull],
   );
+  /** 打分榜「重新起名」：姓和性别带过去，走直播用的精简版（3–5 秒），不走上面的完整版 */
+  const renameFromScore = useCallback(
+    (input: { surname: string; gender: "male" | "female" }) => {
+      setAnalyzeOpen(false);
+      setDraft(input.surname);
+      setGender(input.gender);
+      setBirthday("");
+      void generate({ surname: input.surname, gender: input.gender, birthday: "" });
+    },
+    [generate],
+  );
 
   const resetToInput = useCallback(() => {
     setShow(null);
@@ -754,8 +774,12 @@ export function LiveClient() {
     probe.font = `400 30px ${SERIF}`;
     const whyLines = wrapText(probe, show.one, W - 360).slice(0, 2);
 
+    // 引文证据和字出占同一块，和屏幕上一样：原文 + 出处，引文再多一个核验戳
+    const cs = show.charSource;
+    const evQuote = show.cite?.quote ?? (cs ? `「${cs.line}」` : "");
+    const evPiece = show.cite?.piece ?? (cs ? `「${cs.char}」字见${cs.from}` : "");
     probe.font = `400 40px ${SERIF}`;
-    const quoteLines = show.cite ? wrapText(probe, show.cite.quote, W - 300).slice(0, 2) : [];
+    const quoteLines = evQuote ? wrapText(probe, evQuote, W - 300).slice(0, 2) : [];
 
     probe.font = `400 26px ${SERIF}`;
     const mainRows = show.cardRows.map((r) => ({ label: r[0], lines: wrapText(probe, r[1], colW) }));
@@ -792,6 +816,7 @@ export function LiveClient() {
     cy = div1 + 54;
     const citeTop = cy;
     if (show.cite) cy = citeTop + quoteLines.length * 56 + 42 + 86;
+    else if (quoteLines.length) cy = citeTop + quoteLines.length * 56 + 42 + 30;
     const ledgerY = cy;
     const rowsTop = cy + 34;
     cy = rowsTop + mainH + 20;
@@ -867,28 +892,30 @@ export function LiveClient() {
     x.lineTo(W - M, div1);
     x.stroke();
 
-    // 引文证据：原文凸排 + 篇名 + 核验戳
-    if (show.cite) {
+    // 引文证据：原文凸排 + 篇名 + 核验戳；字出：原文 + 「某」字见某篇，不加戳
+    if (quoteLines.length) {
       x.fillStyle = C.ink;
       x.font = `400 40px ${SERIF}`;
       quoteLines.forEach((ln, i) => x.fillText(ln, W / 2, citeTop + 40 + i * 56));
       const pieceY = citeTop + 40 + quoteLines.length * 56 + 6;
       x.fillStyle = C.ink3;
       x.font = `300 22px ${SANS}`;
-      x.fillText(show.cite.piece, W / 2, pieceY);
+      x.fillText(evPiece, W / 2, pieceY);
 
-      const sealText = `核验 · 原文逐字核过 · 两字${show.cite.kind}`;
-      x.font = `300 20px ${SANS}`;
-      const tw = x.measureText(sealText).width + 64;
-      const bx = W / 2 - tw / 2;
-      const by = pieceY + 22;
-      x.strokeStyle = C.accent;
-      x.lineWidth = 1.5;
-      x.strokeRect(bx, by, tw, 48);
-      x.fillStyle = C.accent;
-      x.textAlign = "left";
-      x.fillText(sealText, bx + 32, by + 32);
-      x.textAlign = "center";
+      if (show.cite) {
+        const sealText = `核验 · 原文逐字核过 · 两字${show.cite.kind}`;
+        x.font = `300 20px ${SANS}`;
+        const tw = x.measureText(sealText).width + 64;
+        const bx = W / 2 - tw / 2;
+        const by = pieceY + 22;
+        x.strokeStyle = C.accent;
+        x.lineWidth = 1.5;
+        x.strokeRect(bx, by, tw, 48);
+        x.fillStyle = C.accent;
+        x.textAlign = "left";
+        x.fillText(sealText, bx + 32, by + 32);
+        x.textAlign = "center";
+      }
     }
 
     x.fillStyle = C.ink3;
@@ -970,7 +997,7 @@ export function LiveClient() {
     x.textAlign = "center";
     x.fillStyle = C.ink3;
     x.font = `300 20px ${SANS}`;
-    x.fillText("瑾瑜 · 中文取名 · 取名参考", W / 2, H - 86);
+    x.fillText("名字由瑾瑜起草", W / 2, H - 86);
 
     cv.toBlob((b) => {
       if (!b) return;
@@ -1188,6 +1215,15 @@ export function LiveClient() {
                       </blockquote>
                     )}
 
+                    {show.charSource && (
+                      <blockquote className="evidence reveal" style={{ ["--d" as string]: "780ms" }}>
+                        <p className="ev-quote">「{show.charSource.line}」</p>
+                        <p className="ev-piece">
+                          「{show.charSource.char}」字见{show.charSource.from}
+                        </p>
+                      </blockquote>
+                    )}
+
                     <p className="ledger reveal" style={{ ["--d" as string]: "820ms" }}>
                       本场第 {show.no} 个
                       {show.sessionGiven ? ` · 此前已给过 ${show.sessionGiven} 个` : ""}
@@ -1238,6 +1274,12 @@ export function LiveClient() {
                     </section>
                   </>
                 ))}
+              {/* 和存图底部同一句 */}
+              {show && (
+                <p className="credit reveal" style={{ ["--d" as string]: "1100ms" }}>
+                  名字由瑾瑜起草
+                </p>
+              )}
             </section>
 
             <footer className="bottom">
@@ -1271,7 +1313,12 @@ export function LiveClient() {
             换肤 · {SKIN_LABEL[skin]} · S
           </button>
 
-          <AnalyzePanel open={analyzeOpen} onClose={() => setAnalyzeOpen(false)} onRegenerate={regenFromAnalysis} />
+          <AnalyzePanel
+            open={analyzeOpen}
+            onClose={() => setAnalyzeOpen(false)}
+            onRegenerate={regenFromAnalysis}
+            onRename={renameFromScore}
+          />
         </div>
       </div>
     </div>

@@ -30,7 +30,8 @@ export function AppShell({
     const active =
       pathname === href || (href !== "/name" && pathname.startsWith(href));
     return [
-      "relative min-h-10 px-3 text-sm tracking-widest transition",
+      // 窄屏收紧间距，五个入口才能和品牌名放在一行；sm 以上保持原样
+      "relative min-h-10 px-1.5 text-sm tracking-wider transition sm:px-3 sm:tracking-widest",
       active ? "font-semibold text-paper" : "text-outline hover:text-gold",
     ].join(" ");
   }
@@ -38,10 +39,10 @@ export function AppShell({
   return (
     <div className="min-h-screen">
       <header className="sticky top-0 z-30 border-b border-outline-variant/50 bg-bg/85 backdrop-blur-md">
-        <div className="mx-auto flex max-w-3xl items-center justify-between gap-4 px-6 py-4">
+        <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-x-4 gap-y-1 px-6 py-4">
           <Link
             href={authed ? "/name" : "/login"}
-            className="text-[1.05rem] font-semibold tracking-[0.36em] text-paper"
+            className="shrink-0 text-[1.05rem] font-semibold tracking-[0.36em] text-paper"
           >
             瑾瑜
           </Link>
@@ -51,6 +52,12 @@ export function AppShell({
                 <Link href="/name" className={navClass("/name")} aria-current={pathname.startsWith("/name") || pathname.startsWith("/reports") ? "page" : undefined}>
                   取名
                   {(pathname.startsWith("/name") || pathname.startsWith("/reports")) && (
+                    <span className="absolute bottom-1 left-3 right-3 h-px bg-gold" aria-hidden />
+                  )}
+                </Link>
+                <Link href="/bazi" className={navClass("/bazi")} aria-current={pathname.startsWith("/bazi") ? "page" : undefined}>
+                  八字
+                  {pathname.startsWith("/bazi") && (
                     <span className="absolute bottom-1 left-3 right-3 h-px bg-gold" aria-hidden />
                   )}
                 </Link>
@@ -67,7 +74,7 @@ export function AppShell({
                   )}
                 </Link>
                 <form action="/api/auth/logout" method="post">
-                  <button type="submit" className="min-h-10 px-3 text-sm tracking-widest text-outline transition hover:text-gold">
+                  <button type="submit" className="min-h-10 px-1.5 text-sm tracking-wider text-outline transition hover:text-gold sm:px-3 sm:tracking-widest">
                     登出
                   </button>
                 </form>

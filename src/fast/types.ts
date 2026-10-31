@@ -7,12 +7,18 @@
 
 export type FastGender = "male" | "female";
 
+/**
+ * 一场直播记多少个「已经给过」的名字。一场约 130 轮 × 4 个名字（需求稿 §11.2.1），
+ * 留 500 个就是整场都记得：不重复出名、抽起手字都靠它。前端和服务端共用这一个数。
+ */
+export const FAST_RECENT_MAX = 500;
+
 /** 前端提交的原始输入，字段都可能缺 */
 export interface FastFormInput {
   surname?: string;
   gender?: string;
   birthday?: string;
-  /** 这一场已经给过的名字，取名时避开（服务端最多留最近 20 个） */
+  /** 这一场已经给过的名字，旧 → 新（服务端最多留最近 FAST_RECENT_MAX 个） */
   recent?: string[];
 }
 
@@ -32,6 +38,18 @@ export interface FastCitation {
   line: string;
 }
 
+/**
+ * 「字出」：名字里某一个字在经典里的一句原文，如「婉」字见《诗经·郑风·野有蔓草》：有美一人，婉如清扬。
+ * 只说这一个字出自哪里，不说整个名字出自哪里。句子来自事先逐字核过的表 src/config/seed-lines.json，
+ * 运行时只是查表，不花模型时间。
+ */
+export interface FastCharSource {
+  char: string;
+  /** 展示用出处，如「《诗经·郑风·野有蔓草》」「王维《山居秋暝》」 */
+  from: string;
+  line: string;
+}
+
 export interface FastCandidate {
   givenName: string;
   fullName: string;
@@ -42,6 +60,8 @@ export interface FastCandidate {
   why: string;
   /** 没有可核出处时整个字段缺省，页面留白 */
   citation?: FastCitation;
+  /** 字出：名字里有字在原句表里才有；起手字优先 */
+  charSource?: FastCharSource;
   /** 命中当前热门字，排序时压低 */
   hotChar: boolean;
 }
@@ -60,7 +80,17 @@ export interface FastDebug {
   firstTokenMs: number;
   /** 是否因为截断/解析失败重跑过一次 */
   retried: boolean;
+  /** 第一路 5 秒没回，补发过第二路 */
+  hedged: boolean;
+  /** 最后用的是补发的那一路 */
+  hedgeWon: boolean;
   dropped: { name: string; reasons: string[] }[];
+  /** 这一轮给模型的起手字 */
+  seeds: string[];
+  /** 起手字轮回时提醒模型别再出的名字 */
+  avoid: string[];
+  /** 最近配得太多、这一轮提醒别用的字 */
+  tired: string[];
 }
 
 export interface FastSuccess {

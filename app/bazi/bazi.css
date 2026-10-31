@@ -1,0 +1,89 @@
+/* 八字页：五行配色 + 四柱表。颜色压低饱和度，跟全站青玉冷调放在一起不跳。 */
+
+:root {
+  --wx-wood: oklch(0.5 0.09 150);
+  --wx-fire: oklch(0.53 0.14 30);
+  --wx-earth: oklch(0.5 0.07 65);
+  --wx-metal: oklch(0.55 0.09 88);
+  --wx-water: oklch(0.45 0.08 245);
+}
+
+[data-theme="dark"] {
+  --wx-wood: oklch(0.76 0.09 150);
+  --wx-fire: oklch(0.74 0.12 32);
+  --wx-earth: oklch(0.74 0.07 70);
+  --wx-metal: oklch(0.82 0.08 90);
+  --wx-water: oklch(0.74 0.08 240);
+}
+
+.wx-wood { color: var(--wx-wood); }
+.wx-fire { color: var(--wx-fire); }
+.wx-earth { color: var(--wx-earth); }
+.wx-metal { color: var(--wx-metal); }
+.wx-water { color: var(--wx-water); }
+
+.wx-bar-wood { background-color: var(--wx-wood); }
+.wx-bar-fire { background-color: var(--wx-fire); }
+.wx-bar-earth { background-color: var(--wx-earth); }
+.wx-bar-metal { background-color: var(--wx-metal); }
+.wx-bar-water { background-color: var(--wx-water); }
+
+.bazi-table {
+  border-collapse: collapse;
+  width: 100%;
+  table-layout: fixed;
+}
+
+.bazi-table th,
+.bazi-table td {
+  border-bottom: 1px solid var(--border);
+  padding: 0.55rem 0.25rem;
+  vertical-align: middle;
+}
+
+.bazi-table thead th {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+}
+
+.bazi-table tbody th {
+  width: 3.25rem;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  text-align: left;
+}
+
+.bazi-table td {
+  color: var(--body);
+  font-size: 0.82rem;
+  text-align: center;
+}
+
+.bazi-table .glyph {
+  display: block;
+  font-size: clamp(1.75rem, 7vw, 2.4rem);
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.bazi-table .glyph-note {
+  display: block;
+  margin-top: 0.2rem;
+  color: var(--faint);
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+}
+
+.bazi-table .day-col {
+  background: var(--accent-soft);
+}
+
+.bazi-table .hidden-stem {
+  display: block;
+  line-height: 1.6;
+  white-space: nowrap;
+}
