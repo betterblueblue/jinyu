@@ -52,7 +52,7 @@ export const POINTS = {
 /** 一个字身上扣到这么多分，才值得给「改字」 */
 export const FIX_THRESHOLD = 8;
 
-/** 与 analysis/rules.ts 的笔画差门槛一致 */
+/** 全名里最多和最少的两个字笔画差到这么多，算一边轻一边重 */
 const STROKE_GAP = 9;
 
 const TONE_NAME = ["", "一声", "二声", "三声", "四声"];
@@ -162,7 +162,7 @@ export function scoreName(split: NameSplit, gender: AnalysisGender): NameScore {
     });
   }
 
-  /* ---- 性别：只在填了性别时判，口径与 analysis/rules.ts 一致 ---- */
+  /* ---- 性别：只在填了性别时判 ---- */
   if (gender !== "unknown") {
     const lean = leanFacts(givStr);
     const other = gender === "male" ? "female" : "male";

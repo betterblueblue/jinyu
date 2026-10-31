@@ -58,12 +58,9 @@
   --fs-py: 36px;
   --fs-mean: 52px;
   --fs-tag: 30px;
-  --fs-detail: 46px;
   --fs-alt: 56px;
   --fs-btn: 35px;
-  --fs-dlabel: 26px;
   --hero-mt: 64px;
-  --details-mt: 42px;
   --name-ls: 0.04em;
 
   width: 1080px;
@@ -101,12 +98,9 @@
   --fs-py: 36px;
   --fs-mean: 52px;
   --fs-tag: 30px;
-  --fs-detail: 46px;
   --fs-alt: 56px;
   --fs-btn: 34px;
-  --fs-dlabel: 26px;
   --hero-mt: 68px;
-  --details-mt: 40px;
 }
 
 [data-skin="silver"] .live-stage {
@@ -133,12 +127,9 @@
   --fs-py: 36px;
   --fs-mean: 52px;
   --fs-tag: 30px;
-  --fs-detail: 46px;
   --fs-alt: 56px;
   --fs-btn: 30px;
-  --fs-dlabel: 26px;
   --hero-mt: 72px;
-  --details-mt: 36px;
 }
 
 /* ---------- 第四套：竹兰（背景图 + 纸色兜底） ---------- */
@@ -167,12 +158,9 @@
   --fs-py: 36px;
   --fs-mean: 52px;
   --fs-tag: 30px;
-  --fs-detail: 46px;
   --fs-alt: 56px;
   --fs-btn: 35px;
-  --fs-dlabel: 26px;
   --hero-mt: 72px;
-  --details-mt: 44px;
 
   background-color: #e0e7d6;
   background-image: url("/skins/bamboo-paper.webp");
@@ -686,13 +674,6 @@
   color: var(--ink-3);
   min-height: 34px;
 }
-.live-stage .gen-stage {
-  margin: 36px 0 0;
-  text-align: center;
-  font-size: 34px;
-  letter-spacing: 0.18em;
-  color: var(--ink-2);
-}
 .live-stage .bar {
   height: 6px;
   background: var(--accent-soft);
@@ -845,54 +826,6 @@
   border-left: 0;
 }
 
-.live-stage .details {
-  margin-top: var(--details-mt);
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 52px;
-  max-width: 900px;
-  margin-left: auto;
-  margin-right: auto;
-  width: 100%;
-}
-.live-stage .detail {
-  padding-top: 12px;
-  border-top: 1px solid var(--hair);
-  text-align: left;
-}
-/* 八字契合通常一句话较长，独占一行，不要挤在双栏里被截断 */
-.live-stage .detail.wide {
-  grid-column: 1 / -1;
-}
-.live-stage .detail .label {
-  display: block;
-  font-size: var(--fs-dlabel);
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  color: var(--accent);
-  margin-bottom: 6px;
-}
-.live-stage .detail p {
-  margin: 0;
-  font-family: "Noto Sans SC", "PingFang SC", system-ui, sans-serif;
-  font-size: calc(var(--fs-detail) - 4px);
-  font-weight: 400;
-  line-height: 1.5;
-  color: var(--ink-2);
-  letter-spacing: 0.04em;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-/* 详解统一单栏：直播缩到手机后，双栏每行只剩八个字就换行 */
-.live-stage .details {
-  grid-template-columns: 1fr;
-  gap: 28px;
-  max-width: 940px;
-}
-
 /* 四柱：只在开了生辰时出现，一行，压在下半部详解与备选之间 */
 .live-stage .bazi {
   margin: 22px auto 0;
@@ -911,15 +844,6 @@
 /* 多出「八字」一行和生辰行时会顶到备选，整体降一档并收紧间距 */
 .live-stage.has-bazi .sheet {
   padding-bottom: 200px;
-}
-.live-stage.has-bazi .details {
-  margin-top: 26px;
-  gap: 14px;
-}
-.live-stage.has-bazi .detail p {
-  font-size: 32px;
-  line-height: 1.45;
-  -webkit-line-clamp: 2;
 }
 .live-stage.has-bazi .bazi {
   margin-top: 8px;
@@ -1004,101 +928,6 @@
   max-width: 900px;
   margin-left: auto;
   margin-right: auto;
-}
-
-/* 未知性别：不突出单个首推，男女两组各展示三个完整推荐 */
-.live-stage .gender-groups {
-  margin-top: 64px;
-}
-.live-stage .groups-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: center;
-  gap: 30px;
-  text-align: center;
-}
-.live-stage .groups-head p {
-  margin: 0;
-  font-family: "Noto Sans SC", "PingFang SC", system-ui, sans-serif;
-  font-size: 24px;
-  font-weight: 300;
-  letter-spacing: 0.16em;
-  color: var(--ink-3);
-}
-.live-stage .groups-head h2 {
-  margin: 0;
-  font-size: 46px;
-  font-weight: 500;
-  letter-spacing: 0.2em;
-  color: var(--ink-name);
-}
-.live-stage .group-columns {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 48px;
-  margin-top: 58px;
-}
-.live-stage .gender-group {
-  min-width: 0;
-}
-.live-stage .gender-group > h3 {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  margin: 0;
-  padding-bottom: 24px;
-  border-bottom: 1px solid var(--hair);
-  font-size: 34px;
-  font-weight: 500;
-  letter-spacing: 0.16em;
-  color: var(--accent);
-}
-.live-stage .gender-group > h3 span {
-  font-family: "Noto Sans SC", system-ui, sans-serif;
-  font-size: 20px;
-  font-weight: 300;
-  letter-spacing: 0.1em;
-  color: var(--ink-3);
-}
-.live-stage .group-item {
-  position: relative;
-  padding: 30px 0 28px;
-  border-bottom: 1px solid var(--hair-2);
-}
-.live-stage .group-index {
-  display: block;
-  font-family: "Noto Sans SC", system-ui, sans-serif;
-  font-size: 18px;
-  font-weight: 300;
-  letter-spacing: 0.14em;
-  color: var(--ink-3);
-}
-.live-stage .group-name {
-  margin: 12px 0 0;
-  font-size: 60px;
-  font-weight: 500;
-  line-height: 1.15;
-  letter-spacing: 0.1em;
-  color: var(--ink-name);
-}
-.live-stage .group-py {
-  margin: 14px 0 0;
-  font-family: "Noto Sans SC", "PingFang SC", system-ui, sans-serif;
-  font-size: 26px;
-  font-weight: 400;
-  letter-spacing: 0.06em;
-  color: var(--ink-2);
-}
-.live-stage .group-one {
-  margin: 18px 0 0;
-  font-size: 28px;
-  line-height: 1.5;
-  letter-spacing: 0.04em;
-  color: var(--ink-2);
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
 }
 
 /* 底部 */

@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { AnalysisResult } from "@/domain/analysis/types";
 import { splitFullName } from "@/domain/analysis/split-name";
 import type { FixOption, FixOutcome, NameScore, NextStep } from "@/domain/score/types";
 import "./analyze.css";
@@ -10,8 +9,9 @@ import "./analyze.css";
  * 名字分析面板：直播打分榜。
  *
  * 一行一位观众，往下累加——榜单本身就是吸引其他人报名字的东西。
- * 回车只按规则打分，几毫秒出分；观众想改，主播点「改字」才去挑同音字。
- * 「详细解读」（原来那套模型分析）暂时关着，见下面 DEEP_READING。榜单在这一场里一直留着，关掉面板也不清。
+ * 回车只按规则打分，几毫秒出分；观众想改，主播点「改字」才去挑同音字。榜单在这一场里一直留着，关掉面板也不清。
+ * 以前的「详细解读」（模型另写一段分析）和后面的「整个换新名」已删（2026-10-31，用户定）：
+ * 解读和规则打分对不上，当着观众很尴尬。
  */
 
 type Gender = "male" | "female" | "unknown";
@@ -19,13 +19,6 @@ type Gender = "male" | "female" | "unknown";
 interface Props {
   open: boolean;
   onClose: () => void;
-  onRegenerate: (payload: {
-    surname: string;
-    gender: Gender;
-    tabooChars: string[];
-    requirements: string;
-    avoidPopular: boolean;
-  }) => void;
   /** 打分榜「重新起名」：带着姓和性别去走直播用的精简版取名 */
   onRename: (input: { surname: string; gender: "male" | "female" }) => void;
 }
@@ -40,15 +33,6 @@ interface FixState {
   misses: number;
 }
 
-interface DeepState {
-  phase: "idle" | "running" | "done" | "error";
-  result?: AnalysisResult;
-  error?: string;
-  progress: number;
-  thinking: string[];
-  stage: string;
-}
-
 interface Row {
   id: number;
   input: { fullName: string; gender: Gender; splitSurname?: string };
@@ -57,27 +41,13 @@ interface Row {
   next?: NextStep;
   error?: string;
   fix: FixState;
-  deep: DeepState;
 }
-
-/**
- * 「详细解读」先关掉（2026-10-31）：模型的解读和规则打分对不上，当着观众很尴尬。
- * 例子：规则扣了「宸太大」，解读说跟字面大不大没关系；文娟规则 100 分，解读又挑出年代感。
- * 年代感、谐音这些已经补进规则。解读要改成「只解释规则的结论、不另下判断」再打开，
- * 打开前别直接把这里改成 true。
- */
-const DEEP_READING = false;
 
 const IDLE_FIX: FixState = { phase: "idle", options: [], chosen: 0, misses: 0 };
 /** 改字连着两次没结果，就别让主播再点了 */
 const MAX_MISSES = 2;
-const IDLE_DEEP: DeepState = { phase: "idle", progress: 0, thinking: [], stage: "" };
 const GENDERS: Gender[] = ["male", "female", "unknown"];
 const G_LABEL: Record<Gender, string> = { male: "男", female: "女", unknown: "不填" };
-const STAGE_LABEL: Record<string, string> = {
-  reading: "正在读这个名字",
-  verifying: "正在核对出处",
-};
 
 /** 名里被扣分的字，在全名里的位置 */
 function markedPositions(score: NameScore): Set<number> {
@@ -110,13 +80,13 @@ async function postJson<T>(url: string, body: unknown): Promise<T> {
   return (await res.json()) as T;
 }
 
-export function AnalyzePanel({ open, onClose, onRegenerate, onRename }: Props) {
+export function AnalyzePanel({ open, onClose, onRename }: Props) {
   const [name, setName] = useState("");
   const [gender, setGender] = useState<Gender>("unknown");
   const [surnameOverride, setSurnameOverride] = useState<string | null>(null);
   const [rows, setRows] = useState<Row[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  /** 改字和详细解读都走同一个模型网关，一次只跑一个，免得互相拖慢 */
+  /** 改字要调模型，一次只跑一个，主播连点也不会叠着发 */
   const [modelBusy, setModelBusy] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
 
@@ -185,7 +155,7 @@ export function AnalyzePanel({ open, onClose, onRegenerate, onRename }: Props) {
     if (fullName.length < 2 || fullName.length > 4) return;
     const id = nextId.current++;
     const input = { fullName, gender, ...(splitPreview ? { splitSurname: splitPreview.surname } : {}) };
-    setRows((all) => [...all, { id, input, fix: IDLE_FIX, deep: IDLE_DEEP }]);
+    setRows((all) => [...all, { id, input, fix: IDLE_FIX }]);
     setSelectedId(id);
     // 直播是一位接一位：性别清回「不填」，免得上一位的性别带到下一位身上
     setName("");
@@ -227,94 +197,6 @@ export function AnalyzePanel({ open, onClose, onRegenerate, onRename }: Props) {
       } catch (e) {
         const message = e instanceof Error ? e.message : "改字没成功";
         patch(row.id, (r) => ({ ...r, fix: { ...IDLE_FIX, phase: "error", message, misses: r.fix.misses + 1 } }));
-      } finally {
-        releaseModel();
-      }
-    },
-    [patch, takeModel, releaseModel],
-  );
-
-  const runDeep = useCallback(
-    async (row: Row) => {
-      if (!takeModel()) return;
-      patch(row.id, (r) => ({ ...r, deep: { ...IDLE_DEEP, phase: "running", stage: STAGE_LABEL.reading! } }));
-      try {
-        const res = await fetch("/api/analyze", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(row.input),
-        });
-        if (!res.ok || !res.body) {
-          const msg = (await res.json().catch(() => ({ message: "解读失败" }))) as { message?: string };
-          throw new Error(msg.message ?? "解读失败");
-        }
-
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buf = "";
-        let acc = "";
-        let lastPaint = 0;
-        let done: AnalysisResult | null = null;
-        for (;;) {
-          const chunk = await reader.read();
-          if (chunk.done) break;
-          buf += decoder.decode(chunk.value, { stream: true });
-          let idx: number;
-          while ((idx = buf.indexOf("\n\n")) >= 0) {
-            const frame = buf.slice(0, idx);
-            buf = buf.slice(idx + 2);
-            let evt = "message";
-            let data = "";
-            for (const line of frame.split("\n")) {
-              if (line.startsWith("event:")) evt = line.slice(6).trim();
-              else if (line.startsWith("data:")) data += line.slice(5).trim();
-            }
-            if (!data) continue;
-            let payload: Record<string, unknown>;
-            try {
-              payload = JSON.parse(data) as Record<string, unknown>;
-            } catch {
-              continue;
-            }
-            if (evt === "thinking") {
-              acc += String(payload.text ?? "");
-              // 推理是逐字推过来的，整张榜跟着重画太密，隔 200 毫秒刷一次
-              const now = Date.now();
-              if (now - lastPaint < 200) continue;
-              lastPaint = now;
-              const lines = acc
-                .split(/[。！？\n]+/)
-                .map((s) => s.trim())
-                .filter((s) => s.length > 3 && /[\u4e00-\u9fa5]/.test(s))
-                .slice(-3);
-              patch(row.id, (r) => ({
-                ...r,
-                deep: { ...r.deep, thinking: lines, progress: Math.min(88, r.deep.progress + 2) },
-              }));
-            } else if (evt === "stage") {
-              const stage = String(payload.stage);
-              patch(row.id, (r) => ({
-                ...r,
-                deep: {
-                  ...r.deep,
-                  stage: STAGE_LABEL[stage] ?? r.deep.stage,
-                  progress: Math.max(r.deep.progress, stage === "verifying" ? 92 : 40),
-                },
-              }));
-            } else if (evt === "error") {
-              throw new Error(String(payload.message ?? "解读失败"));
-            } else if (evt === "done") {
-              const result = payload.result as AnalysisResult | undefined;
-              if (result) done = result;
-            }
-          }
-        }
-        if (!done) throw new Error("没有拿到解读结果");
-        const result = done;
-        patch(row.id, (r) => ({ ...r, deep: { ...r.deep, phase: "done", result, progress: 100 } }));
-      } catch (e) {
-        const error = e instanceof Error ? e.message : "解读失败";
-        patch(row.id, (r) => ({ ...r, deep: { ...IDLE_DEEP, phase: "error", error } }));
       } finally {
         releaseModel();
       }
@@ -471,8 +353,6 @@ export function AnalyzePanel({ open, onClose, onRegenerate, onRename }: Props) {
               modelBusy={modelBusy}
               onFix={() => void runFix(selected)}
               onChoose={(i) => patch(selected.id, (r) => ({ ...r, fix: { ...r.fix, chosen: i } }))}
-              onDeep={() => void runDeep(selected)}
-              onRegenerate={onRegenerate}
               onRename={onRename}
             />
           )}
@@ -488,8 +368,6 @@ function Detail({
   modelBusy,
   onFix,
   onChoose,
-  onDeep,
-  onRegenerate,
   onRename,
 }: {
   row: Row;
@@ -497,11 +375,9 @@ function Detail({
   modelBusy: boolean;
   onFix: () => void;
   onChoose: (i: number) => void;
-  onDeep: () => void;
-  onRegenerate: Props["onRegenerate"];
   onRename: Props["onRename"];
 }) {
-  const { fix, deep } = row;
+  const { fix } = row;
   // 打分接口没给 next 时（面板更新前打的分）按老规矩：有可换的字就给改字，90 分以上不给
   const next: NextStep = row.next ?? {
     kind: score.band !== "great" && score.fixable.length > 0 ? "fix" : "none",
@@ -602,24 +478,12 @@ function Detail({
         </div>
       )}
 
-      {(showFixButton || DEEP_READING) && (
+      {showFixButton && (
         <div className="ap-actions">
-          {showFixButton && (
-            <button type="button" className="ap-act" onClick={onFix} disabled={modelBusy}>
-              {fixLabel}
-            </button>
-          )}
-          {showFixButton && missed && rename(true)}
-          {DEEP_READING && (
-            <button
-              type="button"
-              className="ap-act ghost"
-              onClick={onDeep}
-              disabled={modelBusy || deep.phase === "running"}
-            >
-              {deep.phase === "done" ? "重新解读" : "详细解读"}
-            </button>
-          )}
+          <button type="button" className="ap-act" onClick={onFix} disabled={modelBusy}>
+            {fixLabel}
+          </button>
+          {missed && rename(true)}
         </div>
       )}
 
@@ -647,20 +511,6 @@ function Detail({
           ))}
         </ul>
       )}
-
-      {deep.phase === "running" && (
-        <div className="ap-deep-wait">
-          <p className="ap-stage">{deep.stage}</p>
-          <div className="ap-bar">
-            <i style={{ width: `${deep.progress}%` }} />
-          </div>
-          <div className="ap-think">
-            {deep.thinking.length === 0 ? <p>正在读这个名字的读音、字形和意思……</p> : deep.thinking.map((t, i) => <p key={i}>{t}</p>)}
-          </div>
-        </div>
-      )}
-      {deep.phase === "error" && <p className="ap-error">{deep.error}</p>}
-      {deep.phase === "done" && deep.result && <DeepResult result={deep.result} onRegenerate={onRegenerate} />}
     </>
   );
 }
@@ -696,78 +546,5 @@ function RenameButtons({
     <button type="button" className={cls} disabled={disabled} onClick={() => onRename({ surname, gender })}>
       按{surname}姓重新起名
     </button>
-  );
-}
-
-function DeepResult({ result, onRegenerate }: { result: AnalysisResult; onRegenerate: Props["onRegenerate"] }) {
-  return (
-    <div className="ap-deep">
-      <p className={`ap-headline v-${result.verdict}`}>{result.headline}</p>
-
-      {result.goodPoints.length > 0 && (
-        <section className="ap-block">
-          <h4>站得住的地方</h4>
-          <ul className="ap-good">
-            {result.goodPoints.map((g, i) => (
-              <li key={i}>{g}</li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {result.issues.length > 0 && (
-        <section className="ap-block">
-          <h4>规则之外还要留意的</h4>
-          {result.issues.map((issue, i) => (
-            <div key={i} className={`ap-issue ${issue.severity}`}>
-              <p className="ap-issue-text">{issue.text}</p>
-              {issue.hint && <p className="ap-issue-hint">{issue.hint}</p>}
-            </div>
-          ))}
-        </section>
-      )}
-
-      {result.fitAngle && (
-        <section className="ap-block">
-          <h4>还能往哪走一步</h4>
-          <p className="ap-fit">{result.fitAngle}</p>
-        </section>
-      )}
-
-      {result.citations.length > 0 && (
-        <section className="ap-block">
-          <h4>出处</h4>
-          {result.citations.map((c, i) => (
-            <div key={i} className="ap-cite">
-              <p className="ap-cite-quote">「{c.quote}」</p>
-              <p className="ap-cite-src">
-                {c.source} · {c.piece}
-              </p>
-              <p className="ap-cite-line">{c.line}</p>
-              {c.gloss && <p className="ap-cite-gloss">{c.gloss}</p>}
-            </div>
-          ))}
-        </section>
-      )}
-
-      <p className="ap-closing">{result.closing}</p>
-
-      <button
-        type="button"
-        className="ap-go"
-        onClick={() =>
-          onRegenerate({
-            surname: result.split.surname,
-            gender: result.input.gender,
-            tabooChars: result.regenBrief.tabooChars,
-            requirements: result.regenBrief.requirements,
-            avoidPopular: result.regenBrief.avoidPopular,
-          })
-        }
-      >
-        <span className="ap-go-main">整个换新名</span>
-        <span className="ap-go-hint">不只换一个字，按「{result.split.surname}」姓重新取一组</span>
-      </button>
-    </div>
   );
 }

@@ -17,20 +17,6 @@ export interface NameSplit {
   alternatives: { surname: string; givenName: string }[];
 }
 
-export type IssueKind = "phonology" | "glyph" | "meaning" | "gender" | "era" | "popularity";
-
-/** hard=真麻烦，建议改；cost=每次要付的一点小亏 */
-export type IssueSeverity = "hard" | "cost";
-
-export interface NameIssue {
-  kind: IssueKind;
-  severity: IssueSeverity;
-  /** 一句说清是什么问题 */
-  text: string;
-  /** 可以往哪走，不写「必须改」 */
-  hint?: string;
-}
-
 export interface VerifiedCitation {
   source: string;
   piece: string;
@@ -50,58 +36,7 @@ export interface RejectedCitation {
   reason: string;
 }
 
-/** hard=有硬伤 cost=无硬伤但有代价 fit=没有问题，只是还能更贴合 */
-export type Verdict = "hard" | "cost" | "fit";
-
 export interface GenderLeanFact {
   char: string;
   lean: "male" | "female" | "neutral";
 }
-
-export interface CharFact {
-  char: string;
-  strokes: number | null;
-  /** 1=GB2312 一级 2=二级 0=表外 null=查不到（数据缺失或非汉字） */
-  gb: 0 | 1 | 2 | null;
-}
-
-export interface AnalysisFacts {
-  chars: CharFact[];
-  lean: GenderLeanFact[];
-  /** 姓名整体的性别倾向 */
-  overallLean: "male" | "female" | "neutral" | "mixed";
-}
-
-export interface AnalysisResult {
-  id: string;
-  createdAt: string;
-  input: AnalysisInput;
-  split: NameSplit;
-  verdict: Verdict;
-  /** 开场一句的总评 */
-  headline: string;
-  /** 站得住的地方 */
-  goodPoints: string[];
-  issues: NameIssue[];
-  citations: VerifiedCitation[];
-  rejectedCitations: RejectedCitation[];
-  /** 结尾一句 */
-  closing: string;
-  /** verdict=fit 时说明还能贴合哪里 */
-  fitAngle?: string;
-  regenBrief: {
-    tabooChars: string[];
-    requirements: string;
-    avoidPopular: boolean;
-  };
-  facts: AnalysisFacts;
-  providerName?: string;
-}
-
-export interface AnalysisFailure {
-  ok: false;
-  errorCode: string;
-  message: string;
-}
-
-export type AnalysisOutcome = { ok: true; result: AnalysisResult } | AnalysisFailure;

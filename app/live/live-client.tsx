@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { NameDetail, ReportDocument } from "@/domain/types";
 import {
   FAST_RECENT_MAX,
   type FastCandidate,
@@ -10,7 +9,7 @@ import {
   type FastFormInput,
   type FastSuccess,
 } from "@/fast/types";
-import { fullNamePinyin, nameSyllables, type NameSyllable } from "@/domain/pinyin-name";
+import { nameSyllables, type NameSyllable } from "@/domain/pinyin-name";
 import { checkLine, checkTag, talkLines } from "@/library/talk";
 import type { PrompterName, PrompterRound } from "@/live/prompter";
 import { AnalyzePanel } from "./analyze-panel";
@@ -34,7 +33,6 @@ interface ShowAlt {
   syl: NameSyllable[];
   one: string;
   cite?: ShowCite;
-  rows: [string, string][];
 }
 
 interface ShowData {
@@ -56,15 +54,9 @@ interface ShowData {
   cite?: ShowCite;
   /** 体检一行：「按王姓查过：没查到不好的谐音和生僻字」。精简版的名字都过了闸门才有这一行 */
   check?: string;
-  /** 解释行：读音、生辰这类。屏幕上和存图里同一份 */
-  cardRows: [string, string][];
   alts: ShowAlt[];
-  /** 开了生辰时带上四柱，直播页和存图都要显示 */
+  /** 开了生辰时带上属相和季节，直播页和存图都要显示 */
   bazi?: string;
-  groups?: {
-    male: ShowAlt[];
-    female: ShowAlt[];
-  };
 }
 
 const HAN_ONLY = /[\u4e00-\u9fa5]/g;
@@ -142,33 +134,6 @@ function prompterFromFast(data: FastSuccess, no: number): PrompterRound {
   };
 }
 
-/** 完整版（名字分析 → 一键改名）→ 提词页：没有口播稿，把卡片上的读音、出处这些行列给主播 */
-function prompterFromReport(show: ShowData, gender: Gender): PrompterRound {
-  const toName = (a: ShowAlt): PrompterName => ({ full: a.n, pinyin: a.py, one: a.one });
-  const head = { state: "ready" as const, no: show.no, surname: show.surname, gender: GENDER_WORD[gender] };
-  if (show.groups) {
-    return {
-      ...head,
-      sections: [
-        { label: "男向", names: show.groups.male.map(toName) },
-        { label: "女向", names: show.groups.female.map(toName) },
-      ],
-    };
-  }
-  return {
-    ...head,
-    primary: {
-      full: show.full,
-      pinyin: show.py,
-      one: show.one,
-      lines: [sentence(`${show.full}，${show.one}`), ...show.cardRows.map(([label, text]) => `${label}：${text}`)],
-      source: "report",
-    },
-    sections: show.alts.length ? [{ label: "备选", names: show.alts.map(toName) }] : [],
-  };
-}
-
-
 const SKIN_LABEL: Record<Skin, string> = { paper: "宣纸", celadon: "青瓷", silver: "刻版", bamboo: "竹兰" };
 const SKINS: Skin[] = ["paper", "celadon", "silver", "bamboo"];
 const G_LABEL: Record<Gender, string> = { male: "男", female: "女", unknown: "未知" };
@@ -184,98 +149,10 @@ const SERIF = '"Noto Serif SC","Source Han Serif SC","Songti SC",SimSun,serif';
 const SANS = '"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif';
 
 
-/** 等待时只给观众看真实阶段，不展示模型推理 */
-function stageText(stage: string): string {
-  if (stage === "filter") return "正在筛选";
-  if (stage === "assemble") return "正在整理结果";
-  return "正在准备名字";
-}
-
-function toShow(report: ReportDocument, no = 1, sessionGiven = 0): ShowData {
-  const primary =
-    report.names.find((n) => n.fullName === report.overview.primaryName) ?? report.names[0];
-  const alts = report.names.filter((n) => n.fullName !== primary.fullName).slice(0, 2);
-  const surname = report.request.surname;
-  const givenOf = (full: string) => (full.startsWith(surname) ? full.slice(surname.length) : full);
-
-  // 详解一项：屏幕上和存图里是同一份。寓意放在大字下面那句，这里不再重复
-  const cardRowsFor = (n: NameDetail): [string, string][] => {
-    const all: [string, string][] = [
-      ["读音", n.phonology],
-      ["书写", n.glyph],
-      ["出处", n.origin],
-      ["留意", n.pitfalls],
-      ...(n.baziFit ? ([["生辰", n.baziFit]] as [string, string][]) : []),
-    ];
-    return all.filter((r) => Boolean(r[1]));
-  };
-  const toAlt = (n: NameDetail): ShowAlt => {
-    const given = givenOf(n.fullName);
-    const py = fullNamePinyin(surname, given);
-    return {
-      n: n.fullName,
-      py: py.text,
-      syl: nameSyllables(n.fullName),
-      one: n.meaning,
-      // 一句话已经写了寓意，这一行只补出处：有核验出处就标「出处」，没有才标「留意」。
-      // 标签必须跟内容一致——不能拿「特点」当筐去装出处。
-      rows: (n.origin
-        ? [["出处", n.origin]]
-        : n.pitfalls
-          ? [["留意", n.pitfalls]]
-          : []) as [string, string][],
-    };
-  };
-  const groupFor = (fullNames?: string[]): ShowAlt[] =>
-    (fullNames ?? [])
-      .map((full) => report.names.find((n) => n.fullName === full))
-      .filter((n): n is NameDetail => Boolean(n))
-      .map(toAlt);
-  const groups =
-    report.source === "live" && report.request.gender === "unknown"
-      ? {
-          male: groupFor(report.overview.maleNames),
-          female: groupFor(report.overview.femaleNames),
-        }
-      : undefined;
-
-  const primaryPy = fullNamePinyin(surname, givenOf(primary.fullName));
-
-  return {
-    no,
-    sessionGiven,
-    surname,
-    full: primary.fullName,
-    py: primaryPy.text,
-    ...(primaryPy.hint ? { pyHint: primaryPy.hint } : {}),
-    syl: nameSyllables(primary.fullName),
-    // 用名字本身的寓意做"一句"，oneLiner 更像摘要标题，不适合当主标语
-    one: (primary.meaning || report.overview.oneLiner || "").replace(/\s+/g, ""),
-    tags: [
-      report.request.nameLength === "one" ? "单字名" : "双字名",
-      primary.l2Hot ? "偏热门" : "避开网红名",
-      groups
-        ? "男女各三"
-        : report.request.gender === "male"
-          ? "男向"
-          : report.request.gender === "female"
-            ? "女向"
-            : "中性",
-    ],
-    cardRows: cardRowsFor(primary),
-    alts: alts.map(toAlt),
-    // 直播观众看不懂干支：只说属相和出生季节
-    ...(report.bazi?.readable
-      ? { bazi: `属${report.bazi.readable.zodiac} · ${report.bazi.readable.season}出生` }
-      : {}),
-    groups,
-  };
-}
-
 /**
  * 精简版结果 → 这张卡的数据规格。
  *
- * 屏幕和存图都只吃这一份，不再各挑各的字段（以前 DOM 用 rows、canvas 用 cardRows，
+ * 屏幕和存图都只吃这一份，不再各挑各的字段（以前 DOM 和 canvas 各读一套详解行，
  * 备选在屏幕上只有名字、在图里却带 why 和出处，两边对不上）。
  * 规矩：要加字段，两个渲染器一起加，否则一致性就破了。
  */
@@ -286,7 +163,6 @@ function fastToShow(data: FastSuccess, no: number, sessionGiven: number): ShowDa
     syl: nameSyllables(c.fullName),
     one: c.why,
     cite: toCite(c.givenName, c.citation),
-    rows: [],
   });
 
   const primary = data.primary;
@@ -311,9 +187,6 @@ function fastToShow(data: FastSuccess, no: number, sessionGiven: number): ShowDa
     cite,
     // 精简版的名字都过了闸门（谐音、生僻字……），这一行总是成立
     check: checkTag(data.surname),
-    // 出处单独做成证据块（引文 + 篇名 + 核验方式），拼音在大字下面那行，
-    // 所以这里没有重复项；开生辰时才有内容
-    cardRows: [] as [string, string][],
     alts: data.alternatives.map(toAlt),
     ...(data.baziLine ? { bazi: data.baziLine } : {}),
   };
@@ -373,117 +246,6 @@ function wrapText(ctx: CanvasRenderingContext2D, text: string, maxW: number): st
   return lines;
 }
 
-function downloadCanvas(cv: HTMLCanvasElement, filename: string): void {
-  cv.toBlob((b) => {
-    if (!b) return;
-    const url = URL.createObjectURL(b);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 4000);
-  }, "image/png");
-}
-
-/** 未知性别的直播卡片不再突出单个首推，而是完整带走男向 3 名与女向 3 名。 */
-function buildGroupedCard(show: ShowData, skin: Skin, bgImage: HTMLImageElement | null): HTMLCanvasElement {
-  const C = SKINC[skin];
-  const W = 1080;
-  const M = 90;
-  const gap = 60;
-  const colW = (W - M * 2 - gap) / 2;
-  const groups = show.groups!;
-  const probe = document.createElement("canvas").getContext("2d")!;
-  probe.font = `400 23px ${SERIF}`;
-  const columns = [groups.male, groups.female].map((group) =>
-    group.map((a) => ({ a, lines: wrapText(probe, a.one, colW).slice(0, 3) })),
-  );
-  const rowHeights = [0, 1, 2].map((index) =>
-    Math.max(...columns.map((group) => 215 + (group[index]?.lines.length ?? 1) * 34)),
-  );
-  const startY = 450;
-  const H = Math.max(1440, startY + rowHeights.reduce((sum, h) => sum + h, 0) + 130);
-  const cv = document.createElement("canvas");
-  cv.width = W;
-  cv.height = H;
-  const x = cv.getContext("2d")!;
-
-  if (skin === "bamboo" && bgImage) x.drawImage(bgImage, 0, 0, W, H);
-  else {
-    x.fillStyle = C.bg;
-    x.fillRect(0, 0, W, H);
-  }
-  x.strokeStyle = C.line;
-  x.lineWidth = 2;
-  x.strokeRect(48, 48, W - 96, H - 96);
-  x.lineWidth = 1;
-  x.strokeRect(56, 56, W - 112, H - 112);
-
-  const sx = 90;
-  const sy = 90;
-  x.textAlign = "left";
-  x.textBaseline = "alphabetic";
-  x.fillStyle = C.ink;
-  x.font = `600 40px ${SERIF}`;
-  x.fillText("瑾瑜", sx, sy + 58);
-  x.fillStyle = C.ink3;
-  x.font = `300 21px ${SANS}`;
-  x.fillText("取名参考 · 男女各三", sx + 136, sy + 58);
-
-  x.textAlign = "center";
-  x.fillStyle = C.ink2;
-  x.font = `400 31px ${SERIF}`;
-  x.fillText(`${show.surname}姓 · 性别未知 · 男女各三`, W / 2, 294);
-  x.strokeStyle = C.line;
-  x.beginPath();
-  x.moveTo(M, 332);
-  x.lineTo(W - M, 332);
-  x.stroke();
-
-  columns.forEach((group, col) => {
-    const gx = M + col * (colW + gap);
-    x.textAlign = "left";
-    x.fillStyle = C.accent;
-    x.font = `500 34px ${SERIF}`;
-    x.fillText(col === 0 ? "男向推荐" : "女向推荐", gx, 398);
-    x.textAlign = "right";
-    x.fillStyle = C.ink3;
-    x.font = `300 20px ${SANS}`;
-    x.fillText("03 NAMES", gx + colW, 396);
-
-    let y = startY;
-    group.forEach((item, index) => {
-      x.strokeStyle = C.line;
-      x.beginPath();
-      x.moveTo(gx, y);
-      x.lineTo(gx + colW, y);
-      x.stroke();
-      x.textAlign = "left";
-      x.fillStyle = C.ink3;
-      x.font = `300 18px ${SANS}`;
-      x.fillText(String(index + 1).padStart(2, "0"), gx, y + 34);
-      x.fillStyle = C.ink;
-      x.font = `500 58px ${SERIF}`;
-      x.fillText(item.a.n, gx, y + 104);
-      x.fillStyle = C.ink3;
-      x.font = `300 20px ${SANS}`;
-      x.fillText(item.a.py, gx, y + 142);
-      x.fillStyle = C.ink2;
-      x.font = `400 23px ${SERIF}`;
-      item.lines.forEach((line, lineIndex) => x.fillText(line, gx, y + 184 + lineIndex * 34));
-      y += rowHeights[index]!;
-    });
-  });
-
-  x.textAlign = "center";
-  x.fillStyle = C.ink3;
-  x.font = `300 20px ${SANS}`;
-  x.fillText("名字由瑾瑜起草 · 男女各三", W / 2, H - 72);
-  return cv;
-}
-
 export function LiveClient() {
   // 默认开竹兰；S 键仍按 paper → celadon → silver → bamboo 循环
   const [skin, setSkin] = useState<Skin>("bamboo");
@@ -492,7 +254,6 @@ export function LiveClient() {
   const [draft, setDraft] = useState("");
   /** 精简版唯一的可选项：生日。填了才排盘，不填不提八字 */
   const [birthday, setBirthday] = useState("");
-  const [stage, setStage] = useState<string>("");
   /** 加载页的真实阶段：候选几个、拦了谁、核到几条。内容全部来自服务端事件 */
   const [frames, setFrames] = useState<string[]>([]);
   const [progress, setProgress] = useState(0);
@@ -553,7 +314,6 @@ export function LiveClient() {
     }
     busy.current = true;
     setPhase("generating");
-    setStage("");
     setFrames(["正在征名"]);
     setProgress(12);
     setError(null);
@@ -664,118 +424,7 @@ export function LiveClient() {
     [draft, gender, birthday, cardNo],
   );
 
-  /**
-   * 完整版链路：走 /api/generate + 报告快照。
-   *
-   * 只有「名字分析 → 一键改名」用这条：那份约束里有避讳字和定向要求，
-   * 精简版的三个字段装不下。直播手输姓氏仍然走上面的精简版。
-   */
-  const generateFull = useCallback(
-    async (input: { surname: string; gender: Gender; taboo?: string; requirements?: string }) => {
-      if (busy.current) return;
-      busy.current = true;
-      setPhase("generating");
-      setStage("");
-      setProgress(0);
-      setError(null);
-      pushPrompter({ state: "pending", no: cardNo, surname: input.surname, gender: GENDER_WORD[input.gender] });
-      try {
-        const res = await fetch("/api/generate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            source: "live",
-            surname: input.surname,
-            gender: input.gender,
-            nameLength: "two",
-            tabooChars: input.taboo || undefined,
-            requirements: input.requirements || undefined,
-            avoidPopular: true,
-          }),
-        });
-        if (!res.ok || !res.body) {
-          const msg = (await res.json().catch(() => ({ message: "生成失败" }))) as { message?: string };
-          throw new Error(msg.message || "生成失败");
-        }
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buf = "";
-        let reportId: string | null = null;
-        for (;;) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          buf += decoder.decode(value, { stream: true });
-          let idx: number;
-          while ((idx = buf.indexOf("\n\n")) >= 0) {
-            const frame = buf.slice(0, idx);
-            buf = buf.slice(idx + 2);
-            let evt = "message";
-            let data = "";
-            for (const line of frame.split("\n")) {
-              if (line.startsWith("event:")) evt = line.slice(6).trim();
-              else if (line.startsWith("data:")) data += line.slice(5).trim();
-            }
-            if (!data) continue;
-            let payload: Record<string, unknown>;
-            try {
-              payload = JSON.parse(data) as Record<string, unknown>;
-            } catch {
-              continue;
-            }
-            if (evt === "thinking") {
-              setProgress((p) => Math.min(60, p + 0.4));
-            } else if (evt === "stage") {
-              const next = String(payload.stage ?? "");
-              setStage(next);
-              setProgress((p) => Math.max(p, next === "assemble" ? 85 : 55));
-            } else if (evt === "done") {
-              reportId = String(payload.reportId ?? "");
-            } else if (evt === "error") {
-              throw new Error(String(payload.message ?? "生成失败"));
-            }
-          }
-        }
-        if (!reportId) throw new Error("没有拿到报告");
-        const r = await fetch(`/api/reports/${reportId}`, { cache: "no-store" });
-        const json = (await r.json()) as { ok: boolean; report?: ReportDocument; message?: string };
-        if (!json.ok || !json.report) throw new Error(json.message ?? "读取报告失败");
-
-        const shown = toShow(json.report, cardNo, recentRef.current.length);
-        setShow(shown);
-        pushPrompter(prompterFromReport(shown, input.gender));
-        setCardNo((n) => n + 1);
-        setProgress(100);
-        setReady(false);
-        setPhase("reveal");
-        requestAnimationFrame(() => requestAnimationFrame(() => setReady(true)));
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "生成失败");
-        setPhase("input");
-        setShow(null);
-        pushPrompter({ state: "idle" });
-      } finally {
-        busy.current = false;
-      }
-    },
-    // cardNo 要在依赖里：以前是空数组，这条路的「本场第几个」一直停在 1
-    [cardNo],
-  );
-  /** 分析完直接把结论当约束送进取名：姓氏带过去，问题转成避讳和定向要求 */
-  const regenFromAnalysis = useCallback(
-    (brief: { surname: string; gender: Gender; tabooChars: string[]; requirements: string; avoidPopular: boolean }) => {
-      setAnalyzeOpen(false);
-      setDraft(brief.surname);
-      setGender(brief.gender);
-      void generateFull({
-        surname: brief.surname,
-        gender: brief.gender,
-        taboo: brief.tabooChars.join(""),
-        requirements: brief.requirements,
-      });
-    },
-    [generateFull],
-  );
-  /** 打分榜「重新起名」：姓和性别带过去，走直播用的精简版（3–5 秒），不走上面的完整版 */
+  /** 打分榜「重新起名」：姓和性别带过去，走直播用的精简版（3–5 秒） */
   const renameFromScore = useCallback(
     (input: { surname: string; gender: "male" | "female" }) => {
       setAnalyzeOpen(false);
@@ -791,7 +440,6 @@ export function LiveClient() {
     pushPrompter({ state: "idle" });
     setShow(null);
     setReady(false);
-    setStage("");
     setProgress(0);
     setDraft("");
     // 直播是连续换观众：性别与生日一起清零，
@@ -850,15 +498,9 @@ export function LiveClient() {
   /* ---------- 存图 ---------- */
   const exportCard = useCallback(() => {
     if (!show) return;
-    if (show.groups) {
-      const cv = buildGroupedCard(show, skin, bgImage.current);
-      downloadCanvas(cv, `瑾瑜-${show.surname}-男女各三.png`);
-      return;
-    }
     const C = SKINC[skin];
     const W = 1080;
     const M = 120;
-    const colW = (W - M * 2 - 70) / 2;
     // 备选最多三个，按三列排；两列会在第三个名字处溢出画布
     const altGap = 56;
     const altColW = (W - M * 2 - altGap * 2) / 3;
@@ -875,27 +517,12 @@ export function LiveClient() {
     probe.font = `400 40px ${SERIF}`;
     const quoteLines = evQuote ? wrapText(probe, evQuote, W - 300).slice(0, 2) : [];
 
-    probe.font = `400 26px ${SERIF}`;
-    const mainRows = show.cardRows.map((r) => ({ label: r[0], lines: wrapText(probe, r[1], colW) }));
-    let lh = 0;
-    let rh = 0;
-    mainRows.forEach((r, i) => {
-      const h = 40 + r.lines.length * 44 + 26;
-      if (i % 2 === 0) lh += h;
-      else rh += h;
-    });
-    const mainH = Math.max(lh, rh);
-
     probe.font = `400 21px ${SERIF}`;
     const altBlocks = show.alts.map((a) => {
       const oneLines = wrapText(probe, a.one, altColW).slice(0, 3);
       const citeLines = a.cite ? wrapText(probe, `${a.cite.quote} ${a.cite.piece}`, altColW).slice(0, 2) : [];
-      const rows = a.rows.map((r) => ({ label: r[0], lines: wrapText(probe, r[1], altColW) }));
-      let h = 150 + oneLines.length * 32 + 30 + citeLines.length * 30;
-      rows.forEach((r) => {
-        h += 28 + r.lines.length * 32 + 18;
-      });
-      return { a, oneLines, citeLines, rows, h };
+      const h = 150 + oneLines.length * 32 + 30 + citeLines.length * 30;
+      return { a, oneLines, citeLines, h };
     });
     const altMax = altBlocks.reduce((m, b) => Math.max(m, b.h), 0);
 
@@ -915,7 +542,7 @@ export function LiveClient() {
     if (show.check) cy += 40;
     const ledgerY = cy;
     const rowsTop = cy + 34;
-    cy = rowsTop + mainH + 20;
+    cy = rowsTop + 20;
     if (show.bazi) cy += 56;
     const div2 = cy;
     const altTop = div2 + 96;
@@ -1028,26 +655,11 @@ export function LiveClient() {
       ledgerY + 24,
     );
 
-    const cy2 = [rowsTop, rowsTop];
-    mainRows.forEach((r, i) => {
-      const col = i % 2;
-      const cx = M + col * (colW + 70);
-      const y = cy2[col];
-      x.textAlign = "left";
-      x.fillStyle = C.accent;
-      x.font = `400 21px ${SERIF}`;
-      x.fillText(r.label, cx, y);
-      x.fillStyle = C.ink2;
-      x.font = `400 26px ${SERIF}`;
-      r.lines.forEach((ln, j) => x.fillText(ln, cx, y + 38 + j * 44));
-      cy2[col] = y + 40 + r.lines.length * 44 + 26;
-    });
-
     if (show.bazi) {
       x.textAlign = "center";
       x.fillStyle = C.ink3;
       x.font = `400 22px ${SERIF}`;
-      x.fillText(`生辰 ${show.bazi}`, W / 2, rowsTop + mainH + 34);
+      x.fillText(`生辰 ${show.bazi}`, W / 2, rowsTop + 34);
     }
     x.strokeStyle = C.line;
     x.beginPath();
@@ -1078,22 +690,12 @@ export function LiveClient() {
       x.fillStyle = C.ink2;
       x.font = `400 22px ${SERIF}`;
       b.oneLines.forEach((ln, j) => x.fillText(ln, cx, y + 72 + j * 32));
-      let ry = y + 72 + b.oneLines.length * 32 + 34;
+      const ry = y + 72 + b.oneLines.length * 32 + 34;
       if (b.citeLines.length) {
         x.fillStyle = C.accent;
         x.font = `300 19px ${SERIF}`;
         b.citeLines.forEach((ln, j) => x.fillText(ln, cx, ry + j * 30));
-        ry += b.citeLines.length * 30 + 10;
       }
-      b.rows.forEach((r) => {
-        x.fillStyle = C.accent;
-        x.font = `400 19px ${SERIF}`;
-        x.fillText(r.label, cx, ry);
-        x.fillStyle = C.ink2;
-        x.font = `400 21px ${SERIF}`;
-        r.lines.forEach((ln, j) => x.fillText(ln, cx, ry + 28 + j * 32));
-        ry += 28 + r.lines.length * 32 + 18;
-      });
     });
 
     x.textAlign = "center";
@@ -1222,17 +824,13 @@ export function LiveClient() {
               <p className="gen-extra">
                 {birthday ? `双字名 · 避开网红名 · 生辰 ${birthday}` : "双字名 · 避开网红名"}
               </p>
-              {frames.length ? (
-                <ul className="gen-log">
-                  {frames.map((f, i) => (
-                    <li key={`${f}-${i}`} className={i === frames.length - 1 ? "on" : ""}>
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="gen-stage">{stageText(stage)}</p>
-              )}
+              <ul className="gen-log">
+                {frames.map((f, i) => (
+                  <li key={`${f}-${i}`} className={i === frames.length - 1 ? "on" : ""}>
+                    {f}
+                  </li>
+                ))}
+              </ul>
               <div className="bar">
                 <i style={{ width: `${progress}%` }} />
               </div>
@@ -1244,36 +842,7 @@ export function LiveClient() {
                 <i />
                 REVEAL / No.{String(cardNo).padStart(3, "0")}
               </div>
-              {show &&
-                (show.groups ? (
-                  <section
-                    className="gender-groups reveal"
-                    style={{ ["--d" as string]: "250ms" }}
-                    data-testid="live-unknown-groups"
-                  >
-                    <header className="groups-head">
-                      <p>{show.surname}姓 · 性别未知</p>
-                      <h2>男女各三</h2>
-                    </header>
-                    <div className="group-columns">
-                      {(["male", "female"] as const).map((key) => (
-                        <section className="gender-group" key={key} data-testid={`live-${key}-group`}>
-                          <h3>{key === "male" ? "男向推荐" : "女向推荐"}<span>03</span></h3>
-                          <div className="group-list">
-                            {show.groups![key].map((a, index) => (
-                              <article className="group-item" key={a.n}>
-                                <span className="group-index">{String(index + 1).padStart(2, "0")}</span>
-                                <h4 className="group-name">{a.n}</h4>
-                                <p className="group-py">{a.py}</p>
-                                <p className="group-one">{a.one}</p>
-                              </article>
-                            ))}
-                          </div>
-                        </section>
-                      ))}
-                    </div>
-                  </section>
-                ) : (
+              {show && (
                   <>
                     <div className="hero">
                       <h1 className="name" aria-label={show.full}>
@@ -1328,18 +897,6 @@ export function LiveClient() {
                       {show.sessionGiven ? ` · 此前已给过 ${show.sessionGiven} 个` : ""}
                     </p>
 
-                    <section className="details reveal" style={{ ["--d" as string]: "850ms" }}>
-                      {show.cardRows.map(([label, text]) => (
-                        <div
-                          className={`detail${label === "八字" ? " wide" : ""}`}
-                          key={label}
-                        >
-                          <span className="label">{label}</span>
-                          <p>{text}</p>
-                        </div>
-                      ))}
-                    </section>
-
                     {show.bazi && (
                       <p className="bazi reveal" style={{ ["--d" as string]: "900ms" }}>
                         <span className="bazi-label">生辰</span>
@@ -1372,7 +929,7 @@ export function LiveClient() {
                       </div>
                     </section>
                   </>
-                ))}
+              )}
               {/* 和存图底部同一句 */}
               {show && (
                 <p className="credit reveal" style={{ ["--d" as string]: "1100ms" }}>
@@ -1415,7 +972,6 @@ export function LiveClient() {
           <AnalyzePanel
             open={analyzeOpen}
             onClose={() => setAnalyzeOpen(false)}
-            onRegenerate={regenFromAnalysis}
             onRename={renameFromScore}
           />
         </div>
