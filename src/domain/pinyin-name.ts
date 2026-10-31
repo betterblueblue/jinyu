@@ -49,6 +49,32 @@ export interface NamePinyin {
   hint?: string;
 }
 
+export interface NameSyllable {
+  ch: string;
+  /** 不带声调的拼音，如 qing */
+  py: string;
+  /** 1–4，轻声/查不到记 0 */
+  tone: number;
+}
+
+/**
+ * 逐字音节 + 声调，直播大字下面那行用。
+ *
+ * 只给展示用：姓氏位置按姓氏读音取（surname: "head"），和 fullNamePinyin 一致。
+ */
+export function nameSyllables(text: string, surnameMode = true): NameSyllable[] {
+  const chars = [...text];
+  if (chars.length === 0) return [];
+  const opts = surnameMode ? { surname: "head" as const } : {};
+  const nums = pinyin(text, { toneType: "num", type: "array", ...opts });
+  const numList = (Array.isArray(nums) ? nums : [nums]).map(String);
+  return chars.map((ch, i) => {
+    const s = numList[i] ?? ch;
+    const tone = Number(s.match(/(\d)$/)?.[1] ?? 0);
+    return { ch, py: s.replace(/\d$/, ""), tone };
+  });
+}
+
 export function fullNamePinyin(surname: string, givenName: string): NamePinyin {
   const full = `${surname}${givenName}`;
   const chars = [...full];

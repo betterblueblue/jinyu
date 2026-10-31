@@ -9,7 +9,7 @@ import type {
   FastFormInput,
   FastSuccess,
 } from "@/fast/types";
-import { fullNamePinyin } from "@/domain/pinyin-name";
+import { fullNamePinyin, nameSyllables, type NameSyllable } from "@/domain/pinyin-name";
 import { AnalyzePanel } from "./analyze-panel";
 import "./live.css";
 
@@ -18,25 +18,40 @@ type Gender = "male" | "female" | "unknown";
 type Phase = "input" | "generating" | "reveal";
 
 
+/** 引文证据：原文、篇名、两字在原文里是连着还是分取（后者是核验算出来的，不是文案） */
+interface ShowCite {
+  quote: string;
+  piece: string;
+  kind: "连出" | "分取";
+}
+
 interface ShowAlt {
   n: string;
   py: string;
+  syl: NameSyllable[];
   one: string;
+  cite?: ShowCite;
   rows: [string, string][];
 }
 
 interface ShowData {
+  /** 本场第几个：屏幕和存图都要有，否则截图对不上是哪一轮 */
+  no: number;
+  /** 这一轮出场时，本场已经给过几个名字 */
+  sessionGiven: number;
   surname: string;
   full: string;
   /** 全名拼音（含姓氏） */
   py: string;
   /** 多音姓氏或未收录字的核对提示 */
   pyHint?: string;
+  /** 逐字音节 + 声调，直播大字下面那行用 */
+  syl: NameSyllable[];
   one: string;
   tags: string[];
-  /** 直播页详解：寓意 / 出处（+ 八字） */
-  rows: [string, string][];
-  /** 存图详解：首推给足六项，家人拿回去慢慢看 */
+  /** 首推的引文证据；没有就是没核到，不用凑 */
+  cite?: ShowCite;
+  /** 解释行：读音、生辰这类。屏幕上和存图里同一份 */
   cardRows: [string, string][];
   alts: ShowAlt[];
   /** 开了生辰时带上四柱，直播页和存图都要显示 */
@@ -45,6 +60,23 @@ interface ShowData {
     male: ShowAlt[];
     female: ShowAlt[];
   };
+}
+
+const HAN_ONLY = /[\u4e00-\u9fa5]/g;
+
+/** 两字在核过的原文里是连着的，还是同句分取——由引文算，不由文案写 */
+function citeKind(givenName: string, quote: string): "连出" | "分取" {
+  const folded = quote.match(HAN_ONLY)?.join("") ?? "";
+  const [a, b] = [...givenName];
+  if (!a || !b) return "分取";
+  const i = folded.indexOf(a);
+  return i >= 0 && folded[i + 1] === b ? "连出" : "分取";
+}
+
+function toCite(givenName: string, c?: FastCitation): ShowCite | undefined {
+  if (!c?.quote) return undefined;
+  // 引文按片段处理：结尾句号不放引号里，其余一字不改
+  return { quote: `「${c.quote.replace(/[。！？；，、]\s*$/, "")}」`, piece: `${c.source}·${c.piece}`, kind: citeKind(givenName, c.quote) };
 }
 
 
@@ -70,27 +102,16 @@ function stageText(stage: string): string {
   return "正在准备名字";
 }
 
-function toShow(report: ReportDocument): ShowData {
+function toShow(report: ReportDocument, no = 1, sessionGiven = 0): ShowData {
   const primary =
     report.names.find((n) => n.fullName === report.overview.primaryName) ?? report.names[0];
   const alts = report.names.filter((n) => n.fullName !== primary.fullName).slice(0, 2);
   const surname = report.request.surname;
   const givenOf = (full: string) => (full.startsWith(surname) ? full.slice(surname.length) : full);
 
-  // 直播页：只留观众几秒能看懂的。大字那句已经是寓意，这里换成「为什么推荐」避免重复；
-  // 出处留给主播口头讲或存图，直播画面纵向空间不够
-  const rowsFor = (n: NameDetail): [string, string][] => {
-    const all: [string, string][] = [
-      ["为什么推荐", n.composition || n.meaning],
-      // 开了生辰才给这一项，模型/兜底都会写 baziFit
-      ...(n.baziFit ? ([["八字", n.baziFit]] as [string, string][]) : []),
-    ];
-    return all.filter((r) => Boolean(r[1]));
-  };
-  // 存图：首推详解，家人拿回去慢慢看
+  // 详解一项：屏幕上和存图里是同一份。寓意放在大字下面那句，这里不再重复
   const cardRowsFor = (n: NameDetail): [string, string][] => {
     const all: [string, string][] = [
-      ["寓意", n.meaning],
       ["读音", n.phonology],
       ["书写", n.glyph],
       ["出处", n.origin],
@@ -99,18 +120,23 @@ function toShow(report: ReportDocument): ShowData {
     ];
     return all.filter((r) => Boolean(r[1]));
   };
-  const toAlt = (n: NameDetail): ShowAlt => ({
-    n: n.fullName,
-    py: fullNamePinyin(surname, givenOf(n.fullName)).text,
-    one: n.meaning,
-    // 一句话已经写了寓意，这一行只补出处：有核验出处就标「出处」，没有才标「留意」。
-    // 标签必须跟内容一致——不能拿「特点」当筐去装出处。
-    rows: (n.origin
-      ? [["出处", n.origin]]
-      : n.pitfalls
-        ? [["留意", n.pitfalls]]
-        : []) as [string, string][],
-  });
+  const toAlt = (n: NameDetail): ShowAlt => {
+    const given = givenOf(n.fullName);
+    const py = fullNamePinyin(surname, given);
+    return {
+      n: n.fullName,
+      py: py.text,
+      syl: nameSyllables(n.fullName),
+      one: n.meaning,
+      // 一句话已经写了寓意，这一行只补出处：有核验出处就标「出处」，没有才标「留意」。
+      // 标签必须跟内容一致——不能拿「特点」当筐去装出处。
+      rows: (n.origin
+        ? [["出处", n.origin]]
+        : n.pitfalls
+          ? [["留意", n.pitfalls]]
+          : []) as [string, string][],
+    };
+  };
   const groupFor = (fullNames?: string[]): ShowAlt[] =>
     (fullNames ?? [])
       .map((full) => report.names.find((n) => n.fullName === full))
@@ -127,10 +153,13 @@ function toShow(report: ReportDocument): ShowData {
   const primaryPy = fullNamePinyin(surname, givenOf(primary.fullName));
 
   return {
+    no,
+    sessionGiven,
     surname,
     full: primary.fullName,
     py: primaryPy.text,
     ...(primaryPy.hint ? { pyHint: primaryPy.hint } : {}),
+    syl: nameSyllables(primary.fullName),
     // 用名字本身的寓意做"一句"，oneLiner 更像摘要标题，不适合当主标语
     one: (primary.meaning || report.overview.oneLiner || "").replace(/\s+/g, ""),
     tags: [
@@ -144,7 +173,6 @@ function toShow(report: ReportDocument): ShowData {
             ? "女向"
             : "中性",
     ],
-    rows: rowsFor(primary),
     cardRows: cardRowsFor(primary),
     alts: alts.map(toAlt),
     // 直播观众看不懂干支：只说属相和出生季节
@@ -156,19 +184,20 @@ function toShow(report: ReportDocument): ShowData {
 }
 
 /**
- * 精简版结果 → 直播页要的形状。
+ * 精简版结果 → 这张卡的数据规格。
  *
- * 与 toShow 的区别：那边吃 ReportDocument（完整版，十个字段、有音韵字形避坑），
- * 这边只有「名 + 一句为什么 + 出处」，没有的项就不出那一行。
+ * 屏幕和存图都只吃这一份，不再各挑各的字段（以前 DOM 用 rows、canvas 用 cardRows，
+ * 备选在屏幕上只有名字、在图里却带 why 和出处，两边对不上）。
+ * 规矩：要加字段，两个渲染器一起加，否则一致性就破了。
  */
-function fastToShow(data: FastSuccess): ShowData {
-  const citeText = (c?: FastCitation): string =>
-    c ? `${c.source}·${c.piece}｜「${c.quote}」` : "";
+function fastToShow(data: FastSuccess, no: number, sessionGiven: number): ShowData {
   const toAlt = (c: FastCandidate): ShowAlt => ({
     n: c.fullName,
     py: c.pinyin,
+    syl: nameSyllables(c.fullName),
     one: c.why,
-    rows: (c.citation ? [["出处", citeText(c.citation)]] : []) as [string, string][],
+    cite: toCite(c.givenName, c.citation),
+    rows: [],
   });
 
   const primary = data.primary;
@@ -179,23 +208,58 @@ function fastToShow(data: FastSuccess): ShowData {
   ];
 
   return {
+    no,
+    sessionGiven,
     surname: data.surname,
     full: primary.fullName,
     py: primary.pinyin,
     ...(primary.pinyinHint ? { pyHint: primary.pinyinHint } : {}),
+    syl: nameSyllables(primary.fullName),
     one: primary.why,
     tags,
-    // 大字下面那句已经是 why，这里不再重复「为什么推荐」，只放出处
-    rows: (primary.citation ? [["出处", citeText(primary.citation)]] : []) as [string, string][],
-    cardRows: [
-      ["寓意", primary.why],
-      ["读音", primary.pinyin],
-      ["出处", citeText(primary.citation)],
-      ["生辰", data.baziLine ?? ""],
-    ].filter((r) => Boolean(r[1])) as [string, string][],
+    cite: toCite(primary.givenName, primary.citation),
+    // 出处单独做成证据块（引文 + 篇名 + 核验方式），拼音在大字下面那行，
+    // 所以这里没有重复项；开生辰时才有内容
+    cardRows: [] as [string, string][],
     alts: data.alternatives.map(toAlt),
     ...(data.baziLine ? { bazi: data.baziLine } : {}),
   };
+}
+
+/** 画一行带调拼音：声调是上标数字，和屏幕上的 <sup> 一致 */
+function drawSyllables(
+  ctx: CanvasRenderingContext2D,
+  syls: NameSyllable[],
+  x: number,
+  y: number,
+  o: { size: number; weight: number; color: string; align: "left" | "center"; maxW?: number },
+): void {
+  const base = o.size;
+  const gap = base * 0.45;
+  const toneGap = base * 0.3;
+  ctx.font = `${o.weight} ${base}px ${SANS}`;
+  const widths = syls.map((s) => ctx.measureText(s.py).width);
+  let total = 0;
+  syls.forEach((s, i) => {
+    total += widths[i]! + (s.tone ? toneGap : 0);
+  });
+  total += gap * Math.max(0, syls.length - 1);
+  const k = o.maxW && total > o.maxW ? o.maxW / total : 1;
+  const size = base * k;
+  let cur = o.align === "center" ? x - (total * k) / 2 : x;
+  ctx.textAlign = "left";
+  syls.forEach((s, i) => {
+    ctx.font = `${o.weight} ${size}px ${SANS}`;
+    ctx.fillStyle = o.color;
+    ctx.fillText(s.py, cur, y);
+    cur += widths[i]! * k;
+    if (s.tone) {
+      ctx.font = `400 ${size * 0.55}px ${SANS}`;
+      ctx.fillText(String(s.tone), cur + 1, y - size * 0.4);
+      cur += toneGap * k;
+    }
+    if (i < syls.length - 1) cur += gap * k;
+  });
 }
 
 function wrapText(ctx: CanvasRenderingContext2D, text: string, maxW: number): string[] {
@@ -336,6 +400,8 @@ export function LiveClient() {
   /** 精简版唯一的可选项：生日。填了才排盘，不填不提八字 */
   const [birthday, setBirthday] = useState("");
   const [stage, setStage] = useState<string>("");
+  /** 加载页的真实阶段：候选几个、拦了谁、核到几条。内容全部来自服务端事件 */
+  const [frames, setFrames] = useState<string[]>([]);
   const [progress, setProgress] = useState(0);
   const [show, setShow] = useState<ShowData | null>(null);
   const [ready, setReady] = useState(false);
@@ -347,7 +413,7 @@ export function LiveClient() {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const busy = useRef(false);
   const bgImage = useRef<HTMLImageElement | null>(null);
-  /** 这一场已经给过的名字（最多 12 个），随请求带给精简版去重 */
+  /** 这一场已经给过的名字（最多 20 个，约最近 5 轮），随请求带给精简版去重 */
   const recentRef = useRef<string[]>([]);
 
   /* 竹兰背景图预加载：导出卡片时要同步画进 canvas */
@@ -395,8 +461,14 @@ export function LiveClient() {
     busy.current = true;
     setPhase("generating");
     setStage("");
-    setProgress(0);
+    setFrames(["正在征名"]);
+    setProgress(12);
     setError(null);
+
+    const pushFrame = (text: string, p: number) => {
+      setFrames((f) => (f[f.length - 1] === text ? f : [...f.slice(-3), text]));
+      setProgress((q) => Math.max(q, p));
+    };
 
     try {
       const picked = override?.gender ?? gender;
@@ -409,23 +481,75 @@ export function LiveClient() {
         ...(birthday ? { birthday } : {}),
         ...(recentRef.current.length ? { recent: recentRef.current } : {}),
       };
-      const res = await fetch("/api/fast", {
+      const res = await fetch("/api/fast?stream=1", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      const payload = (await res.json()) as FastSuccess | FastFailure;
+
+      let payload: FastSuccess | FastFailure | null = null;
+      /** 服务端推过来的真实阶段，先收着，结果到了再按节奏放出来 */
+      const staged: string[] = [];
+      if (!res.body || !(res.headers.get("content-type") ?? "").includes("ndjson")) {
+        // 非流式返回（未登录、参数错误）照旧按 JSON 处理
+        payload = (await res.json()) as FastSuccess | FastFailure;
+      } else {
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = "";
+        for (;;) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          let idx: number;
+          while ((idx = buf.indexOf("\n")) >= 0) {
+            const line = buf.slice(0, idx).trim();
+            buf = buf.slice(idx + 1);
+            if (!line) continue;
+            let msg: Record<string, unknown>;
+            try {
+              msg = JSON.parse(line) as Record<string, unknown>;
+            } catch {
+              continue;
+            }
+            if (msg.type === "stage") {
+              // 每一帧都是 run.ts 真算出来的：给了几个、拦了谁、核到几条。
+              // 这些步骤本身只花几毫秒，全在模型返回之后才发生，所以先收着，
+              // 等结果到了再逐帧放——放的是刚发生的事实，不是编的进度。
+              if (msg.stage === "draft") staged.push(`候选 ${String(msg.drafted)} 个`);
+              else if (msg.stage === "gate") {
+                const dropped = (msg.dropped ?? []) as { name: string; reasons: string[] }[];
+                if (dropped.length === 0) staged.push(`${String(msg.kept)} 个全部通过闸门`);
+                else for (const d of dropped.slice(0, 2)) staged.push(`排除 ${d.name} · ${d.reasons.join("、")}`);
+              } else if (msg.stage === "cite") {
+                const missing = Number(msg.missing ?? 0);
+                staged.push(`原文核验 ${String(msg.withLine)} 条${missing ? `，${missing} 个留白` : ""}`);
+              }
+            } else if (msg.type === "result") {
+              payload = msg.result as FastSuccess | FastFailure;
+            }
+          }
+        }
+      }
+      if (!payload) throw new Error("生成失败");
       if (!payload.ok) throw new Error(payload.message || "生成失败");
 
-      setShow(fastToShow(payload));
-      // 记下这一场已经给过哪些名字：下一轮带着去重，观众不会连着看到同一个名
-      recentRef.current = Array.from(
-        new Set(
-          [...recentRef.current, payload.primary.givenName, ...payload.alternatives.map((a) => a.givenName)].filter(
-            (n) => /^[\u4e00-\u9fff]{2}$/.test(n),
-          ),
-        ),
-      ).slice(-12);
+      // 逐帧放出来，每帧 260ms；没有帧就直接揭晓
+      const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+      for (let i = 0; i < staged.length; i++) {
+        pushFrame(staged[i]!, 35 + Math.round(((i + 1) / (staged.length + 1)) * 55));
+        await sleep(260);
+      }
+
+      setShow(fastToShow(payload, cardNo, recentRef.current.length));
+      // 记下这一场已经给过哪些名字：下一轮带着去重，观众不会连着看到同一个名。
+      // 重复出现的名字必须挪到队尾再截断——直接 Set + slice(-N) 会让它停在最早的位置，
+      // 于是最常出现的那个名字反而最先被挤出去，下一轮又合法了。
+      const justGiven = [payload.primary.givenName, ...payload.alternatives.map((a) => a.givenName)].filter(
+        (n) => /^[\u4e00-\u9fff]{2}$/.test(n),
+      );
+      const keepOld = recentRef.current.filter((n) => !justGiven.includes(n));
+      recentRef.current = [...keepOld, ...justGiven].slice(-20);
       setCardNo((n) => n + 1);
       setProgress(100);
       setReady(false);
@@ -517,7 +641,7 @@ export function LiveClient() {
         const json = (await r.json()) as { ok: boolean; report?: ReportDocument; message?: string };
         if (!json.ok || !json.report) throw new Error(json.message ?? "读取报告失败");
 
-        setShow(toShow(json.report));
+        setShow(toShow(json.report, cardNo, recentRef.current.length));
         setCardNo((n) => n + 1);
         setProgress(100);
         setReady(false);
@@ -620,9 +744,18 @@ export function LiveClient() {
     const W = 1080;
     const M = 120;
     const colW = (W - M * 2 - 70) / 2;
-    const altColW = (W - M * 2 - 80) / 2;
+    // 备选最多三个，按三列排；两列会在第三个名字处溢出画布
+    const altGap = 56;
+    const altColW = (W - M * 2 - altGap * 2) / 3;
     const probe = document.createElement("canvas").getContext("2d");
     if (!probe) return;
+
+    /* ---- 先量高度，再按光标往下排：屏幕和存图是同一份 spec，字段一项不少 ---- */
+    probe.font = `400 30px ${SERIF}`;
+    const whyLines = wrapText(probe, show.one, W - 360).slice(0, 2);
+
+    probe.font = `400 40px ${SERIF}`;
+    const quoteLines = show.cite ? wrapText(probe, show.cite.quote, W - 300).slice(0, 2) : [];
 
     probe.font = `400 26px ${SERIF}`;
     const mainRows = show.cardRows.map((r) => ({ label: r[0], lines: wrapText(probe, r[1], colW) }));
@@ -637,23 +770,36 @@ export function LiveClient() {
 
     probe.font = `400 21px ${SERIF}`;
     const altBlocks = show.alts.map((a) => {
-      const oneLines = wrapText(probe, a.one, altColW).slice(0, 2);
+      const oneLines = wrapText(probe, a.one, altColW).slice(0, 3);
+      const citeLines = a.cite ? wrapText(probe, `${a.cite.quote} ${a.cite.piece}`, altColW).slice(0, 2) : [];
       const rows = a.rows.map((r) => ({ label: r[0], lines: wrapText(probe, r[1], altColW) }));
-      let h = 150 + oneLines.length * 32 + 30;
+      let h = 150 + oneLines.length * 32 + 30 + citeLines.length * 30;
       rows.forEach((r) => {
         h += 28 + r.lines.length * 32 + 18;
       });
-      return { a, oneLines, rows, h };
+      return { a, oneLines, citeLines, rows, h };
     });
     const altMax = altBlocks.reduce((m, b) => Math.max(m, b.h), 0);
 
     const nameY = 470;
-    const baziExtra = show.bazi ? 56 : 0;
-    // 存图不画大字那句（和「寓意」重复），所以标签和详解整体上移
-    const tagsY = show.pyHint ? 648 : 612;
-    const dividerY = tagsY + 46;
-    const rowsTop = dividerY + 56;
-    const H = Math.max(1440, Math.ceil(rowsTop + mainH + 60 + baziExtra + 54 + altMax + 140));
+    let cy = nameY + 76;
+    cy += show.pyHint ? 76 : 40;
+    const whyTop = cy + 18;
+    cy = whyTop + whyLines.length * 44;
+    const tagsY = cy + 6;
+    cy = tagsY + 34;
+    const div1 = cy; // 第一道横线
+    cy = div1 + 54;
+    const citeTop = cy;
+    if (show.cite) cy = citeTop + quoteLines.length * 56 + 42 + 86;
+    const ledgerY = cy;
+    const rowsTop = cy + 34;
+    cy = rowsTop + mainH + 20;
+    if (show.bazi) cy += 56;
+    const div2 = cy;
+    const altTop = div2 + 96;
+    const H = Math.max(1440, Math.ceil(altTop + altMax + 150));
+
     const cv = document.createElement("canvas");
     cv.width = W;
     cv.height = H;
@@ -689,37 +835,75 @@ export function LiveClient() {
     x.fillStyle = C.ink;
     x.font = `500 172px ${SERIF}`;
     x.fillText(show.full, W / 2, nameY);
-    x.fillStyle = C.ink3;
-    // 全名拼音（含姓氏）比原来长，超宽就缩
-    let pySize = 32;
-    x.font = `200 ${pySize}px ${SANS}`;
-    while (pySize > 20 && x.measureText(show.py).width > W - 320) {
-      pySize -= 2;
-      x.font = `200 ${pySize}px ${SANS}`;
-    }
-    x.fillText(show.py, W / 2, 546);
+
+    // 逐字音节 + 声调（声调是上标，和屏幕上一致）
+    x.textAlign = "center";
+    drawSyllables(x, show.syl, W / 2, nameY + 76, {
+      size: 32,
+      weight: 200,
+      color: C.ink3,
+      align: "center",
+      maxW: W - 320,
+    });
+    x.textAlign = "center";
     if (show.pyHint) {
-      x.fillStyle = C.ink3;
       x.font = `300 18px ${SANS}`;
-      x.fillText(show.pyHint, W / 2, 586);
+      x.fillText(show.pyHint, W / 2, nameY + 116);
     }
-    // 存图里「寓意」已经作为独立一段，这里不再重复大字那句
+
+    // 大字下面那句（why），屏幕上同一个位置
     x.fillStyle = C.ink2;
+    x.font = `400 30px ${SERIF}`;
+    whyLines.forEach((ln, i) => x.fillText(ln, W / 2, whyTop + 30 + i * 44));
+
+    x.fillStyle = C.ink3;
     x.font = `300 24px ${SANS}`;
-    x.fillText(show.tags.join("   ·   "), W / 2, tagsY);
+    x.fillText(show.tags.join("   ·   "), W / 2, tagsY + 24);
 
     x.strokeStyle = C.line;
     x.lineWidth = 1;
     x.beginPath();
-    x.moveTo(M, dividerY);
-    x.lineTo(W - M, dividerY);
+    x.moveTo(M, div1);
+    x.lineTo(W - M, div1);
     x.stroke();
 
-    const cy = [rowsTop, rowsTop];
+    // 引文证据：原文凸排 + 篇名 + 核验戳
+    if (show.cite) {
+      x.fillStyle = C.ink;
+      x.font = `400 40px ${SERIF}`;
+      quoteLines.forEach((ln, i) => x.fillText(ln, W / 2, citeTop + 40 + i * 56));
+      const pieceY = citeTop + 40 + quoteLines.length * 56 + 6;
+      x.fillStyle = C.ink3;
+      x.font = `300 22px ${SANS}`;
+      x.fillText(show.cite.piece, W / 2, pieceY);
+
+      const sealText = `核验 · 原文逐字核过 · 两字${show.cite.kind}`;
+      x.font = `300 20px ${SANS}`;
+      const tw = x.measureText(sealText).width + 64;
+      const bx = W / 2 - tw / 2;
+      const by = pieceY + 22;
+      x.strokeStyle = C.accent;
+      x.lineWidth = 1.5;
+      x.strokeRect(bx, by, tw, 48);
+      x.fillStyle = C.accent;
+      x.textAlign = "left";
+      x.fillText(sealText, bx + 32, by + 32);
+      x.textAlign = "center";
+    }
+
+    x.fillStyle = C.ink3;
+    x.font = `300 20px ${SANS}`;
+    x.fillText(
+      `本场第 ${show.no} 个${show.sessionGiven ? ` · 此前已给过 ${show.sessionGiven} 个` : ""}`,
+      W / 2,
+      ledgerY + 24,
+    );
+
+    const cy2 = [rowsTop, rowsTop];
     mainRows.forEach((r, i) => {
       const col = i % 2;
       const cx = M + col * (colW + 70);
-      const y = cy[col];
+      const y = cy2[col];
       x.textAlign = "left";
       x.fillStyle = C.accent;
       x.font = `400 21px ${SERIF}`;
@@ -727,10 +911,9 @@ export function LiveClient() {
       x.fillStyle = C.ink2;
       x.font = `400 26px ${SERIF}`;
       r.lines.forEach((ln, j) => x.fillText(ln, cx, y + 38 + j * 44));
-      cy[col] = y + 40 + r.lines.length * 44 + 26;
+      cy2[col] = y + 40 + r.lines.length * 44 + 26;
     });
 
-    const div2 = rowsTop + mainH + (show.bazi ? 60 : 20);
     if (show.bazi) {
       x.textAlign = "center";
       x.fillStyle = C.ink3;
@@ -748,21 +931,31 @@ export function LiveClient() {
     x.font = `400 21px ${SERIF}`;
     x.fillText("备选", W / 2, div2 + 44);
 
-    const altTop = div2 + 104;
     altBlocks.forEach((b, i) => {
-      const cx = M + i * (altColW + 80);
+      const cx = M + i * (altColW + altGap);
       const y = altTop;
       x.textAlign = "left";
       x.fillStyle = C.ink;
       x.font = `500 40px ${SERIF}`;
       x.fillText(b.a.n, cx, y);
-      x.fillStyle = C.ink3;
-      x.font = `300 21px ${SANS}`;
-      x.fillText(b.a.py, cx, y + 34);
+      drawSyllables(x, b.a.syl, cx, y + 34, {
+        size: 21,
+        weight: 300,
+        color: C.ink3,
+        align: "left",
+        maxW: altColW,
+      });
+      x.textAlign = "left";
       x.fillStyle = C.ink2;
       x.font = `400 22px ${SERIF}`;
       b.oneLines.forEach((ln, j) => x.fillText(ln, cx, y + 72 + j * 32));
-      let ry = y + 72 + b.oneLines.length * 32 + 40;
+      let ry = y + 72 + b.oneLines.length * 32 + 34;
+      if (b.citeLines.length) {
+        x.fillStyle = C.accent;
+        x.font = `300 19px ${SERIF}`;
+        b.citeLines.forEach((ln, j) => x.fillText(ln, cx, ry + j * 30));
+        ry += b.citeLines.length * 30 + 10;
+      }
       b.rows.forEach((r) => {
         x.fillStyle = C.accent;
         x.font = `400 19px ${SERIF}`;
@@ -900,7 +1093,17 @@ export function LiveClient() {
               <p className="gen-extra">
                 {birthday ? `双字名 · 避开网红名 · 生辰 ${birthday}` : "双字名 · 避开网红名"}
               </p>
-              <p className="gen-stage">{stageText(stage)}</p>
+              {frames.length ? (
+                <ul className="gen-log">
+                  {frames.map((f, i) => (
+                    <li key={`${f}-${i}`} className={i === frames.length - 1 ? "on" : ""}>
+                      {f}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="gen-stage">{stageText(stage)}</p>
+              )}
               <div className="bar">
                 <i style={{ width: `${progress}%` }} />
               </div>
@@ -952,7 +1155,12 @@ export function LiveClient() {
                         ))}
                       </h1>
                       <p className="pinyin reveal" style={{ ["--d" as string]: "200ms" }}>
-                        {show.py}
+                        {show.syl.map((s, i) => (
+                          <span className="syl" key={`${s.ch}-${i}`}>
+                            {s.py}
+                            {s.tone ? <i className="tone">{s.tone}</i> : null}
+                          </span>
+                        ))}
                       </p>
                       {show.pyHint && (
                         <p className="pinyin-hint reveal" style={{ ["--d" as string]: "300ms" }}>
@@ -969,8 +1177,24 @@ export function LiveClient() {
                       </ul>
                     </div>
 
+                    {show.cite && (
+                      <blockquote className="evidence reveal" style={{ ["--d" as string]: "780ms" }}>
+                        <p className="ev-quote">{show.cite.quote}</p>
+                        <p className="ev-piece">{show.cite.piece}</p>
+                        <p className="ev-seal">
+                          <span>核验</span>
+                          原文逐字核过 · 两字{show.cite.kind}
+                        </p>
+                      </blockquote>
+                    )}
+
+                    <p className="ledger reveal" style={{ ["--d" as string]: "820ms" }}>
+                      本场第 {show.no} 个
+                      {show.sessionGiven ? ` · 此前已给过 ${show.sessionGiven} 个` : ""}
+                    </p>
+
                     <section className="details reveal" style={{ ["--d" as string]: "850ms" }}>
-                      {show.rows.map(([label, text]) => (
+                      {show.cardRows.map(([label, text]) => (
                         <div
                           className={`detail${label === "八字" ? " wide" : ""}`}
                           key={label}
@@ -994,7 +1218,20 @@ export function LiveClient() {
                         {show.alts.map((a) => (
                           <div className="alt-item" key={a.n}>
                             <span className="alt-name">{a.n}</span>
-                            <span className="alt-py">{a.py}</span>
+                            <span className="alt-py">
+                              {a.syl.map((s, i) => (
+                                <span className="syl" key={`${s.ch}-${i}`}>
+                                  {s.py}
+                                  {s.tone ? <i className="tone">{s.tone}</i> : null}
+                                </span>
+                              ))}
+                            </span>
+                            <span className="alt-one">{a.one}</span>
+                            {a.cite && (
+                              <span className="alt-cite">
+                                {a.cite.quote} {a.cite.piece}
+                              </span>
+                            )}
                           </div>
                         ))}
                       </div>
