@@ -1,0 +1,315 @@
+"use client";
+
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { ReviewBatch, ReviewItem, Suggestion, Verdict, VerdictMap, VerdictRecord } from "@/library/review-types";
+
+const VERDICT_LABEL: Record<Verdict, string> = { yes: "要", no: "不要", unsure: "拿不准" };
+const AS_VERDICT: Record<Suggestion, Verdict> = { 要: "yes", 不要: "no", 拿不准: "unsure" };
+const GENDER_LABEL: Record<ReviewItem["gender"], string> = { male: "男孩", female: "女孩", neutral: "男女都可" };
+const KEYS: { verdict: Verdict; key: string }[] = [
+  { verdict: "yes", key: "1" },
+  { verdict: "no", key: "2" },
+  { verdict: "unsure", key: "3" },
+];
+
+/** 要 = 天青，不要 = 铁足，拿不准 = 灰：和全站的强调色一致 */
+function tone(v: Verdict | Suggestion): string {
+  const k = typeof v === "string" && v in AS_VERDICT ? AS_VERDICT[v as Suggestion] : (v as Verdict);
+  if (k === "yes") return "border-gold text-gold";
+  if (k === "no") return "border-cinnabar text-cinnabar";
+  return "border-outline-variant text-outline";
+}
+
+function nextOpen(items: ReviewItem[], verdicts: VerdictMap, from: number): number {
+  const after = items.findIndex((it, i) => i > from && !verdicts[it.id]);
+  if (after >= 0) return after;
+  return items.findIndex((it) => !verdicts[it.id]);
+}
+
+export function ReviewClient({
+  batch,
+  initialVerdicts,
+  batchNames,
+}: {
+  batch: ReviewBatch;
+  initialVerdicts: VerdictMap;
+  batchNames: string[];
+}) {
+  const items = batch.items;
+  const [verdicts, setVerdicts] = useState<VerdictMap>(initialVerdicts);
+  const [index, setIndex] = useState(() => {
+    const open = items.findIndex((i) => !initialVerdicts[i.id]);
+    return open >= 0 ? open : 0;
+  });
+  const [note, setNote] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const item = items[index]!;
+  const mine = verdicts[item.id];
+  const done = items.filter((i) => verdicts[i.id]).length;
+
+  // 换到另一个名字时，备注框显示那个名字已存的备注
+  useEffect(() => {
+    setNote(verdicts[item.id]?.note ?? "");
+    setError(null);
+    // 只在换名字时同步，存完备注不要被覆盖
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item.id]);
+
+  const vote = useCallback(
+    async (verdict: Verdict) => {
+      if (saving) return;
+      setSaving(true);
+      setError(null);
+      try {
+        const res = await fetch("/api/review", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ batch: batch.batch, id: item.id, verdict, note }),
+        });
+        const out = (await res.json()) as { ok: boolean; record?: VerdictRecord; message?: string };
+        if (!res.ok || !out.ok || !out.record) throw new Error(out.message || "没存上，再点一次");
+        const next = { ...verdicts, [item.id]: out.record };
+        setVerdicts(next);
+        const target = nextOpen(items, next, index);
+        if (target >= 0) setIndex(target);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "没存上，再点一次");
+      } finally {
+        setSaving(false);
+      }
+    },
+    [saving, batch.batch, item.id, note, verdicts, items, index],
+  );
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement | null)?.tagName ?? "";
+      if (tag === "TEXTAREA" || tag === "INPUT") return;
+      const hit = KEYS.find((k) => k.key === e.key);
+      if (hit) {
+        e.preventDefault();
+        void vote(hit.verdict);
+      } else if (e.key === "ArrowLeft") {
+        setIndex((i) => Math.max(0, i - 1));
+      } else if (e.key === "ArrowRight") {
+        setIndex((i) => Math.min(items.length - 1, i + 1));
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [vote, items.length]);
+
+  const compare = useMemo(() => {
+    const reviewed = items.filter((i) => verdicts[i.id]);
+    const differ = reviewed.filter((i) => AS_VERDICT[i.suggestion] !== verdicts[i.id]!.verdict);
+    return { reviewed: reviewed.length, same: reviewed.length - differ.length, differ };
+  }, [items, verdicts]);
+
+  return (
+    <main data-testid="review-page">
+      <p className="text-xs font-medium tracking-[0.22em] text-gold">名字评审</p>
+      <h1 className="mt-2 text-2xl font-bold tracking-[0.1em] text-paper sm:text-3xl">{batch.title}</h1>
+      <p className="mt-3 text-sm leading-relaxed text-body-text">{batch.note}</p>
+      <p className="mt-3 text-sm leading-relaxed text-body-text">
+        你只回答一个问题：<b className="text-paper">如果是你的孩子，你愿意用这个名字吗？</b>
+        按 1 要、2 不要、3 拿不准，← → 翻页。下面的原因只是参考，你的直觉就是观众的直觉。
+      </p>
+
+      {batchNames.length > 1 ? (
+        <nav className="mt-4 flex flex-wrap gap-2 text-xs">
+          {batchNames.map((n) => (
+            <Link
+              key={n}
+              href={`/review?batch=${n}`}
+              className={`border px-2.5 py-1 tracking-wider ${n === batch.batch ? "border-gold text-gold" : "border-outline-variant/60 text-outline"}`}
+            >
+              {n}
+            </Link>
+          ))}
+        </nav>
+      ) : null}
+
+      <div className="mt-5 flex items-center gap-3 text-sm text-outline">
+        <div className="h-1.5 flex-1 overflow-hidden bg-surface-low">
+          <div className="h-full bg-gold transition-all" style={{ width: `${(done / items.length) * 100}%` }} />
+        </div>
+        <span data-testid="review-progress">
+          已评 {done} / {items.length}
+        </span>
+      </div>
+
+      <section className="mt-6 border border-outline-variant/60 bg-surface/70 p-5 shadow-card sm:p-7" data-testid="review-card">
+        <div className="flex flex-wrap items-center gap-2 text-xs tracking-wider text-outline">
+          <span>
+            第 {index + 1} / {items.length} 个
+          </span>
+          <span className="border border-outline-variant/60 px-1.5 py-0.5">{GENDER_LABEL[item.gender]}</span>
+          <span className="border border-outline-variant/60 px-1.5 py-0.5">{item.origin}</span>
+          {mine ? (
+            <span className={`border px-1.5 py-0.5 ${tone(mine.verdict)}`}>你选了：{VERDICT_LABEL[mine.verdict]}</span>
+          ) : null}
+        </div>
+
+        <div className="mt-5 text-center">
+          <p className="text-5xl font-semibold tracking-[0.35em] text-paper sm:text-6xl" data-testid="review-name">
+            {item.givenName}
+          </p>
+          <p className="mt-3 text-base tracking-[0.2em] text-outline">{item.pinyin}</p>
+        </div>
+
+        <div className="mt-6 border-l-2 border-gold/60 pl-4">
+          {item.citation ? (
+            <>
+              <p className="text-lg leading-relaxed text-paper">「{item.citation.line}」</p>
+              <p className="mt-1 text-sm text-outline">
+                {item.citation.from}
+                {item.order === "reversed" ? " · 两个字在原句里是倒着取的" : ""}
+              </p>
+            </>
+          ) : (
+            <p className="text-sm text-outline">没有出处</p>
+          )}
+          <p className="mt-3 text-base leading-relaxed text-body-text">{item.meaning}</p>
+        </div>
+
+        <div className="mt-6">
+          <p className="text-sm text-outline">
+            我的建议：
+            <span className={`ml-1 border px-2 py-0.5 text-sm font-semibold ${tone(item.suggestion)}`}>{item.suggestion}</span>
+          </p>
+          <div className="mt-3 grid gap-4 sm:grid-cols-2">
+            <div>
+              <p className="text-xs tracking-widest text-gold">好在哪</p>
+              <ul className="mt-1.5 space-y-1.5 text-sm leading-relaxed text-body-text">
+                {item.pros.map((p) => (
+                  <li key={p}>· {p}</li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <p className="text-xs tracking-widest text-cinnabar">问题在哪</p>
+              <ul className="mt-1.5 space-y-1.5 text-sm leading-relaxed text-body-text">
+                {item.cons.map((c) => (
+                  <li key={c}>· {c}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <details className="mt-5 text-sm text-body-text">
+          <summary className="cursor-pointer text-outline">配上姓看看（规则打分）</summary>
+          <p className="mt-2 text-xs leading-relaxed text-faint">
+            规则只查谐音、忌字、热门字、年代字、笔画这类硬伤，查不出土不土、怪不怪，所以分数高不代表名字好。
+          </p>
+          <ul className="mt-2 space-y-2">
+            {item.samples.map((s) => (
+              <li key={s.fullName}>
+                <span className="text-paper">{s.fullName}</span>
+                <span className="ml-2 text-outline">{s.pinyin}</span>
+                <span className="ml-2">{s.score} 分</span>
+                {s.deductions.length ? (
+                  <ul className="mt-0.5 pl-3 text-xs text-outline">
+                    {s.deductions.map((d) => (
+                      <li key={d.line}>
+                        −{d.points} {d.line}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </details>
+
+        <textarea
+          className="field-input mt-5 min-h-[3.2rem] resize-y text-sm"
+          placeholder="想补一句理由可以写在这里（可不填，比如「太老气」「读着拗口」）"
+          maxLength={200}
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+        />
+
+        <div className="mt-4 grid grid-cols-3 gap-3">
+          {KEYS.map(({ verdict, key }) => (
+            <button
+              key={verdict}
+              type="button"
+              disabled={saving}
+              onClick={() => void vote(verdict)}
+              data-testid={`review-${verdict}`}
+              className={`min-h-12 border text-base tracking-widest transition disabled:opacity-50 ${
+                mine?.verdict === verdict ? `${tone(verdict)} bg-gold-soft font-semibold` : "border-outline-variant text-body-text hover:border-gold hover:text-gold"
+              }`}
+            >
+              {VERDICT_LABEL[verdict]}
+              <span className="ml-1.5 text-xs text-faint">{key}</span>
+            </button>
+          ))}
+        </div>
+        {error ? <p className="mt-3 text-sm text-cinnabar">{error}</p> : null}
+
+        <div className="mt-4 flex justify-between text-sm">
+          <button type="button" className="btn-ghost" disabled={index === 0} onClick={() => setIndex((i) => Math.max(0, i - 1))}>
+            ← 上一个
+          </button>
+          <button
+            type="button"
+            className="btn-ghost"
+            disabled={index === items.length - 1}
+            onClick={() => setIndex((i) => Math.min(items.length - 1, i + 1))}
+          >
+            下一个 →
+          </button>
+        </div>
+      </section>
+
+      <section className="mt-8">
+        <p className="text-xs tracking-widest text-outline">全部名字（点一下跳过去；框的颜色是你选的）</p>
+        <ul className="mt-3 flex flex-wrap gap-2">
+          {items.map((it, i) => {
+            const v = verdicts[it.id];
+            return (
+              <li key={it.id}>
+                <button
+                  type="button"
+                  onClick={() => setIndex(i)}
+                  className={`min-h-9 border px-2.5 text-sm tracking-wider ${
+                    v ? tone(v.verdict) : "border-outline-variant/50 text-faint"
+                  } ${i === index ? "bg-gold-soft" : ""}`}
+                >
+                  {it.givenName}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </section>
+
+      {compare.reviewed > 0 ? (
+        <section className="mt-8" data-testid="review-compare">
+          <div className="ink-divider mb-5" />
+          <p className="text-base text-paper">
+            已评 {compare.reviewed} 个，和我的建议一致 {compare.same} 个，不一致 {compare.differ.length} 个。
+          </p>
+          {compare.differ.length ? (
+            <ul className="mt-3 space-y-1.5 text-sm text-body-text">
+              {compare.differ.map((it) => (
+                <li key={it.id}>
+                  <button type="button" className="text-paper underline-offset-4 hover:underline" onClick={() => setIndex(items.indexOf(it))}>
+                    {it.givenName}
+                  </button>
+                  ：我建议「{it.suggestion}」，你选「{VERDICT_LABEL[verdicts[it.id]!.verdict]}」
+                  {verdicts[it.id]!.note ? `（${verdicts[it.id]!.note}）` : ""}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </section>
+      ) : null}
+    </main>
+  );
+}
