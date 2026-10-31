@@ -10,9 +10,8 @@ import nameChars from "@/config/name-chars.json";
 /**
  * 打分用的词表，全部是 src/config 下的 JSON。
  *
- * 刻意不从 src/fast/gate.ts 里取：那边是精简版取名的闸门，正在另一条线上重构。
- * 谐音坏词表是从 gate.ts 的 BAD_PREFIX 抄过来的，多存了一列「听成什么」，
- * 主播才说得出口；精简版以后想用，直接改成读这份文件即可。
+ * 打分榜、直播闸门（src/fast/gate.ts）、完整版闸门（src/domain/gate.ts）都读这一份，
+ * 判法统一在 recommend.ts。谐音坏词表多存了一列「听成什么」，主播才说得出口。
  */
 
 export const TEMPLATE_NAMES: ReadonlySet<string> = new Set(l1Templates as string[]);
@@ -122,7 +121,8 @@ export const BIG_SURNAMES: ReadonlySet<string> = new Set([..."王李张刘陈杨
 
 /**
  * 姓本身是某个常用字的异体，名首字一撞就连读成那个词（沈默 → 沉默）。
- * 与 gate.ts 的 SURNAME_CHAR_TRAP 同一份字，as 是姓被听成的那个字。
+ * 拼音不同音（shěn / chén），坏词表抓不到，只能按字拦。as 是姓被听成的那个字。
+ * 扩法：谁发现新的就加一行，键是姓。
  */
 export const SURNAME_TRAP: Readonly<Record<string, { as: string; chars: ReadonlySet<string> }>> = {
   沈: { as: "沉", chars: new Set([..."默思重香睡浮着稳淀沦迷溺痛"]) },

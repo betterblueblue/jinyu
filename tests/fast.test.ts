@@ -51,14 +51,29 @@ describe("精简版闸门", () => {
     expect(checkFastCandidate("苏清禾", "苏").keep).toBe(false);
   });
 
-  it("干净的名字放行，热门字只标记不拦", () => {
+  it("干净的名字放行，一个热门字只标记不拦", () => {
     const ok = checkFastCandidate("静姝", "林");
     expect(ok.keep).toBe(true);
     expect(ok.hotChar).toBe(false);
 
-    const hot = checkFastCandidate("书瑶", "林");
+    // 林清瑶：只有「瑶」是热门字，扣 8 分还有 92
+    const hot = checkFastCandidate("清瑶", "林");
     expect(hot.keep).toBe(true);
     expect(hot.hotChar).toBe(true);
+  });
+
+  it("和打分榜同一套规则：打分会扣到 90 以下的直播不出", () => {
+    // 林书瑶：热门字 8 + 笔画差 5（书 4 画、瑶 14 画），87 分。以前只标热门、照样出
+    const low = checkFastCandidate("书瑶", "林");
+    expect(low.keep).toBe(false);
+    expect(low.score).toBe(87);
+    expect(low.reasons[0]).toContain("打分不到 90");
+    // 宸、懿这类换字档的字，打分扣 15，以前直播闸门不拦
+    expect(checkFastCandidate("宸熙", "张", "male").keep).toBe(false);
+    // 两个热门字
+    expect(checkFastCandidate("梓萱", "陈", "female").keep).toBe(false);
+    // 男孩名里两个字都偏女孩
+    expect(checkFastCandidate("婉婷", "王", "male").keep).toBe(false);
   });
 
   it("连姓谐音按「姓 + 名首字」拦，正常词不误伤", () => {

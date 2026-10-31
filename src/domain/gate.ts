@@ -1,5 +1,7 @@
 import l1Templates from "@/config/l1-templates.json";
 import l2Chars from "@/config/l2-chars.json";
+import type { AnalysisGender } from "./analysis/types";
+import { checkRecommendable } from "./score/recommend";
 import type { EliminationNote, GatedCandidate, NormalizedRequest, RawCandidate } from "./types";
 
 const L1 = new Set(l1Templates as string[]);
@@ -46,6 +48,24 @@ function isL2Hot(given: string): boolean {
   return [...given].some((c) => L2.has(c));
 }
 
+/**
+ * 和打分榜同一套规则（score/recommend.ts）：谐音、忌字、和姓同音、打分不到 90 的都不进报告。
+ * 用户指定的辈分字落下的扣分不算；关了「尽量避开热门名」时不算热门字。
+ * 性别未知时按模型标的男向 / 女向判，中性名不判性别。
+ */
+function recommendReasons(givenName: string, c: RawCandidate, req: NormalizedRequest): string[] {
+  const gender: AnalysisGender =
+    req.gender !== "unknown" ? req.gender : c.genderLean === "male" || c.genderLean === "female" ? c.genderLean : "unknown";
+  const exemptPositions = req.generationChar
+    ? [...givenName].map((ch, i) => (ch === req.generationChar ? i : -1)).filter((i) => i >= 0)
+    : [];
+  const check = checkRecommendable(req.surname, givenName, gender, {
+    exemptPositions,
+    ...(req.avoidPopular ? {} : { ignoreRules: ["hot"] as const }),
+  });
+  return check.reasons;
+}
+
 function polyphoneNote(given: string): string | undefined {
   const hits = [...given].filter((c) => POLYPHONE_RISK.has(c));
   if (!hits.length) return undefined;
@@ -85,6 +105,9 @@ export function applyHardGate(candidates: RawCandidate[], req: NormalizedRequest
     }
     if (seen.has(givenName)) {
       reasons.push("重复候选");
+    }
+    if (!reasons.length) {
+      reasons.push(...recommendReasons(givenName, c, req));
     }
 
     if (reasons.length) {
