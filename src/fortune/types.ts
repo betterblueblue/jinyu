@@ -191,4 +191,6 @@ export interface FortuneReading {
   provider: string;
   /** 被措辞闸门删掉的句子数（寿命、血光、克夫这类） */
   removed: number;
+  /** 和排盘对不上被删掉的句子数（日主、强弱、喜忌、干支、生肖写错，或提了神煞） */
+  conflicts: number;
 }

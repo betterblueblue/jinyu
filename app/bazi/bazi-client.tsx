@@ -619,6 +619,11 @@ function ChartView({
             {reading.provider === "fake" ? (
               <p className="mb-3 text-xs text-outline">当前是示例模式（没有接入模型），下面只摆出盘面事实。</p>
             ) : null}
+            {reading.conflicts ? (
+              <p className="mb-3 text-xs text-outline" data-testid="bazi-conflicts">
+                解读里有 {reading.conflicts} 句和上面的排盘对不上（比如把日主、喜忌、干支说错），已经删掉。
+              </p>
+            ) : null}
             {reading.overview ? (
               <p className="max-w-[44ch] text-base leading-8 text-paper" data-testid="bazi-overview">
                 {reading.overview}

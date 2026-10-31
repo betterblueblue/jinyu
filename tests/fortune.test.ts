@@ -5,6 +5,7 @@ import { findPlace, isPreciseEnough, listChildren } from "@/fortune/places";
 import { buildReadingMessages } from "@/fortune/prompt";
 import { FakeReadingProvider } from "@/fortune/provider";
 import { natalRelations } from "@/fortune/relations";
+import { chartFacts, findConflict } from "@/fortune/consistency";
 import { cleanText, normalizeReading, runReading } from "@/fortune/reading";
 import { chinaDstRange, equationOfTimeMinutes, formatLocal, toTrueSolarTime } from "@/fortune/solar-time";
 import { computeStrength } from "@/fortune/strength";
@@ -294,6 +295,64 @@ describe("解读落地", () => {
     expect(reading.years.map((x) => x.year)).toEqual([2027]);
     expect(reading.advice).toEqual(["多运动。"]);
     expect(reading.sections.map((s) => s.title)).toEqual(["性格"]);
+  });
+
+  it("和排盘对不上的句子删掉并计数：日主、强弱、喜忌、柱子、十神、生肖、神煞", () => {
+    const f = chartFacts(chart);
+    const s = chart.strength;
+    const [year, month, day] = chart.pillars;
+    const wrongGan = "甲乙丙丁戊己庚辛壬癸".split("").find((g) => g !== f.dayGan)!;
+    const weak = ["极弱", "身弱", "偏弱"].includes(s.level);
+    const wrongStrength = weak ? "你身强，扛得住事。" : "你身弱，要多靠人帮。";
+    const rightStrength = weak ? "你身弱，要多靠人帮。" : "你身强，扛得住事。";
+    const wrongGod = month.tenGod === "正印" ? "偏印" : "正印";
+    const wrong = [
+      `${wrongGan}木日主，性子直。`,
+      wrongStrength,
+      s.unfavorable[0] ? `命中喜${s.unfavorable[0]}。` : "",
+      s.favorable[0] ? `${s.favorable[0]}为忌神。` : "",
+      "日柱甲子，坐下子水。",
+      `月干为${wrongGod}，得长辈照顾。`,
+      chart.zodiac === "鼠" ? "你属牛。" : "你属鼠。",
+      "命带桃花，人缘好。",
+    ].filter(Boolean);
+    const right = [
+      `日主${f.dayGan}${s.dayMaster.element}，做事有主见。`,
+      rightStrength,
+      s.favorable[0] ? `喜用${s.favorable[0]}。` : "",
+      `年柱${year.ganzhi}，日支${day.zhi}。`,
+      `月干${month.gan}为${month.tenGod}。`,
+      `你属${chart.zodiac}。`,
+      "若论格局，也有人看作另一种。",
+      "判断日主旺衰要看月令。",
+      "提升自身强项，比补短板更有效。",
+    ].filter(Boolean);
+    for (const t of wrong) expect(findConflict(t, f, true), t).not.toBeNull();
+    for (const t of right) expect(findConflict(t, f, true), t).toBeNull();
+
+    const reading = normalizeReading(
+      { overview: [...right.slice(0, 2), ...wrong.slice(0, 3)].join(""), personality: { basis: "", text: wrong.slice(3).join("") } },
+      chart,
+      "test",
+    )!;
+    expect(reading.conflicts).toBe(wrong.length);
+    expect(reading.overview).toBe(right.slice(0, 2).join(""));
+    expect(reading.sections).toHaveLength(0);
+  });
+
+  it("「日支丑未又冲」这种讲两支关系的写法不当成日支写错（真模型出过）", () => {
+    const f = chartFacts(chart);
+    const dayZhi = chart.pillars[2].zhi;
+    const other = "子丑寅卯辰巳午未申酉戌亥".split("").find((z) => z !== dayZhi)!;
+    expect(findConflict(`地支巳酉丑三合金局，日支${other}${dayZhi}又冲。`, f, true)).toBeNull();
+    expect(findConflict(`日支${other}土，坐下根气足。`, f, true)).not.toBeNull();
+  });
+
+  it("大运、流年里的「流年干」「年干」不当年柱查，喜忌照样查", () => {
+    const f = chartFacts(chart);
+    expect(findConflict("流年干丙火透出，年支午火。", f, false)).toBeNull();
+    const fav = chart.strength.favorable[0];
+    if (fav) expect(findConflict(`这十年${fav}为忌，要收着点。`, f, false)).not.toBeNull();
   });
 
   it("模型什么都没给时算失败，不拿空壳充数", () => {

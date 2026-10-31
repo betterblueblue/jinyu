@@ -1,3 +1,4 @@
+import { chartFacts, findConflict } from "./consistency";
 import type { ReadingProvider } from "./provider";
 import type { RawReading, RawSection } from "./prompt";
 import type { FortuneChart, FortuneReading, ReadingSection } from "./types";
@@ -46,17 +47,27 @@ function tidy(text: string): string {
 interface Cleaned {
   text: string;
   removed: number;
+  /** 和排盘对不上被删掉的句子数（见 consistency.ts） */
+  conflicts: number;
 }
 
-/** 按句子过闸：命中禁区的整句删，断语软化，再按句子边界截到 max 字以内 */
-export function cleanText(raw: unknown, max: number): Cleaned {
-  if (typeof raw !== "string") return { text: "", removed: 0 };
+/**
+ * 按句子过闸：命中禁区的整句删，和排盘对不上的整句删（给了 conflictOf 才查），断语软化，
+ * 再按句子边界截到 max 字以内
+ */
+export function cleanText(raw: unknown, max: number, conflictOf?: (sentence: string) => string | null): Cleaned {
+  if (typeof raw !== "string") return { text: "", removed: 0, conflicts: 0 };
   const sentences = tidy(raw).match(/[^。！？；]+[。！？；]?/g) ?? [];
   let removed = 0;
+  let conflicts = 0;
   let out = "";
   for (const sentence of sentences) {
     if (BANNED_SENTENCE.test(sentence)) {
       removed++;
+      continue;
+    }
+    if (conflictOf?.(sentence)) {
+      conflicts++;
       continue;
     }
     let s = sentence;
@@ -67,14 +78,20 @@ export function cleanText(raw: unknown, max: number): Cleaned {
     }
     out += s;
   }
-  return { text: out.trim(), removed };
+  return { text: out.trim(), removed, conflicts };
 }
 
 export function normalizeReading(raw: RawReading, chart: FortuneChart, providerName: string): FortuneReading | null {
   let removed = 0;
-  const take = (value: unknown, max: number) => {
-    const c = cleanText(value, max);
+  let conflicts = 0;
+  const facts = chartFacts(chart);
+  // 命局总论、各项、建议讲的是原局，全部查；大运、流年只查日主、喜忌、生肖、神煞（见 consistency.ts）
+  const natal = (s: string) => findConflict(s, facts, true);
+  const period = (s: string) => findConflict(s, facts, false);
+  const take = (value: unknown, max: number, check: (s: string) => string | null = natal) => {
+    const c = cleanText(value, max, check);
     removed += c.removed;
+    conflicts += c.conflicts;
     return c.text;
   };
 
@@ -95,7 +112,7 @@ export function normalizeReading(raw: RawReading, chart: FortuneChart, providerN
         (x): x is { ganzhi?: unknown; text?: unknown } =>
           Boolean(x) && typeof x === "object" && String((x as { ganzhi?: unknown }).ganzhi ?? "").trim() === step.ganzhi,
       );
-      return { ganzhi: step.ganzhi, text: hit ? take(hit.text, 200) : "" };
+      return { ganzhi: step.ganzhi, text: hit ? take(hit.text, 200, period) : "" };
     })
     .filter((x) => x.text);
 
@@ -106,7 +123,7 @@ export function normalizeReading(raw: RawReading, chart: FortuneChart, providerN
         (x): x is { year?: unknown; text?: unknown } =>
           Boolean(x) && typeof x === "object" && Number((x as { year?: unknown }).year) === y.year,
       );
-      return { year: y.year, text: hit ? take(hit.text, 240) : "" };
+      return { year: y.year, text: hit ? take(hit.text, 240, period) : "" };
     })
     .filter((x) => x.text);
 
@@ -115,7 +132,7 @@ export function normalizeReading(raw: RawReading, chart: FortuneChart, providerN
     .filter(Boolean)
     .slice(0, 5);
 
-  return { overview, sections, luck, years, advice, provider: providerName, removed };
+  return { overview, sections, luck, years, advice, provider: providerName, removed, conflicts };
 }
 
 export type ReadingOutcome = { ok: true; reading: FortuneReading } | { ok: false; message: string };
