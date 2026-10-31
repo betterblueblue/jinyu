@@ -11,7 +11,7 @@
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { scoreName } from "../../src/domain/score/score";
-import type { ReviewBatch, ReviewCitation, ReviewGender, VerdictMap } from "../../src/library/review-types";
+import type { ReviewBatch, ReviewCitation, ReviewGender, TalkScript, VerdictMap } from "../../src/library/review-types";
 
 /** 和姓无关、命中就配哪个姓都不能出的规则（与 recommend.ts 的硬伤一致） */
 const NAME_BLOCKING = new Set(["forbidden", "swap", "template", "rare", "misread", "eraName"]);
@@ -22,6 +22,8 @@ export interface LibraryEntry {
   gender: ReviewGender;
   citation?: ReviewCitation;
   meaning: string;
+  /** 口播稿，提词页照着念 */
+  talk?: TalkScript;
   /** 用户给的分：90 很好 / 80 可以 */
   grade: number;
   batch: string;
@@ -79,6 +81,7 @@ for (const file of readdirSync(reviewDir).filter((f) => f.endsWith(".json") && !
       gender: item.gender,
       ...(item.citation ? { citation: item.citation } : {}),
       meaning: item.meaning,
+      ...(item.talk ? { talk: item.talk } : {}),
       grade,
       batch: batch.batch,
     });
@@ -95,6 +98,8 @@ const male = count("male");
 const female = count("female");
 const neutral = count("neutral");
 console.log(
-  `名字库 ${entries.length} 个：男孩 ${male}、女孩 ${female}、男女都可 ${neutral}；男孩能用 ${male + neutral}，女孩能用 ${female + neutral}。带出处 ${entries.filter((e) => e.citation).length} 个`,
+  `名字库 ${entries.length} 个：男孩 ${male}、女孩 ${female}、男女都可 ${neutral}；男孩能用 ${male + neutral}，女孩能用 ${female + neutral}。带出处 ${entries.filter((e) => e.citation).length} 个，带口播稿 ${entries.filter((e) => e.talk).length} 个`,
 );
 if (skipped.length) console.log(`没进库（低于 ${MIN_GRADE} 分或重复）：${skipped.join(" ")}`);
+const untalked = entries.filter((e) => !e.talk).map((e) => e.givenName);
+if (untalked.length) console.log(`提醒 进库但还没有口播稿（直播时提词页只能显示一句话）：${untalked.join(" ")}`);

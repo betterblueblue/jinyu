@@ -5,18 +5,22 @@
  *   输入 data/name-library/v2/drafts/<batch>.json（agent 起草：名字、出处、我的建议、好在哪、问题在哪）
  *   输出 data/name-library/v2/review/<batch>.json
  *
- * 做三件事，全是确定性计算，不调模型：
+ * 口播稿可以写在草稿每一条的 talk 里，也可以单独放 drafts/<batch>.talk.json（{ 编号: talk }，给已经评过的批次补）。
+ *
+ * 做四件事，全是确定性计算，不调模型：
  *   1. 出处逐字回语料核对（scripts/library/corpus.ts 的 checkCitation）；有一条不过就退出码 1，不生成文件
  *   2. 配王、李、陈三个常见姓，用打分规则（src/domain/score/score.ts）算分，扣分理由一并写进去
  *   3. 标上名字拼音
+ *   4. 口播稿查格式和忌讳词（src/library/talk.ts 的 talkProblems），不过也退出码 1
  * 建议「要」的名字如果名字本身扣分超过 10 分，打印提醒（说明我的建议和规则对不上，要么改建议，要么补规则）。
  */
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { pinyin } from "pinyin-pro";
 import { fullNamePinyin } from "../../src/domain/pinyin-name";
 import { scoreName } from "../../src/domain/score/score";
-import type { DraftBatch, ReviewBatch, ReviewItem } from "../../src/library/review-types";
+import type { DraftBatch, ReviewBatch, ReviewItem, TalkScript } from "../../src/library/review-types";
+import { talkProblems } from "../../src/library/talk";
 import { checkCitation } from "./corpus";
 
 const SAMPLE_SURNAMES = ["王", "李", "陈"];
@@ -31,16 +35,24 @@ if (!batchName || !/^[a-z0-9-]+$/.test(batchName)) {
 
 const root = join(process.cwd(), "data", "name-library", "v2");
 const draft = JSON.parse(readFileSync(join(root, "drafts", `${batchName}.json`), "utf8")) as DraftBatch;
+const talkFile = join(root, "drafts", `${batchName}.talk.json`);
+const talkMap = existsSync(talkFile) ? (JSON.parse(readFileSync(talkFile, "utf8")) as Record<string, TalkScript>) : {};
 
 const errors: string[] = [];
 const warnings: string[] = [];
 const seen = new Set<string>();
-const items: ReviewItem[] = draft.items.map((d) => {
+for (const id of Object.keys(talkMap)) {
+  if (!draft.items.some((d) => d.id === id)) errors.push(`${batchName}.talk.json 里的 ${id} 在草稿里找不到`);
+}
+const items: ReviewItem[] = draft.items.map((draftItem) => {
+  const talk = draftItem.talk ?? talkMap[draftItem.id];
+  const d = talk ? { ...draftItem, talk } : draftItem;
   if (seen.has(d.id)) errors.push(`${d.id} 编号重复`);
   seen.add(d.id);
   if (![...d.givenName].every((ch) => /[\u4e00-\u9fff]/.test(ch)) || [...d.givenName].length !== 2) {
     errors.push(`${d.id} ${d.givenName}：不是两个汉字`);
   }
+  if (d.talk) for (const p of talkProblems(d.talk)) errors.push(`${d.id} ${d.givenName} 口播稿：${p}`);
 
   let order: ReviewItem["order"];
   if (d.citation) {
@@ -89,6 +101,7 @@ writeFileSync(join(root, "review", `${batchName}.json`), `${JSON.stringify(out, 
 
 const count = (k: string) => items.filter((i) => i.suggestion === k).length;
 const cited = items.filter((i) => i.citation).length;
+const talked = items.filter((i) => i.talk).length;
 console.log(
-  `${batchName}：${items.length} 个（建议要 ${count("要")} / 拿不准 ${count("拿不准")} / 不要 ${count("不要")}），带出处 ${cited} 个，全部逐字核过`,
+  `${batchName}：${items.length} 个（建议要 ${count("要")} / 拿不准 ${count("拿不准")} / 不要 ${count("不要")}），带出处 ${cited} 个，全部逐字核过；带口播稿 ${talked} 个`,
 );

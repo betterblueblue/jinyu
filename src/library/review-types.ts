@@ -24,6 +24,18 @@ export interface ReviewCitation {
   line: string;
 }
 
+/** 直播口播稿的素材，拼法见 src/library/talk.ts */
+export interface TalkScript {
+  /** 一句话寓意，15 字以内，接在「寓意」后面念；观众屏幕上名字下面也是这一句 */
+  one: string;
+  /** 拆字：两个字各是什么意思 */
+  chars: string;
+  /** 合起来：两个字拼成的画面，和对孩子的祝福 */
+  whole: string;
+  /** 只给主播看：生僻字读音、观众可能提到的联想 */
+  tip?: string;
+}
+
 /** agent 起草的一条 */
 export interface DraftItem {
   id: string;
@@ -34,6 +46,8 @@ export interface DraftItem {
   citation?: ReviewCitation;
   /** 一句口播寓意 */
   meaning: string;
+  /** 口播稿；可以写在草稿里，也可以放 drafts/<批次>.talk.json（给评过的批次补） */
+  talk?: TalkScript;
   suggestion: Suggestion;
   pros: string[];
   cons: string[];

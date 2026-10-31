@@ -3,6 +3,10 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Grade, ReviewBatch, ReviewItem, Suggestion, Verdict, VerdictMap, VerdictRecord } from "@/library/review-types";
+import { talkLines } from "@/library/talk";
+
+/** 口播稿示意用的姓；直播时换成观众报的姓 */
+const TALK_SURNAME = "王";
 
 const AS_VERDICT: Record<Suggestion, Verdict> = { 要: "yes", 不要: "no", 拿不准: "unsure" };
 const GENDER_LABEL: Record<ReviewItem["gender"], string> = { male: "男孩", female: "女孩", neutral: "男女都可" };
@@ -141,6 +145,7 @@ export function ReviewClient({
       <p className="mt-3 text-sm leading-relaxed text-body-text">
         你只回答一个问题：<b className="text-paper">如果是你的孩子，你愿意用这个名字吗？</b>
         按 1 很好、2 可以、3 一般、4 不要、5 拿不准，← → 翻页。「很好」「可以」的才进直播名字库。下面的原因只是参考，你的直觉就是观众的直觉。
+        「直播怎么讲」是主播要念的稿子，念一遍，别扭的地方写在备注里。
       </p>
 
       {batchNames.length > 1 ? (
@@ -195,8 +200,24 @@ export function ReviewClient({
           ) : (
             <p className="text-sm text-outline">没有出处</p>
           )}
-          <p className="mt-3 text-base leading-relaxed text-body-text">{item.meaning}</p>
+          {item.talk ? null : <p className="mt-3 text-base leading-relaxed text-body-text">{item.meaning}</p>}
         </div>
+
+        {item.talk ? (
+          <div className="mt-6" data-testid="review-talk">
+            <p className="text-xs tracking-widest text-gold">直播怎么讲</p>
+            <p className="mt-2 text-sm text-outline">
+              观众屏幕上只有一句：<span className="text-base text-paper">{item.talk.one}</span>
+            </p>
+            <p className="mt-3 text-sm text-outline">主播照着念（以{TALK_SURNAME}姓为例）：</p>
+            <ol className="mt-1.5 list-decimal space-y-1.5 pl-5 text-base leading-relaxed text-body-text">
+              {talkLines(TALK_SURNAME, item.givenName, item.talk, item.citation).map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ol>
+            {item.talk.tip ? <p className="mt-3 text-sm leading-relaxed text-outline">只给主播看：{item.talk.tip}</p> : null}
+          </div>
+        ) : null}
 
         <div className="mt-6">
           <p className="text-sm text-outline">
