@@ -1,7 +1,7 @@
 import seedChars from "@/config/seed-chars.json";
-import seedLines from "@/config/seed-lines.json";
 import { buildBaziSummary } from "@/domain/bazi";
 import { fullNamePinyin } from "@/domain/pinyin-name";
+import { loadLibrary, pickLibraryCandidate } from "@/library/live-pick";
 import { citeFromLine, locateCitation } from "./cite";
 import { checkFastCandidate } from "./gate";
 import { normalizeFastInput } from "./normalize";
@@ -10,14 +10,14 @@ import { pickSeeds } from "./seeds";
 import {
   FAST_RECENT_MAX,
   type FastCandidate,
-  type FastCharSource,
   type FastFormInput,
   type FastResult,
   type FastStageEvent,
 } from "./types";
 
 /**
- * 精简版主流程：校验 → 排盘（可选）→ 抽起手字 → 一次生成 → 闸门 → 核出处（模型给了才核）→ 配字出（查表）→ 排序。
+ * 精简版主流程：校验 → 排盘（可选）→ 抽起手字 → 一次生成 → 闸门 → 核出处（模型给了才核）→ 排序
+ * → 首推换成名字库里的（挑得到的话，见 src/library/live-pick.ts），备选仍用模型起的。
  *
  * 不落盘：直播结果是即时产物，存图即交付。写进 data/reports 会污染历史页。
  */
@@ -96,21 +96,13 @@ function rankCandidates(pool: FastCandidate[], recent: readonly string[]): FastC
 export const __rankCandidates = rankCandidates;
 
 /**
- * 字出原句表：164 个起手字各配一句经典原文，scripts/check-seed-lines.ts 逐字核过。
- * 直播不再让模型给出处（多 3 秒、36 个名字只核到 1 条），名字里的起手字却一定在表里，
- * 查表就能给出一句真原文，不花模型时间。
+ * 首推换成名字库里的那个以后，备选去掉和它同名的；和它撞字的排到后面，不够三个才用上。
  */
-const CHAR_LINES: Record<string, { from: string; line: string }> = seedLines.lines;
-
-/** 先看这一轮的起手字，再看另一个字（模型配的字也可能在表里）；都没有就不出字出 */
-function charSourceOf(givenName: string, seeds: readonly string[]): FastCharSource | undefined {
-  const chars = [...givenName];
-  const order = [...chars.filter((ch) => seeds.includes(ch)), ...chars.filter((ch) => !seeds.includes(ch))];
-  for (const ch of order) {
-    const hit = CHAR_LINES[ch];
-    if (hit) return { char: ch, from: hit.from, line: hit.line };
-  }
-  return undefined;
+function alternativesBeside(primary: FastCandidate, ranked: readonly FastCandidate[]): FastCandidate[] {
+  const taken = new Set([...primary.givenName]);
+  const others = ranked.filter((c) => c.givenName !== primary.givenName);
+  const apart = others.filter((c) => ![...c.givenName].some((ch) => taken.has(ch)));
+  return [...apart, ...others.filter((c) => !apart.includes(c))].slice(0, ALTERNATIVES_MAX);
 }
 
 /** 同一批候选之间不重复用字；重复的丢掉，除非丢到不够 KEEP_MIN */
@@ -193,7 +185,6 @@ export async function runFast(
     if (c.source || c.piece) citeTried++;
 
     const py = fullNamePinyin(req.surname, name);
-    const charSource = charSourceOf(name, seeds);
     kept.push({
       givenName: name,
       fullName: `${req.surname}${name}`,
@@ -201,7 +192,6 @@ export async function runFast(
       ...(py.hint ? { pinyinHint: py.hint } : {}),
       why: c.why ?? "",
       hotChar: verdict.hotChar,
-      ...(charSource ? { charSource } : {}),
       ...((): { citation?: FastCandidate["citation"] } => {
         // 提示词不再要出处；模型自己给了，照旧逐字核，核不过就当没有
         if (!c.source && !c.piece) return {};
@@ -245,8 +235,9 @@ export async function runFast(
   const pool = fresh.length >= KEEP_MIN ? fresh : base;
 
   const ranked = rankCandidates(pool, recent);
-  const [primary, ...rest] = ranked as [FastCandidate, ...FastCandidate[]];
-  const alternatives = rest.slice(0, ALTERNATIVES_MAX);
+  const fromLibrary = pickLibraryCandidate(loadLibrary(), req.surname, req.gender, recent);
+  const primary = fromLibrary ?? ranked[0]!;
+  const alternatives = fromLibrary ? alternativesBeside(fromLibrary, ranked) : ranked.slice(1, 1 + ALTERNATIVES_MAX);
 
   // 出处这一帧只在模型真给了出处时才推，否则加载页每轮都会写「原文核验 0 条」
   const notes: string[] = [];

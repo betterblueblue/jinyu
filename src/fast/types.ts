@@ -4,6 +4,7 @@
  * 与完整版彻底分开：这里只有「姓 + 性别 + 生日」三个输入，
  * 没有 NormalizedRequest、没有辈分/避讳/字数/具体要求。
  */
+import type { TalkScript } from "@/library/review-types";
 
 export type FastGender = "male" | "female";
 
@@ -30,24 +31,14 @@ export interface FastRequest {
   birthday?: string;
 }
 
-/** 出处：quote 一律从语料原文里截，不是模型抄的 */
+/** 出处：quote 一律是语料原文（模型给的逐字核过；名字库的建库时逐字核过），不是模型抄的 */
 export interface FastCitation {
   source: string;
   piece: string;
   quote: string;
   line: string;
-}
-
-/**
- * 「字出」：名字里某一个字在经典里的一句原文，如「婉」字见《诗经·郑风·野有蔓草》：有美一人，婉如清扬。
- * 只说这一个字出自哪里，不说整个名字出自哪里。句子来自事先逐字核过的表 src/config/seed-lines.json，
- * 运行时只是查表，不花模型时间。
- */
-export interface FastCharSource {
-  char: string;
-  /** 展示用出处，如「《诗经·郑风·野有蔓草》」「王维《山居秋暝》」 */
-  from: string;
-  line: string;
+  /** 展示用出处，名字库的条目才有，如「崔颢《黄鹤楼》」；没有就拼 source·piece */
+  label?: string;
 }
 
 export interface FastCandidate {
@@ -58,12 +49,12 @@ export interface FastCandidate {
   pinyinHint?: string;
   /** 一句「为什么好」，20 字内 */
   why: string;
-  /** 没有可核出处时整个字段缺省，页面留白 */
+  /** 没有可核出处时整个字段缺省，页面留白；没有出处就不讲，不拿单个字凑 */
   citation?: FastCitation;
-  /** 字出：名字里有字在原句表里才有；起手字优先 */
-  charSource?: FastCharSource;
   /** 命中当前热门字，排序时压低 */
   hotChar: boolean;
+  /** 来自名字库（用户评过的），不是模型临时起的；口播稿给提词页 */
+  library?: { id: string; talk?: TalkScript };
 }
 
 /** 排查用：模型给了几个、过闸几个、每个被拦的原因。页面不展示，探针打出来看 */

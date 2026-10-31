@@ -3,9 +3,15 @@ import { isAuthenticated } from "@/auth/session";
 import { AppShell } from "@/components/AppShell";
 import { LoginForm } from "./login-form";
 
-export default async function LoginPage() {
+/** 登录后回到哪：只认站内的简单路径（提词页用 /login?next=/live/prompter），别的一律回 /name */
+function safeNext(raw: string | undefined): string {
+  return raw && /^\/(?![/\\])[A-Za-z0-9/_-]*$/.test(raw) ? raw : "/name";
+}
+
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
+  const next = safeNext((await searchParams).next);
   if (await isAuthenticated()) {
-    redirect("/name");
+    redirect(next);
   }
 
   return (
@@ -21,7 +27,7 @@ export default async function LoginPage() {
           可细读 · 可回看 · 可分享
         </p>
         <div className="ink-divider my-8" />
-        <LoginForm />
+        <LoginForm next={next} />
       </main>
     </AppShell>
   );

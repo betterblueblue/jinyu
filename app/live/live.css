@@ -1423,6 +1423,19 @@
   font-weight: 400;
   letter-spacing: 0.18em;
 }
+/* 体检一行：按观众的姓查过谐音和生僻字，压在「本场第几个」上面，存图同一个位置 */
+.live-stage .check {
+  margin: 26px 0 0;
+  text-align: center;
+  font-family: "Noto Sans SC", "PingFang SC", system-ui, sans-serif;
+  font-size: 20px;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  color: var(--ink-2);
+}
+.live-stage.has-bazi .check {
+  margin-top: 14px;
+}
 .live-stage .ledger {
   margin: 18px 0 0;
   text-align: center;

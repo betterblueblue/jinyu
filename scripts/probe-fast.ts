@@ -43,8 +43,7 @@ async function main() {
   let hedgedRounds = 0;
   let hedgeWonRounds = 0;
   let okRounds = 0;
-  let primaryWithZi = 0;
-  let shownWithZi = 0;
+  let primaryFromLibrary = 0;
 
   for (let i = 1; i <= rounds; i++) {
     const t = Date.now();
@@ -68,15 +67,12 @@ async function main() {
     const withCite = all.filter((c) => c.citation).length;
     console.log(`#${i} ${ms}ms cite ${withCite}/${all.length}${r.baziLine ? ` 生辰:${r.baziLine}` : ""}`);
     okRounds++;
-    if (r.primary.charSource) primaryWithZi++;
+    if (r.primary.library) primaryFromLibrary++;
     for (const c of all) {
-      const cite = c.citation ? `${c.citation.source}·${c.citation.piece}｜${c.citation.quote}` : "—";
-      const zi = c.charSource ? `「${c.charSource.char}」字见${c.charSource.from}｜${c.charSource.line}` : "—";
-      if (c.charSource) shownWithZi++;
-      console.log(`   ${c.fullName} (${c.pinyin}) ${c.hotChar ? "[hot]" : ""}`);
+      const cite = c.citation ? `${c.citation.label ?? `${c.citation.source}·${c.citation.piece}`}｜${c.citation.quote}` : "—";
+      console.log(`   ${c.fullName} (${c.pinyin}) ${c.library ? "[库]" : ""}${c.hotChar ? "[hot]" : ""}`);
       console.log(`     why: ${c.why}`);
       console.log(`     cite: ${cite}`);
-      console.log(`     字出: ${zi}`);
     }
     if (r.notes.length) console.log(`   notes: ${r.notes.join(" / ")}`);
     if (session) {
@@ -117,7 +113,7 @@ async function main() {
         `\n用得最多的字：${topChars.map(([ch, n]) => `${ch}×${n}`).join(" ")}` +
         `\n用了字表外的字：${offTable.length} 个${offTable.length ? `（${offTable.join(" ")}）` : ""}` +
         `\n补发 ${hedgedRounds} 轮，其中补发那一路先回 ${hedgeWonRounds} 轮` +
-        `\n字出：首推 ${primaryWithZi}/${okRounds} 轮有，全部名字 ${shownWithZi}/${shownAll.length} 个有`,
+        `\n首推来自名字库：${primaryFromLibrary}/${okRounds} 轮`,
     );
   }
 }

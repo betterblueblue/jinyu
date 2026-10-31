@@ -5,13 +5,14 @@ import type { NameDetail, ReportDocument } from "@/domain/types";
 import {
   FAST_RECENT_MAX,
   type FastCandidate,
-  type FastCharSource,
   type FastCitation,
   type FastFailure,
   type FastFormInput,
   type FastSuccess,
 } from "@/fast/types";
 import { fullNamePinyin, nameSyllables, type NameSyllable } from "@/domain/pinyin-name";
+import { checkLine, checkTag, talkLines } from "@/library/talk";
+import type { PrompterName, PrompterRound } from "@/live/prompter";
 import { AnalyzePanel } from "./analyze-panel";
 import "./live.css";
 
@@ -51,10 +52,10 @@ interface ShowData {
   syl: NameSyllable[];
   one: string;
   tags: string[];
-  /** 首推的引文证据；没有就是没核到，不用凑 */
+  /** 首推的引文证据；没有就是没有，不拿单个字凑 */
   cite?: ShowCite;
-  /** 首推的字出：和引文证据放同一个位置，有引文时不出 */
-  charSource?: FastCharSource;
+  /** 体检一行：「按王姓查过：没查到不好的谐音和生僻字」。精简版的名字都过了闸门才有这一行 */
+  check?: string;
   /** 解释行：读音、生辰这类。屏幕上和存图里同一份 */
   cardRows: [string, string][];
   alts: ShowAlt[];
@@ -77,10 +78,94 @@ function citeKind(givenName: string, quote: string): "连出" | "分取" {
   return i >= 0 && folded[i + 1] === b ? "连出" : "分取";
 }
 
+/** 出处的写法：名字库的条目带现成的（「崔颢《黄鹤楼》」），模型核出来的拼书名和篇名 */
+function citeFrom(c: FastCitation): string {
+  return c.label ?? `${c.source}·${c.piece}`;
+}
+
 function toCite(givenName: string, c?: FastCitation): ShowCite | undefined {
   if (!c?.quote) return undefined;
   // 引文按片段处理：结尾句号不放引号里，其余一字不改
-  return { quote: `「${c.quote.replace(/[。！？；，、]\s*$/, "")}」`, piece: `${c.source}·${c.piece}`, kind: citeKind(givenName, c.quote) };
+  return { quote: `「${c.quote.replace(/[。！？；，、]\s*$/, "")}」`, piece: citeFrom(c), kind: citeKind(givenName, c.quote) };
+}
+
+/* ---------- 主播提词页（/live/prompter） ---------- */
+
+const GENDER_WORD: Record<Gender, string> = { male: "男孩", female: "女孩", unknown: "性别未定" };
+
+/** 句子结尾补句号，口播稿每行都是整句 */
+function sentence(s: string): string {
+  const t = s.trim();
+  return !t || /[。！？]$/.test(t) ? t : `${t}。`;
+}
+
+/**
+ * 提词页只是辅助：推不上不影响直播台，不等结果、不报错。
+ * 直播伴侣只采集直播台这个窗口，稿子推到另一个页面，观众看不到。
+ */
+function pushPrompter(round: PrompterRound): void {
+  void fetch("/api/live/prompter", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(round),
+    keepalive: true,
+  }).catch(() => undefined);
+}
+
+/** 精简版一轮 → 提词页：名字库的名字给整段口播稿，模型临时起的只有一句话和体检那句 */
+function prompterFromFast(data: FastSuccess, no: number): PrompterRound {
+  const p = data.primary;
+  const talk = p.library?.talk;
+  // 屏幕上是截短的那一小句（quote），主播念整句（line）；模型核出来的两者一样
+  const citation = p.citation ? { from: citeFrom(p.citation), line: p.citation.line } : undefined;
+  const lines = talk
+    ? talkLines(data.surname, p.givenName, talk, citation)
+    : [
+        sentence(`${p.fullName}，${p.why}`),
+        ...(citation ? [`出自${citation.from}「${citation.line}」。`] : []),
+        checkLine(data.surname),
+      ];
+  const toName = (c: FastCandidate): PrompterName => ({ full: c.fullName, pinyin: c.pinyin, one: c.why });
+  return {
+    state: "ready",
+    no,
+    surname: data.surname,
+    gender: GENDER_WORD[data.gender],
+    primary: {
+      ...toName(p),
+      ...(p.pinyinHint ? { pinyinHint: p.pinyinHint } : {}),
+      lines,
+      ...(talk?.tip ? { tip: talk.tip } : {}),
+      source: p.library ? "library" : "model",
+    },
+    sections: data.alternatives.length ? [{ label: "备选", names: data.alternatives.map(toName) }] : [],
+  };
+}
+
+/** 完整版（名字分析 → 一键改名）→ 提词页：没有口播稿，把卡片上的读音、出处这些行列给主播 */
+function prompterFromReport(show: ShowData, gender: Gender): PrompterRound {
+  const toName = (a: ShowAlt): PrompterName => ({ full: a.n, pinyin: a.py, one: a.one });
+  const head = { state: "ready" as const, no: show.no, surname: show.surname, gender: GENDER_WORD[gender] };
+  if (show.groups) {
+    return {
+      ...head,
+      sections: [
+        { label: "男向", names: show.groups.male.map(toName) },
+        { label: "女向", names: show.groups.female.map(toName) },
+      ],
+    };
+  }
+  return {
+    ...head,
+    primary: {
+      full: show.full,
+      pinyin: show.py,
+      one: show.one,
+      lines: [sentence(`${show.full}，${show.one}`), ...show.cardRows.map(([label, text]) => `${label}：${text}`)],
+      source: "report",
+    },
+    sections: show.alts.length ? [{ label: "备选", names: show.alts.map(toName) }] : [],
+  };
 }
 
 
@@ -220,11 +305,12 @@ function fastToShow(data: FastSuccess, no: number, sessionGiven: number): ShowDa
     py: primary.pinyin,
     ...(primary.pinyinHint ? { pyHint: primary.pinyinHint } : {}),
     syl: nameSyllables(primary.fullName),
+    // 名字库的名字这一句是库里写好的一句话寓意；模型起的是模型那句
     one: primary.why,
     tags,
     cite,
-    // 模型给了整名出处、核过了，就用引文证据；没有才用字出（只说一个字出自哪）
-    ...(!cite && primary.charSource ? { charSource: primary.charSource } : {}),
+    // 精简版的名字都过了闸门（谐音、生僻字……），这一行总是成立
+    check: checkTag(data.surname),
     // 出处单独做成证据块（引文 + 篇名 + 核验方式），拼音在大字下面那行，
     // 所以这里没有重复项；开生辰时才有内容
     cardRows: [] as [string, string][],
@@ -490,6 +576,7 @@ export function LiveClient() {
         ...(bday ? { birthday: bday } : {}),
         ...(recentRef.current.length ? { recent: recentRef.current } : {}),
       };
+      pushPrompter({ state: "pending", no: cardNo, surname, gender: GENDER_WORD[picked] });
       const res = await fetch("/api/fast?stream=1", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -551,6 +638,7 @@ export function LiveClient() {
       }
 
       setShow(fastToShow(payload, cardNo, recentRef.current.length));
+      pushPrompter(prompterFromFast(payload, cardNo));
       // 记下这一场已经给过哪些名字：下一轮带着去重，观众不会连着看到同一个名。
       // 重复出现的名字必须挪到队尾再截断——直接 Set + slice(-N) 会让它停在最早的位置，
       // 于是最常出现的那个名字反而最先被挤出去，下一轮又合法了。
@@ -568,11 +656,12 @@ export function LiveClient() {
       setError(e instanceof Error ? e.message : "生成失败");
       setPhase("input");
       setShow(null);
+      pushPrompter({ state: "idle" });
     } finally {
       busy.current = false;
     }
     },
-    [draft, gender, birthday],
+    [draft, gender, birthday, cardNo],
   );
 
   /**
@@ -589,6 +678,7 @@ export function LiveClient() {
       setStage("");
       setProgress(0);
       setError(null);
+      pushPrompter({ state: "pending", no: cardNo, surname: input.surname, gender: GENDER_WORD[input.gender] });
       try {
         const res = await fetch("/api/generate", {
           method: "POST",
@@ -650,7 +740,9 @@ export function LiveClient() {
         const json = (await r.json()) as { ok: boolean; report?: ReportDocument; message?: string };
         if (!json.ok || !json.report) throw new Error(json.message ?? "读取报告失败");
 
-        setShow(toShow(json.report, cardNo, recentRef.current.length));
+        const shown = toShow(json.report, cardNo, recentRef.current.length);
+        setShow(shown);
+        pushPrompter(prompterFromReport(shown, input.gender));
         setCardNo((n) => n + 1);
         setProgress(100);
         setReady(false);
@@ -660,11 +752,13 @@ export function LiveClient() {
         setError(e instanceof Error ? e.message : "生成失败");
         setPhase("input");
         setShow(null);
+        pushPrompter({ state: "idle" });
       } finally {
         busy.current = false;
       }
     },
-    [],
+    // cardNo 要在依赖里：以前是空数组，这条路的「本场第几个」一直停在 1
+    [cardNo],
   );
   /** 分析完直接把结论当约束送进取名：姓氏带过去，问题转成避讳和定向要求 */
   const regenFromAnalysis = useCallback(
@@ -694,6 +788,7 @@ export function LiveClient() {
   );
 
   const resetToInput = useCallback(() => {
+    pushPrompter({ state: "idle" });
     setShow(null);
     setReady(false);
     setStage("");
@@ -774,10 +869,9 @@ export function LiveClient() {
     probe.font = `400 30px ${SERIF}`;
     const whyLines = wrapText(probe, show.one, W - 360).slice(0, 2);
 
-    // 引文证据和字出占同一块，和屏幕上一样：原文 + 出处，引文再多一个核验戳
-    const cs = show.charSource;
-    const evQuote = show.cite?.quote ?? (cs ? `「${cs.line}」` : "");
-    const evPiece = show.cite?.piece ?? (cs ? `「${cs.char}」字见${cs.from}` : "");
+    // 引文证据，和屏幕上一样：原文 + 出处 + 核验戳；没有出处这一块就空着
+    const evQuote = show.cite?.quote ?? "";
+    const evPiece = show.cite?.piece ?? "";
     probe.font = `400 40px ${SERIF}`;
     const quoteLines = evQuote ? wrapText(probe, evQuote, W - 300).slice(0, 2) : [];
 
@@ -816,7 +910,9 @@ export function LiveClient() {
     cy = div1 + 54;
     const citeTop = cy;
     if (show.cite) cy = citeTop + quoteLines.length * 56 + 42 + 86;
-    else if (quoteLines.length) cy = citeTop + quoteLines.length * 56 + 42 + 30;
+    // 体检一行压在「本场第几个」上面，屏幕上也是这个顺序
+    const checkY = cy;
+    if (show.check) cy += 40;
     const ledgerY = cy;
     const rowsTop = cy + 34;
     cy = rowsTop + mainH + 20;
@@ -892,7 +988,7 @@ export function LiveClient() {
     x.lineTo(W - M, div1);
     x.stroke();
 
-    // 引文证据：原文凸排 + 篇名 + 核验戳；字出：原文 + 「某」字见某篇，不加戳
+    // 引文证据：原文凸排 + 篇名 + 核验戳
     if (quoteLines.length) {
       x.fillStyle = C.ink;
       x.font = `400 40px ${SERIF}`;
@@ -916,6 +1012,12 @@ export function LiveClient() {
         x.fillText(sealText, bx + 32, by + 32);
         x.textAlign = "center";
       }
+    }
+
+    if (show.check) {
+      x.fillStyle = C.ink2;
+      x.font = `400 22px ${SANS}`;
+      x.fillText(show.check, W / 2, checkY + 24);
     }
 
     x.fillStyle = C.ink3;
@@ -1215,13 +1317,10 @@ export function LiveClient() {
                       </blockquote>
                     )}
 
-                    {show.charSource && (
-                      <blockquote className="evidence reveal" style={{ ["--d" as string]: "780ms" }}>
-                        <p className="ev-quote">「{show.charSource.line}」</p>
-                        <p className="ev-piece">
-                          「{show.charSource.char}」字见{show.charSource.from}
-                        </p>
-                      </blockquote>
+                    {show.check && (
+                      <p className="check reveal" style={{ ["--d" as string]: "800ms" }} data-testid="live-check">
+                        {show.check}
+                      </p>
                     )}
 
                     <p className="ledger reveal" style={{ ["--d" as string]: "820ms" }}>

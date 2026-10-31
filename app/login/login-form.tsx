@@ -3,7 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-export function LoginForm() {
+/** next 由登录页校验过，只会是站内路径 */
+export function LoginForm({ next = "/name" }: { next?: string }) {
   const router = useRouter();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -25,7 +26,7 @@ export function LoginForm() {
         setError(data.message || "登录失败");
         return;
       }
-      router.push("/name");
+      router.push(next);
       router.refresh();
     } catch {
       setError("网络异常，请重试");

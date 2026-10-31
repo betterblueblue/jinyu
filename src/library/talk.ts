@@ -24,6 +24,11 @@ export function checkLine(surname: string): string {
   return `系统按${surname}姓查过，没查到不好的谐音和生僻字。`;
 }
 
+/** 观众屏幕和存图上的那一行小字，和第⑤句同一个意思 */
+export function checkTag(surname: string): string {
+  return `按${surname}姓查过：没查到不好的谐音和生僻字`;
+}
+
 export function talkLines(
   surname: string,
   givenName: string,

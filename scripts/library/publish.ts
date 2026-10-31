@@ -11,23 +11,10 @@
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { scoreName } from "../../src/domain/score/score";
-import type { ReviewBatch, ReviewCitation, ReviewGender, TalkScript, VerdictMap } from "../../src/library/review-types";
+import type { LibraryEntry, LibraryFile, ReviewBatch, ReviewGender, VerdictMap } from "../../src/library/review-types";
 
 /** 和姓无关、命中就配哪个姓都不能出的规则（与 recommend.ts 的硬伤一致） */
 const NAME_BLOCKING = new Set(["forbidden", "swap", "template", "rare", "misread", "eraName"]);
-
-export interface LibraryEntry {
-  id: string;
-  givenName: string;
-  gender: ReviewGender;
-  citation?: ReviewCitation;
-  meaning: string;
-  /** 口播稿，提词页照着念 */
-  talk?: TalkScript;
-  /** 用户给的分：90 很好 / 80 可以 */
-  grade: number;
-  batch: string;
-}
 
 const MIN_GRADE = 80;
 const root = join(process.cwd(), "data", "name-library", "v2");
@@ -88,11 +75,8 @@ for (const file of readdirSync(reviewDir).filter((f) => f.endsWith(".json") && !
   }
 }
 
-writeFileSync(
-  join(root, "library.json"),
-  `${JSON.stringify({ builtAt: new Date().toISOString(), entries }, null, 2)}\n`,
-  "utf8",
-);
+const out: LibraryFile = { builtAt: new Date().toISOString(), entries };
+writeFileSync(join(root, "library.json"), `${JSON.stringify(out, null, 2)}\n`, "utf8");
 const count = (g: ReviewGender) => entries.filter((e) => e.gender === g).length;
 const male = count("male");
 const female = count("female");

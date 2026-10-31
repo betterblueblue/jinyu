@@ -84,6 +84,25 @@ export interface ReviewBatch {
   items: ReviewItem[];
 }
 
+/** 直播名字库 data/name-library/v2/library.json 里的一条（scripts/library/publish.ts 生成） */
+export interface LibraryEntry {
+  id: string;
+  givenName: string;
+  gender: ReviewGender;
+  citation?: ReviewCitation;
+  meaning: string;
+  /** 口播稿，提词页照着念 */
+  talk?: TalkScript;
+  /** 用户给的分：90 很好 / 80 可以 */
+  grade: number;
+  batch: string;
+}
+
+export interface LibraryFile {
+  builtAt: string;
+  entries: LibraryEntry[];
+}
+
 export interface VerdictRecord {
   verdict: Verdict;
   /** 只有「要」才有；试评那一批没有这一项 */
