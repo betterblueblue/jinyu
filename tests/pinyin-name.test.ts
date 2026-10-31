@@ -16,6 +16,14 @@ describe("全名拼音", () => {
     expect(fullNamePinyin("曾", "一鸣").hint).toContain("zēng");
   });
 
+  it("名字里的多音字按名字朗读，不套姓氏读音", () => {
+    // 回归：surname:"all" 会把姓氏读音表套到每个字上，乐→yuè、宁→nìng
+    expect(fullNamePinyin("陈", "乐言").text).toBe("chén lè yán");
+    expect(fullNamePinyin("周", "乐然").text).toBe("zhōu lè rán");
+    expect(fullNamePinyin("解", "宁").text).toBe("xiè níng");
+    expect(fullNamePinyin("欧阳", "子涵").text).toBe("ōu yáng zǐ hán");
+  });
+
   it("读音没收录的字给出核对提示，不硬编一个音", () => {
     const r = fullNamePinyin("𠮷", "田");
     expect(r.text.split(" ")[0]).toBe("𠮷");

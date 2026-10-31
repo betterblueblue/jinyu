@@ -2,6 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { NameDetail, ReportDocument } from "@/domain/types";
+import type {
+  FastCandidate,
+  FastCitation,
+  FastFailure,
+  FastFormInput,
+  FastSuccess,
+} from "@/fast/types";
 import { fullNamePinyin } from "@/domain/pinyin-name";
 import { AnalyzePanel } from "./analyze-panel";
 import "./live.css";
@@ -10,15 +17,6 @@ type Skin = "paper" | "celadon" | "silver" | "bamboo";
 type Gender = "male" | "female" | "unknown";
 type Phase = "input" | "generating" | "reveal";
 
-interface Extra {
-  len: "two" | "one";
-  genChar: string;
-  genPos: "first" | "second" | "any";
-  taboo: string;
-  bazi: boolean;
-  birthDate: string;
-  birthHour: string;
-}
 
 interface ShowAlt {
   n: string;
@@ -49,15 +47,6 @@ interface ShowData {
   };
 }
 
-const EMPTY_EXTRA: Extra = {
-  len: "two",
-  genChar: "",
-  genPos: "first",
-  taboo: "",
-  bazi: false,
-  birthDate: "",
-  birthHour: "",
-};
 
 const SKIN_LABEL: Record<Skin, string> = { paper: "宣纸", celadon: "青瓷", silver: "刻版", bamboo: "竹兰" };
 const SKINS: Skin[] = ["paper", "celadon", "silver", "bamboo"];
@@ -73,14 +62,6 @@ const SKINC = {
 const SERIF = '"Noto Serif SC","Source Han Serif SC","Songti SC",SimSun,serif';
 const SANS = '"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif';
 
-function extraText(e: Extra): string {
-  const p: string[] = [];
-  if (e.genChar) p.push(`辈分「${e.genChar}」`);
-  if (e.taboo) p.push(`避讳「${e.taboo}」`);
-  if (e.len === "one") p.push("单字名");
-  if (e.bazi) p.push("看生辰");
-  return p.join(" · ");
-}
 
 /** 等待时只给观众看真实阶段，不展示模型推理 */
 function stageText(stage: string): string {
@@ -171,6 +152,49 @@ function toShow(report: ReportDocument): ShowData {
       ? { bazi: `属${report.bazi.readable.zodiac} · ${report.bazi.readable.season}出生` }
       : {}),
     groups,
+  };
+}
+
+/**
+ * 精简版结果 → 直播页要的形状。
+ *
+ * 与 toShow 的区别：那边吃 ReportDocument（完整版，十个字段、有音韵字形避坑），
+ * 这边只有「名 + 一句为什么 + 出处」，没有的项就不出那一行。
+ */
+function fastToShow(data: FastSuccess): ShowData {
+  const citeText = (c?: FastCitation): string =>
+    c ? `${c.source}·${c.piece}｜「${c.quote}」` : "";
+  const toAlt = (c: FastCandidate): ShowAlt => ({
+    n: c.fullName,
+    py: c.pinyin,
+    one: c.why,
+    rows: (c.citation ? [["出处", citeText(c.citation)]] : []) as [string, string][],
+  });
+
+  const primary = data.primary;
+  const tags = [
+    "双字名",
+    primary.hotChar ? "偏热门" : "避开网红名",
+    data.gender === "male" ? "男向" : "女向",
+  ];
+
+  return {
+    surname: data.surname,
+    full: primary.fullName,
+    py: primary.pinyin,
+    ...(primary.pinyinHint ? { pyHint: primary.pinyinHint } : {}),
+    one: primary.why,
+    tags,
+    // 大字下面那句已经是 why，这里不再重复「为什么推荐」，只放出处
+    rows: (primary.citation ? [["出处", citeText(primary.citation)]] : []) as [string, string][],
+    cardRows: [
+      ["寓意", primary.why],
+      ["读音", primary.pinyin],
+      ["出处", citeText(primary.citation)],
+      ["生辰", data.baziLine ?? ""],
+    ].filter((r) => Boolean(r[1])) as [string, string][],
+    alts: data.alternatives.map(toAlt),
+    ...(data.baziLine ? { bazi: data.baziLine } : {}),
   };
 }
 
@@ -309,8 +333,8 @@ export function LiveClient() {
   const [phase, setPhase] = useState<Phase>("input");
   const [gender, setGender] = useState<Gender>("unknown");
   const [draft, setDraft] = useState("");
-  const [extra, setExtra] = useState<Extra>(EMPTY_EXTRA);
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  /** 精简版唯一的可选项：生日。填了才排盘，不填不提八字 */
+  const [birthday, setBirthday] = useState("");
   const [stage, setStage] = useState<string>("");
   const [progress, setProgress] = useState(0);
   const [show, setShow] = useState<ShowData | null>(null);
@@ -323,6 +347,8 @@ export function LiveClient() {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const busy = useRef(false);
   const bgImage = useRef<HTMLImageElement | null>(null);
+  /** 这一场已经给过的名字（最多 12 个），随请求带给精简版去重 */
+  const recentRef = useRef<string[]>([]);
 
   /* 竹兰背景图预加载：导出卡片时要同步画进 canvas */
   useEffect(() => {
@@ -373,34 +399,85 @@ export function LiveClient() {
     setError(null);
 
     try {
-      const res = await fetch("/api/generate", {
+      const picked = override?.gender ?? gender;
+      if (picked === "unknown") {
+        throw new Error("先选性别：按 1 男 / 2 女，再点开始取名");
+      }
+      const body: FastFormInput = {
+        surname,
+        gender: picked,
+        ...(birthday ? { birthday } : {}),
+        ...(recentRef.current.length ? { recent: recentRef.current } : {}),
+      };
+      const res = await fetch("/api/fast", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          source: "live",
-          surname,
-          gender: override?.gender ?? gender,
-          nameLength: extra.len,
-          generationChar: extra.genChar || undefined,
-          generationPosition: extra.genPos,
-          tabooChars: override?.taboo || extra.taboo || undefined,
-          requirements: override?.requirements || undefined,
-          baziEnabled: extra.bazi && Boolean(extra.birthDate),
-          birthDate: extra.birthDate || undefined,
-          birthHour: extra.birthHour || undefined,
-        }),
+        body: JSON.stringify(body),
       });
+      const payload = (await res.json()) as FastSuccess | FastFailure;
+      if (!payload.ok) throw new Error(payload.message || "生成失败");
+
+      setShow(fastToShow(payload));
+      // 记下这一场已经给过哪些名字：下一轮带着去重，观众不会连着看到同一个名
+      recentRef.current = Array.from(
+        new Set(
+          [...recentRef.current, payload.primary.givenName, ...payload.alternatives.map((a) => a.givenName)].filter(
+            (n) => /^[\u4e00-\u9fff]{2}$/.test(n),
+          ),
+        ),
+      ).slice(-12);
+      setCardNo((n) => n + 1);
+      setProgress(100);
+      setReady(false);
+      setPhase("reveal");
+      requestAnimationFrame(() => requestAnimationFrame(() => setReady(true)));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "生成失败");
+      setPhase("input");
+      setShow(null);
+    } finally {
+      busy.current = false;
+    }
+    },
+    [draft, gender, birthday],
+  );
+
+  /**
+   * 完整版链路：走 /api/generate + 报告快照。
+   *
+   * 只有「名字分析 → 一键改名」用这条：那份约束里有避讳字和定向要求，
+   * 精简版的三个字段装不下。直播手输姓氏仍然走上面的精简版。
+   */
+  const generateFull = useCallback(
+    async (input: { surname: string; gender: Gender; taboo?: string; requirements?: string }) => {
+      if (busy.current) return;
+      busy.current = true;
+      setPhase("generating");
+      setStage("");
+      setProgress(0);
+      setError(null);
+      try {
+        const res = await fetch("/api/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            source: "live",
+            surname: input.surname,
+            gender: input.gender,
+            nameLength: "two",
+            tabooChars: input.taboo || undefined,
+            requirements: input.requirements || undefined,
+            avoidPopular: true,
+          }),
+        });
         if (!res.ok || !res.body) {
-          const msg = await res.json().catch(() => ({ message: "生成失败" }));
+          const msg = (await res.json().catch(() => ({ message: "生成失败" }))) as { message?: string };
           throw new Error(msg.message || "生成失败");
         }
-
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
         let buf = "";
         let reportId: string | null = null;
-        let acc = "";
-
         for (;;) {
           const { value, done } = await reader.read();
           if (done) break;
@@ -423,7 +500,6 @@ export function LiveClient() {
               continue;
             }
             if (evt === "thinking") {
-              // 原始推理里有英文、有还没定的名字，不给观众看；只留进度
               setProgress((p) => Math.min(60, p + 0.4));
             } else if (evt === "stage") {
               const next = String(payload.stage ?? "");
@@ -436,7 +512,6 @@ export function LiveClient() {
             }
           }
         }
-
         if (!reportId) throw new Error("没有拿到报告");
         const r = await fetch(`/api/reports/${reportId}`, { cache: "no-store" });
         const json = (await r.json()) as { ok: boolean; report?: ReportDocument; message?: string };
@@ -456,23 +531,22 @@ export function LiveClient() {
         busy.current = false;
       }
     },
-    [draft, gender, extra],
+    [],
   );
-
   /** 分析完直接把结论当约束送进取名：姓氏带过去，问题转成避讳和定向要求 */
   const regenFromAnalysis = useCallback(
     (brief: { surname: string; gender: Gender; tabooChars: string[]; requirements: string; avoidPopular: boolean }) => {
       setAnalyzeOpen(false);
       setDraft(brief.surname);
       setGender(brief.gender);
-      void generate({
+      void generateFull({
         surname: brief.surname,
         gender: brief.gender,
         taboo: brief.tabooChars.join(""),
         requirements: brief.requirements,
       });
     },
-    [generate],
+    [generateFull],
   );
 
   const resetToInput = useCallback(() => {
@@ -481,10 +555,10 @@ export function LiveClient() {
     setStage("");
     setProgress(0);
     setDraft("");
-    // 直播是连续换观众：性别与补充条件（字数/辈分/避讳/生辰）一起清零，
+    // 直播是连续换观众：性别与生日一起清零，
     // 否则上一位的条件会静默带到下一位身上，画面里只显示成一行小字
     setGender("unknown");
-    setExtra({ ...EMPTY_EXTRA });
+    setBirthday("");
     setPhase("input");
     requestAnimationFrame(() => inputRef.current?.focus());
   }, []);
@@ -501,7 +575,6 @@ export function LiveClient() {
           setAnalyzeOpen(false);
           return;
         }
-        setDrawerOpen(false);
         return;
       }
       // 分析面板开着的时候不吃其它快捷键，免得在输入框外按空格就把取名触发了
@@ -740,7 +813,7 @@ export function LiveClient() {
           <div className="rim" />
           <div className="rail">JINYU · NAMING STUDIO</div>
 
-          <main className={`sheet ${drawerOpen ? "dim" : ""}`}>
+          <main className="sheet">
             {/* 品牌不再放顶部：抖音头像和榜单会压住它，挪到底部左下角的小标 */}
 
             {/* 输入态 */}
@@ -800,12 +873,16 @@ export function LiveClient() {
                 <span className="go-main">开始取名</span>
               </button>
 
-              <button type="button" className="extra-bar" onClick={() => setDrawerOpen(true)}>
-                <span>补充信息（可选）</span>
-                <span className={`extra-sum ${extraText(extra) ? "" : "empty"}`}>
-                  {extraText(extra) || "辈分字 · 避讳 · 字数 · 生辰"}
-                </span>
-              </button>
+              <label className="extra-bar">
+                <span>生日（可选）</span>
+                <input
+                  type="date"
+                  className="extra-sum"
+                  value={birthday}
+                  onChange={(e) => setBirthday(e.target.value)}
+                  aria-label="宝宝生日，可不填"
+                />
+              </label>
 
               <button type="button" className="entry-bar" onClick={() => setAnalyzeOpen(true)}>
                 <span>名字分析</span>
@@ -821,7 +898,7 @@ export function LiveClient() {
                 正在为 <em>{curSurname}</em> 取名
               </p>
               <p className="gen-extra">
-                {extraText(extra) || "默认档：双字名 · 避开网红名"}
+                {birthday ? `双字名 · 避开网红名 · 生辰 ${birthday}` : "双字名 · 避开网红名"}
               </p>
               <p className="gen-stage">{stageText(stage)}</p>
               <div className="bar">
@@ -950,136 +1027,6 @@ export function LiveClient() {
               </div>
             </footer>
           </main>
-
-          {/* 补充面板 */}
-          <div className={`drawer ${drawerOpen ? "open" : ""}`}>
-            <div className="drawer-head">
-              <span className="drawer-title">补充信息</span>
-              <button type="button" className="drawer-close" aria-label="关闭" onClick={() => setDrawerOpen(false)}>
-                ×
-              </button>
-            </div>
-            <div className="drawer-body">
-              <div className="frow">
-                <span className="flabel">名字字数</span>
-                <div className="seg">
-                  <button
-                    type="button"
-                    className={extra.len === "two" ? "on" : ""}
-                    onClick={() => setExtra((p) => ({ ...p, len: "two" }))}
-                  >
-                    双字名
-                  </button>
-                  <button
-                    type="button"
-                    className={extra.len === "one" ? "on" : ""}
-                    onClick={() => setExtra((p) => ({ ...p, len: "one", genChar: "" }))}
-                  >
-                    单字名
-                  </button>
-                </div>
-              </div>
-
-              <div className="frow">
-                <span className="flabel">辈分字</span>
-                <div className="two">
-                  <input
-                    className="inp"
-                    maxLength={1}
-                    disabled={extra.len === "one"}
-                    placeholder={extra.len === "one" ? "单字名不能再填辈分字" : "单个汉字，如 知"}
-                    value={extra.genChar}
-                    onChange={(e) => setExtra((p) => ({ ...p, genChar: e.target.value }))}
-                  />
-                  <div className="seg">
-                    {(
-                      [
-                        ["first", "名首"],
-                        ["second", "名次"],
-                        ["any", "任意"],
-                      ] as [Extra["genPos"], string][]
-                    ).map(([k, label]) => (
-                      <button
-                        key={k}
-                        type="button"
-                        className={extra.genPos === k ? "on" : ""}
-                        onClick={() => setExtra((p) => ({ ...p, genPos: k }))}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <div className="frow">
-                <span className="flabel">避讳字（不会出现在推荐里）</span>
-                <input
-                  className="inp"
-                  placeholder="可填多个，如 明、华"
-                  value={extra.taboo}
-                  onChange={(e) => setExtra((p) => ({ ...p, taboo: e.target.value }))}
-                />
-              </div>
-
-              <div className="frow">
-                <label className="chk">
-                  <input
-                    type="checkbox"
-                    checked={extra.bazi}
-                    onChange={(e) => setExtra((p) => ({ ...p, bazi: e.target.checked }))}
-                  />
-                  按生辰参考（需已出生）
-                </label>
-                {extra.bazi && (
-                  <div className="two">
-                    <input
-                      className="inp"
-                      type="date"
-                      value={extra.birthDate}
-                      onChange={(e) => setExtra((p) => ({ ...p, birthDate: e.target.value }))}
-                    />
-                    <select
-                      className="inp"
-                      value={extra.birthHour}
-                      onChange={(e) => setExtra((p) => ({ ...p, birthHour: e.target.value }))}
-                    >
-                      <option value="">时辰不确定</option>
-                      {[
-                        "子时 23–1",
-                        "丑时 1–3",
-                        "寅时 3–5",
-                        "卯时 5–7",
-                        "辰时 7–9",
-                        "巳时 9–11",
-                        "午时 11–13",
-                        "未时 13–15",
-                        "申时 15–17",
-                        "酉时 17–19",
-                        "戌时 19–21",
-                        "亥时 21–23",
-                      ].map((h) => (
-                        <option key={h} value={h}>
-                          {h}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-              </div>
-            </div>
-            <button
-              type="button"
-              className="drawer-done"
-              onClick={() => {
-                setExtra((p) => (p.bazi && !p.birthDate ? { ...p, bazi: false } : p));
-                setDrawerOpen(false);
-                inputRef.current?.focus();
-              }}
-            >
-              完成，回到取名
-            </button>
-          </div>
 
           <span className="brand-mini" aria-hidden="true">瑾瑜</span>
 

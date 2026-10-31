@@ -54,7 +54,10 @@ export function fullNamePinyin(surname: string, givenName: string): NamePinyin {
   const chars = [...full];
   if (chars.length === 0) return { text: "" };
 
-  const raw = pinyin(full, { toneType: "symbol", type: "array", surname: "all" });
+  // surname: "head" 只把姓氏读音限制在姓氏位置。
+  // 用 "all" 会让 pinyin-pro 对**每个字**都套姓氏读音表（core/pinyin/all.mjs:11），
+  // 名字里的多音字会被改成姓的读法：陈乐言变 chén yuè yán、解宁变 xiè nìng。
+  const raw = pinyin(full, { toneType: "symbol", type: "array", surname: "head" });
   const syllables = (Array.isArray(raw) ? raw : [raw]).map(String);
   const text = syllables.join(" ");
 
