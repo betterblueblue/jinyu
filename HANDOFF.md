@@ -6,6 +6,8 @@ Audience: new session with **no** prior chat context.
 
 This file is context only — **not** authorization to change code, deploy, commit, or rotate secrets.
 
+> **2026-10-31 晚：先读 `docs/总体方案.md`。** 那份是现状、难点、改造清单和完成状态的总表，和这里冲突时以那份为准。这里只当历史记录。
+
 ---
 
 ## 1. Task — what we are doing
