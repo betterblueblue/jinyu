@@ -10,12 +10,6 @@ const L2 = new Set(l2Chars as string[]);
 /** Common high-risk polyphones often misread in daily life */
 const POLYPHONE_RISK = new Set(["行", "长", "重", "乐", "会", "朝", "调", "量", "种", "传", "觉"]);
 
-export interface GateOptions {
-  /** When true (A+), L2 may still pass but never become the only survivors if avoidPopular — still allowed into list */
-  relaxL2ForPrimary?: boolean;
-  /** When avoidPopular is false, only L1 hard-blocks; L2 soft marks still apply lightly */
-}
-
 export interface GateResult {
   passed: GatedCandidate[];
   eliminated: EliminationNote[];

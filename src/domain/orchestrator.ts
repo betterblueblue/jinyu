@@ -2,7 +2,7 @@ import { assembleReport } from "./assembler";
 import { applyHardGate, assertNoForbiddenPadding } from "./gate";
 import { buildBaziSummary } from "./bazi";
 import { rankSoft } from "./soft-ranker";
-import { verifyCitation } from "./analysis/corpus";
+import { corpusCatalog, verifyCitation } from "./analysis/corpus";
 import type { CandidateProvider } from "@/providers/types";
 import type { GatedCandidate, GenerationResult, NormalizedRequest } from "./types";
 
@@ -24,7 +24,11 @@ export async function runGeneration(
   const stages: string[] = [];
   const relaxations: string[] = [];
   const liveUnknownSix = options?.source === "live" && req.gender === "unknown";
-  const providerOptions = { liveUnknownSix };
+  // 出处只认这些书：模型给的出处随后用同一份语料逐字核（verifyCitation），和名字分析用的是同一份书目
+  const catalog = corpusCatalog()
+    .filter((s) => s.available)
+    .map((s) => s.name);
+  const providerOptions = { liveUnknownSix, catalog };
   let stage: GenerationResult["stage"] = "candidates";
 
   const emitThinking = (chunk: string) => onProgress?.({ type: "thinking", text: chunk });
@@ -37,7 +41,6 @@ export async function runGeneration(
     stages.push("filter");
     onProgress?.({ type: "stage", stage: "filter" });
     let gate = applyHardGate(allRaw, req);
-    let allowL2Primary = false;
 
     if (!hasEnoughCandidates(gate.passed, req, liveUnknownSix)) {
       // limited retry
@@ -46,13 +49,8 @@ export async function runGeneration(
       gate = applyHardGate(allRaw, req);
     }
 
-    if (!hasEnoughCandidates(gate.passed, req, liveUnknownSix)) {
-      // A+: relax soft only — allow L2 as primary, note style hard-fit relaxed
-      allowL2Primary = true;
-      relaxations.push("L2 可进入首推");
-      // re-rank later with allowL2Primary; no hard-rule relaxation
-    }
-
+    // 以前这里有一段「A+ 放宽：热门字可以当首推」，但放宽之后紧接着用同一个条件判失败，
+    // 从来没生效过（2026-10-31 删）。硬规则本来就不放宽；候选不够就如实报不够。
     if (!hasEnoughCandidates(gate.passed, req, liveUnknownSix)) {
       return {
         ok: false,
@@ -79,7 +77,7 @@ export async function runGeneration(
       return outcome.ok ? { ...c, verifiedCitation: outcome.citation } : c;
     });
 
-    const ranked = rankSoft(withCitations, req, { allowL2Primary });
+    const ranked = rankSoft(withCitations, req);
     assertNoForbiddenPadding(ranked.ranked, req);
 
     stage = "assemble";

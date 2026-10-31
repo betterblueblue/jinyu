@@ -97,6 +97,8 @@ export class StepFunProvider implements CandidateProvider {
               }
             : {}),
           attempt,
+          // 指令里说「source 只用给定的 catalog」，书目必须真的给到
+          ...(options?.catalog?.length ? { catalog: options.catalog } : {}),
           count: liveUnknownSix ? 12 : req.gender === "unknown" ? 8 : 6,
           instruction:
             "请生成多个候选「名」（不含姓）。若有辈分字必须按位置包含。不要使用避讳字。citation 必须是具体古典书目的原文：quote 一字不差，source 只用给定的 catalog。没有可靠出处就不要编，也不要写「现代常用字组合」「成词义」这类说法——系统会拿原文逐字核对，核不过整条丢掉。最终只输出 JSON。" +

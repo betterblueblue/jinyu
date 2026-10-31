@@ -18,11 +18,7 @@ export interface RankResult {
  *
  * 永远不硬性淘汰，只调顺序。
  */
-export function rankSoft(
-  candidates: GatedCandidate[],
-  req: NormalizedRequest,
-  options?: { allowL2Primary?: boolean },
-): RankResult {
+export function rankSoft(candidates: GatedCandidate[], req: NormalizedRequest): RankResult {
   const notes: string[] = [];
 
   const scored = candidates.map((c, index) => {
@@ -36,11 +32,7 @@ export function rankSoft(
     if (composition.length >= 12) score += 6;
 
     if (c.l2Hot) {
-      if (req.avoidPopular && !options?.allowL2Primary) {
-        score -= 40;
-      } else {
-        score -= 10;
-      }
+      score -= req.avoidPopular ? 40 : 10;
     }
 
     if (req.gender === "male" && c.genderLean === "female") score -= 15;
@@ -63,7 +55,7 @@ export function rankSoft(
   }
 
   let primaryIndex = 0;
-  if (req.avoidPopular && !options?.allowL2Primary) {
+  if (req.avoidPopular) {
     const nonL2 = ranked.findIndex((r) => !r.l2Hot);
     if (nonL2 >= 0) primaryIndex = nonL2;
   }
