@@ -1,6 +1,6 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import type { ReviewBatch, Verdict, VerdictMap, VerdictRecord } from "./review-types";
+import { GRADES, type Grade, type ReviewBatch, type Verdict, type VerdictMap, type VerdictRecord } from "./review-types";
 
 /**
  * 名字评审的读写。批次文件由 scripts/library/build-review.ts 生成，用户的评审结果单独存一份 <批次>.verdicts.json。
@@ -56,17 +56,31 @@ export type SaveResult = { ok: true; record: VerdictRecord } | { ok: false; mess
 /** 串行写：主播连点几下也不会互相覆盖 */
 let queue: Promise<unknown> = Promise.resolve();
 
-export function saveVerdict(name: string, id: string, verdict: string, note?: string): Promise<SaveResult> {
+export function saveVerdict(
+  name: string,
+  id: string,
+  verdict: string,
+  note?: string,
+  grade?: number,
+): Promise<SaveResult> {
   const run = async (): Promise<SaveResult> => {
     if (!isBatchName(name)) return { ok: false, message: "批次名不对" };
     if (!VERDICTS.includes(verdict as Verdict)) return { ok: false, message: "只能选 要 / 不要 / 拿不准" };
+    if (grade !== undefined && (verdict !== "yes" || !GRADES.includes(grade as Grade))) {
+      return { ok: false, message: "只有「要」能分很好 / 可以 / 一般" };
+    }
     const batch = await loadBatch(name);
     if (!batch) return { ok: false, message: "找不到这一批名字" };
     if (!batch.items.some((i) => i.id === id)) return { ok: false, message: "这一批里没有这个名字" };
 
     const verdicts = await loadVerdicts(name);
     const text = typeof note === "string" ? [...note.trim()].slice(0, NOTE_MAX).join("") : "";
-    const record: VerdictRecord = { verdict: verdict as Verdict, ...(text ? { note: text } : {}), at: new Date().toISOString() };
+    const record: VerdictRecord = {
+      verdict: verdict as Verdict,
+      ...(grade !== undefined ? { grade: grade as Grade } : {}),
+      ...(text ? { note: text } : {}),
+      at: new Date().toISOString(),
+    };
     verdicts[id] = record;
 
     const file = path.join(reviewDir(), `${name}.verdicts.json`);

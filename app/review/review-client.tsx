@@ -2,16 +2,35 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { ReviewBatch, ReviewItem, Suggestion, Verdict, VerdictMap, VerdictRecord } from "@/library/review-types";
+import type { Grade, ReviewBatch, ReviewItem, Suggestion, Verdict, VerdictMap, VerdictRecord } from "@/library/review-types";
 
-const VERDICT_LABEL: Record<Verdict, string> = { yes: "要", no: "不要", unsure: "拿不准" };
 const AS_VERDICT: Record<Suggestion, Verdict> = { 要: "yes", 不要: "no", 拿不准: "unsure" };
 const GENDER_LABEL: Record<ReviewItem["gender"], string> = { male: "男孩", female: "女孩", neutral: "男女都可" };
-const KEYS: { verdict: Verdict; key: string }[] = [
-  { verdict: "yes", key: "1" },
-  { verdict: "no", key: "2" },
-  { verdict: "unsure", key: "3" },
+
+interface Choice {
+  key: string;
+  label: string;
+  verdict: Verdict;
+  grade?: Grade;
+}
+
+/** 试评时用户在备注里自己打 70 / 80 / 90 分，所以「要」拆成三档，一下点完 */
+const CHOICES: Choice[] = [
+  { key: "1", label: "很好", verdict: "yes", grade: 90 },
+  { key: "2", label: "可以", verdict: "yes", grade: 80 },
+  { key: "3", label: "一般", verdict: "yes", grade: 70 },
+  { key: "4", label: "不要", verdict: "no" },
+  { key: "5", label: "拿不准", verdict: "unsure" },
 ];
+
+function labelOf(r: VerdictRecord): string {
+  if (r.verdict === "yes") return r.grade === 90 ? "很好" : r.grade === 80 ? "可以" : r.grade === 70 ? "一般" : "要";
+  return r.verdict === "no" ? "不要" : "拿不准";
+}
+
+function isChosen(r: VerdictRecord | undefined, c: Choice): boolean {
+  return Boolean(r && r.verdict === c.verdict && (c.verdict !== "yes" || r.grade === c.grade));
+}
 
 /** 要 = 天青，不要 = 铁足，拿不准 = 灰：和全站的强调色一致 */
 function tone(v: Verdict | Suggestion): string {
@@ -59,7 +78,7 @@ export function ReviewClient({
   }, [item.id]);
 
   const vote = useCallback(
-    async (verdict: Verdict) => {
+    async (choice: Choice) => {
       if (saving) return;
       setSaving(true);
       setError(null);
@@ -67,7 +86,13 @@ export function ReviewClient({
         const res = await fetch("/api/review", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ batch: batch.batch, id: item.id, verdict, note }),
+          body: JSON.stringify({
+            batch: batch.batch,
+            id: item.id,
+            verdict: choice.verdict,
+            ...(choice.grade ? { grade: choice.grade } : {}),
+            note,
+          }),
         });
         const out = (await res.json()) as { ok: boolean; record?: VerdictRecord; message?: string };
         if (!res.ok || !out.ok || !out.record) throw new Error(out.message || "没存上，再点一次");
@@ -88,10 +113,10 @@ export function ReviewClient({
     const onKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement | null)?.tagName ?? "";
       if (tag === "TEXTAREA" || tag === "INPUT") return;
-      const hit = KEYS.find((k) => k.key === e.key);
+      const hit = CHOICES.find((k) => k.key === e.key);
       if (hit) {
         e.preventDefault();
-        void vote(hit.verdict);
+        void vote(hit);
       } else if (e.key === "ArrowLeft") {
         setIndex((i) => Math.max(0, i - 1));
       } else if (e.key === "ArrowRight") {
@@ -115,7 +140,7 @@ export function ReviewClient({
       <p className="mt-3 text-sm leading-relaxed text-body-text">{batch.note}</p>
       <p className="mt-3 text-sm leading-relaxed text-body-text">
         你只回答一个问题：<b className="text-paper">如果是你的孩子，你愿意用这个名字吗？</b>
-        按 1 要、2 不要、3 拿不准，← → 翻页。下面的原因只是参考，你的直觉就是观众的直觉。
+        按 1 很好、2 可以、3 一般、4 不要、5 拿不准，← → 翻页。「很好」「可以」的才进直播名字库。下面的原因只是参考，你的直觉就是观众的直觉。
       </p>
 
       {batchNames.length > 1 ? (
@@ -148,9 +173,7 @@ export function ReviewClient({
           </span>
           <span className="border border-outline-variant/60 px-1.5 py-0.5">{GENDER_LABEL[item.gender]}</span>
           <span className="border border-outline-variant/60 px-1.5 py-0.5">{item.origin}</span>
-          {mine ? (
-            <span className={`border px-1.5 py-0.5 ${tone(mine.verdict)}`}>你选了：{VERDICT_LABEL[mine.verdict]}</span>
-          ) : null}
+          {mine ? <span className={`border px-1.5 py-0.5 ${tone(mine.verdict)}`}>你选了：{labelOf(mine)}</span> : null}
         </div>
 
         <div className="mt-5 text-center">
@@ -233,20 +256,22 @@ export function ReviewClient({
           onChange={(e) => setNote(e.target.value)}
         />
 
-        <div className="mt-4 grid grid-cols-3 gap-3">
-          {KEYS.map(({ verdict, key }) => (
+        <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-5 sm:gap-3">
+          {CHOICES.map((c) => (
             <button
-              key={verdict}
+              key={c.key}
               type="button"
               disabled={saving}
-              onClick={() => void vote(verdict)}
-              data-testid={`review-${verdict}`}
+              onClick={() => void vote(c)}
+              data-testid={`review-${c.key}`}
               className={`min-h-12 border text-base tracking-widest transition disabled:opacity-50 ${
-                mine?.verdict === verdict ? `${tone(verdict)} bg-gold-soft font-semibold` : "border-outline-variant text-body-text hover:border-gold hover:text-gold"
+                isChosen(mine, c)
+                  ? `${tone(c.verdict)} bg-gold-soft font-semibold`
+                  : "border-outline-variant text-body-text hover:border-gold hover:text-gold"
               }`}
             >
-              {VERDICT_LABEL[verdict]}
-              <span className="ml-1.5 text-xs text-faint">{key}</span>
+              {c.label}
+              <span className="ml-1.5 text-xs text-faint">{c.key}</span>
             </button>
           ))}
         </div>
@@ -302,7 +327,7 @@ export function ReviewClient({
                   <button type="button" className="text-paper underline-offset-4 hover:underline" onClick={() => setIndex(items.indexOf(it))}>
                     {it.givenName}
                   </button>
-                  ：我建议「{it.suggestion}」，你选「{VERDICT_LABEL[verdicts[it.id]!.verdict]}」
+                  ：我建议「{it.suggestion}」，你选「{labelOf(verdicts[it.id]!)}」
                   {verdicts[it.id]!.note ? `（${verdicts[it.id]!.note}）` : ""}
                 </li>
               ))}

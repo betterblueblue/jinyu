@@ -15,12 +15,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, message: "请求体解析失败" }, { status: 400 });
   }
 
-  const { batch, id, verdict, note } = body;
+  const { batch, id, verdict, note, grade } = body;
   if (typeof batch !== "string" || typeof id !== "string" || typeof verdict !== "string") {
     return NextResponse.json({ ok: false, message: "缺少批次、编号或评审结果" }, { status: 400 });
   }
+  if (grade !== undefined && typeof grade !== "number") {
+    return NextResponse.json({ ok: false, message: "分档不对" }, { status: 400 });
+  }
 
-  const out = await saveVerdict(batch, id, verdict, typeof note === "string" ? note : undefined);
+  const out = await saveVerdict(batch, id, verdict, typeof note === "string" ? note : undefined, grade);
   if (!out.ok) return NextResponse.json(out, { status: 400 });
   return NextResponse.json({ ok: true, record: out.record });
 }

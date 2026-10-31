@@ -5,6 +5,12 @@
 
 export type Suggestion = "要" | "不要" | "拿不准";
 export type Verdict = "yes" | "no" | "unsure";
+/**
+ * 「要」的程度：很好 90 / 可以 80 / 一般 70。
+ * 试评时用户自己在备注里写分（80、90、70），说明光有「要」不够分出好坏。进直播库按 80 分起算。
+ */
+export type Grade = 90 | 80 | 70;
+export const GRADES: readonly Grade[] = [90, 80, 70];
 export type ReviewGender = "male" | "female" | "neutral";
 
 export interface ReviewCitation {
@@ -66,6 +72,8 @@ export interface ReviewBatch {
 
 export interface VerdictRecord {
   verdict: Verdict;
+  /** 只有「要」才有；试评那一批没有这一项 */
+  grade?: Grade;
   note?: string;
   at: string;
 }
