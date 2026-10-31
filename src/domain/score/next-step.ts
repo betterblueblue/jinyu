@@ -8,7 +8,12 @@ import type { NameScore, NextStep } from "./types";
  */
 export const RENAME_SOUND_POINTS = 15;
 
-/** 打分之后主播下一步推什么。要查同音候选（读字表），只能在服务端算 */
+/**
+ * 打分之后主播下一步推什么。要查同音候选（读字表），只能在服务端算。
+ *
+ * 90 分及以上（非常优秀）不推改字：分数高就是不需要改（用户 2026-10-31 定）。
+ * 读音硬伤至少扣 15 分，所以 90 分以上不会走到「先问观众」那一支。
+ */
 export function nextStep(score: NameScore, split: NameSplit): NextStep {
   const fixable = score.fixable.filter((f) => sameSoundCandidates(split, score.gender, f.index, 1).length > 0);
   const soundIssues = score.deductions.filter((d) => d.soundBound && d.points >= RENAME_SOUND_POINTS);
@@ -17,10 +22,12 @@ export function nextStep(score: NameScore, split: NameSplit): NextStep {
       ? fixable.length > 0
         ? "ask"
         : "rename"
-      : fixable.length > 0
-        ? "fix"
-        : score.band === "change"
-          ? "rename"
-          : "none";
+      : score.band === "great"
+        ? "none"
+        : fixable.length > 0
+          ? "fix"
+          : score.band === "change"
+            ? "rename"
+            : "none";
   return { kind, fixable, soundIssues };
 }

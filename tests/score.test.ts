@@ -283,6 +283,13 @@ describe("打分之后推什么", () => {
     expect(plan("李知微", "female").kind).toBe("none");
   });
 
+  it("90 分以上不推改字，哪怕某个字扣满了 8 分", () => {
+    const { split, result } = score("张仡卓");
+    expect(result.fixable.length).toBeGreaterThan(0);
+    const high = { ...result, score: 92, band: "great" as const, bandLabel: "非常优秀" };
+    expect(nextStep(high, split).kind).toBe("none");
+  });
+
   it("75 分以下又没字可换，也推重新起名", () => {
     const { split, result } = score("李知微", "female");
     const low = { ...result, score: 70, band: "change" as const, fixable: [], deductions: [] };

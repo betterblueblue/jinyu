@@ -502,9 +502,9 @@ function Detail({
   onRename: Props["onRename"];
 }) {
   const { fix, deep } = row;
-  // 打分接口没给 next 时（面板更新前打的分）按老规矩：有可换的字就给改字
+  // 打分接口没给 next 时（面板更新前打的分）按老规矩：有可换的字就给改字，90 分以上不给
   const next: NextStep = row.next ?? {
-    kind: score.fixable.length > 0 ? "fix" : "none",
+    kind: score.band !== "great" && score.fixable.length > 0 ? "fix" : "none",
     fixable: score.fixable,
     soundIssues: [],
   };
