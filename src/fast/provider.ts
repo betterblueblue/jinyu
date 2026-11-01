@@ -26,12 +26,20 @@ export interface RawFast {
   line?: string;
 }
 
+/** 提示词怎么拼。线上用 prompt.ts 那一套；评测脚本（scripts/eval-fast.ts）换别的版本来比 */
+export interface FastPromptBuilders {
+  system: () => string;
+  user: (req: FastRequest, round: FastPromptRound) => string;
+}
+
 export interface FastClientOptions {
   baseUrl: string;
   apiKey: string;
   model: string;
   /** 第一路多久没回就补发第二路，默认 HEDGE_MS；测试可调小 */
   hedgeMs?: number;
+  /** 不传就用 prompt.ts */
+  prompt?: FastPromptBuilders;
 }
 
 /**
@@ -56,13 +64,16 @@ export interface DraftStats {
   hedged: boolean;
   /** 最后用的是补发的那一路 */
   hedgeWon: boolean;
+  /** 最后用的是第几路：0 是第一路，1 起是补发的（第几组起手字） */
+  lane: number;
 }
 
-type LaneResult = { list: RawFast[]; stats: Omit<DraftStats, "hedged" | "hedgeWon"> };
+type LaneResult = { list: RawFast[]; stats: Omit<DraftStats, "hedged" | "hedgeWon" | "lane"> };
 
 export class FastProvider {
   private readonly client: ChatClientOptions;
   private readonly hedgeMs: number;
+  private readonly prompt: FastPromptBuilders;
   /** 最近一次 draft 的耗时构成，写给 run.ts 的 debug，不进提示词、不影响结果 */
   lastDraft: DraftStats = {
     reasoningChars: 0,
@@ -71,10 +82,12 @@ export class FastProvider {
     finishReason: null,
     hedged: false,
     hedgeWon: false,
+    lane: 0,
   };
 
   constructor(opts: FastClientOptions) {
-    const { hedgeMs, ...client } = opts;
+    const { hedgeMs, prompt, ...client } = opts;
+    this.prompt = prompt ?? { system: buildFastSystem, user: buildFastUser };
     // reasoning_effort 必须显式 low。实测（同一提示词，2026-10-31）：
     //   默认档 → 12.7s，推理吃满 2048 token，finish=length，只出 4 个名还被截断
     //   low   →  5.2s，835 token，finish=stop，6 个名完整
@@ -84,18 +97,23 @@ export class FastProvider {
   }
 
   /**
-   * @param round      第一路用的这一轮参数
-   * @param hedgeRound 补发那一路用的参数（换一组起手字）；不给就补发同样的请求
+   * @param round  第一路用的这一轮参数
+   * @param hedge  补发用的参数（每一路换一组起手字）：给一组就补发一路，给两组就补发两路；不给就补发同样的请求
    */
-  async draft(req: FastRequest, round: FastPromptRound, hedgeRound?: FastPromptRound): Promise<RawFast[]> {
+  async draft(
+    req: FastRequest,
+    round: FastPromptRound,
+    hedge?: FastPromptRound | readonly FastPromptRound[],
+  ): Promise<RawFast[]> {
+    const hedges = hedge === undefined ? [] : Array.isArray(hedge) ? hedge : [hedge as FastPromptRound];
     const messagesOf = (r: FastPromptRound) => [
-      { role: "system" as const, content: buildFastSystem() },
-      { role: "user" as const, content: buildFastUser(req, r) },
+      { role: "system" as const, content: this.prompt.system() },
+      { role: "user" as const, content: this.prompt.user(req, r) },
     ];
 
-    // 一路请求：截断/解析失败只重试一次，且不清空已拿到的结果
-    const lane = async (signal: AbortSignal, isHedge: boolean): Promise<LaneResult> => {
-      const messages = messagesOf(isHedge && hedgeRound ? hedgeRound : round);
+    // 一路请求：截断/解析失败只重试一次，且不清空已拿到的结果。index 0 是第一路，1 起是补发的
+    const lane = async (signal: AbortSignal, index: number): Promise<LaneResult> => {
+      const messages = messagesOf(index === 0 ? round : (hedges[index - 1] ?? round));
       const first = await streamChat(this.client, { messages, maxTokens: MAX_TOKENS, signal });
       let list = parseFast(first.content);
       let stats: LaneResult["stats"] = {
@@ -119,31 +137,34 @@ export class FastProvider {
       return { list, stats };
     };
 
-    const won = await this.race(lane);
-    this.lastDraft = { ...won.stats, hedged: won.hedged, hedgeWon: won.hedgeWon };
+    const won = await this.race(lane, Math.max(1, hedges.length));
+    this.lastDraft = { ...won.stats, hedged: won.hedged, hedgeWon: won.lane > 0, lane: won.lane };
     return won.list;
   }
 
-  /** 先发一路；hedgeMs 内没回（或已经报错）就补发一路。谁先成功用谁，另一路取消；两路都失败才报错 */
+  /**
+   * 先发一路；hedgeMs 内没回（或已经报错）就把补发的几路一起发出去。谁先成功用谁，其余取消；全都失败才报错
+   */
   private race(
-    lane: (signal: AbortSignal, isHedge: boolean) => Promise<LaneResult>,
-  ): Promise<LaneResult & { hedged: boolean; hedgeWon: boolean }> {
+    lane: (signal: AbortSignal, index: number) => Promise<LaneResult>,
+    hedgeCount: number,
+  ): Promise<LaneResult & { hedged: boolean; lane: number }> {
     return new Promise((resolve, reject) => {
       const controllers: AbortController[] = [];
       let settled = false;
       let failed = 0;
       let timer: ReturnType<typeof setTimeout> | undefined;
 
-      const launch = (isHedge: boolean) => {
+      const launch = (index: number) => {
         const ctrl = new AbortController();
         controllers.push(ctrl);
-        lane(ctrl.signal, isHedge).then(
+        lane(ctrl.signal, index).then(
           (value) => {
             if (settled) return;
             settled = true;
             clearTimeout(timer);
             for (const c of controllers) if (c !== ctrl) c.abort();
-            resolve({ ...value, hedged: controllers.length > 1, hedgeWon: isHedge });
+            resolve({ ...value, hedged: controllers.length > 1, lane: index });
           },
           (err: unknown) => {
             if (settled) return;
@@ -151,7 +172,7 @@ export class FastProvider {
             if (controllers.length === 1) {
               // 还没补发就失败了：立刻补发，不等满 hedgeMs
               clearTimeout(timer);
-              launch(true);
+              launchHedges();
             } else if (failed >= controllers.length) {
               settled = true;
               reject(err);
@@ -159,10 +180,13 @@ export class FastProvider {
           },
         );
       };
+      const launchHedges = () => {
+        for (let i = 1; i <= hedgeCount; i++) launch(i);
+      };
 
-      launch(false);
+      launch(0);
       timer = setTimeout(() => {
-        if (!settled && controllers.length === 1) launch(true);
+        if (!settled && controllers.length === 1) launchHedges();
       }, this.hedgeMs);
     });
   }
@@ -208,7 +232,7 @@ function clean(list: RawFast[]): RawFast[] {
     }));
 }
 
-export function createFastProvider(): FastProvider {
+export function createFastProvider(prompt?: FastPromptBuilders): FastProvider {
   const apiKey = process.env.LLM_API_KEY;
   if (!apiKey) throw new Error("LLM_API_KEY 缺失（检查 .env.local）");
   // FAST_HEDGE_MS：补发等多久，不设就是 HEDGE_MS。设 0 等于每轮一开始就两路一起发
@@ -218,5 +242,6 @@ export function createFastProvider(): FastProvider {
     apiKey,
     model: process.env.LLM_MODEL ?? "opendesign/deepseek-v4.1-flash",
     ...(process.env.FAST_HEDGE_MS && Number.isFinite(hedge) && hedge >= 0 ? { hedgeMs: hedge } : {}),
+    ...(prompt ? { prompt } : {}),
   });
 }

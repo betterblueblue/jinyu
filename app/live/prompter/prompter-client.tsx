@@ -8,9 +8,13 @@ const POLL_MS = 1000;
 
 const SOURCE_NOTE: Record<PrompterPrimary["source"], string> = {
   library: "名字库 · 照着念",
-  model: "库外名字 · 模型临时起的，没有现成稿子，两个字的意思自己讲两句",
+  model: "模型现起 · 稿子也是模型写的，没人审过，念之前扫一眼",
   report: "完整版结果",
 };
+
+function Writing() {
+  return <p className="text-lg text-neutral-500">拆字和合起来还在写，几秒就到……</p>;
+}
 
 function Meta({ round }: { round: Extract<PrompterRound, { state: "pending" | "ready" }> }) {
   return (
@@ -41,6 +45,11 @@ function Ready({ round }: { round: Extract<PrompterRound, { state: "ready" }> })
               </li>
             ))}
           </ol>
+          {p.writing ? (
+            <div className="mt-3 pl-12" data-testid="prompter-writing">
+              <Writing />
+            </div>
+          ) : null}
           {p.tip ? (
             <p
               className="mt-6 rounded border border-amber-400/50 bg-amber-400/10 px-4 py-3 text-[clamp(18px,2.4vw,26px)] leading-relaxed text-amber-200"
@@ -54,12 +63,29 @@ function Ready({ round }: { round: Extract<PrompterRound, { state: "ready" }> })
       {round.sections.map((s) => (
         <section key={s.label} className="mt-8 border-t border-neutral-700 pt-5">
           <p className="text-lg tracking-widest text-neutral-400">{s.label}</p>
-          <ul className="mt-3 space-y-3">
+          <ul className="mt-3 space-y-5">
             {s.names.map((n) => (
-              <li key={n.full} className="text-[clamp(20px,2.8vw,30px)] leading-relaxed">
-                <span className="font-semibold text-white">{n.full}</span>
-                <span className="ml-3 text-neutral-400">{n.pinyin}</span>
-                {n.one ? <span className="ml-3 text-neutral-200">{n.one}</span> : null}
+              <li key={n.full} className="text-[clamp(20px,2.8vw,30px)] leading-relaxed" data-testid="prompter-alt">
+                <p>
+                  <span className="font-semibold text-white">{n.full}</span>
+                  <span className="ml-3 text-neutral-400">{n.pinyin}</span>
+                  {n.one ? <span className="ml-3 text-neutral-200">{n.one}</span> : null}
+                </p>
+                {n.lines?.length ? (
+                  <div className="mt-1 space-y-1 pl-4 text-[clamp(18px,2.4vw,26px)] text-neutral-300">
+                    {n.lines.map((line) => (
+                      <p key={line}>{line}</p>
+                    ))}
+                  </div>
+                ) : null}
+                {n.writing ? (
+                  <div className="mt-1 pl-4">
+                    <Writing />
+                  </div>
+                ) : null}
+                {n.tip ? (
+                  <p className="mt-1 pl-4 text-[clamp(16px,2.2vw,22px)] text-amber-200">只给主播看：{n.tip}</p>
+                ) : null}
               </li>
             ))}
           </ul>

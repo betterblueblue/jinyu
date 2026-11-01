@@ -10,15 +10,19 @@ export interface PrompterName {
   pinyin: string;
   /** 一句话寓意，观众屏幕上那一句 */
   one: string;
+  /** 备选的稿子（拆字、合起来），一句一行；还没写好就没有 */
+  lines?: string[];
+  /** 只给主播看：读音、谐音联想 */
+  tip?: string;
+  /** 稿子还在写（模型起的名字，出结果后几秒内补上） */
+  writing?: boolean;
 }
 
 export interface PrompterPrimary extends PrompterName {
   pinyinHint?: string;
   /** 主播照着念的稿子，一句一行 */
   lines: string[];
-  /** 只给主播看：生僻字读音、观众可能提到的联想 */
-  tip?: string;
-  /** library 名字库里用户评过的；model 模型临时起的，没有现成稿子；report 完整版报告 */
+  /** library 名字库里用户评过的；model 模型现起的，稿子也是模型写的；report 完整版报告 */
   source: "library" | "model" | "report";
 }
 
@@ -62,6 +66,17 @@ function optText(v: unknown): string | undefined | null {
   return text(v);
 }
 
+function parseLines(v: unknown): string[] | null {
+  if (!Array.isArray(v) || v.length > LINES_MAX) return null;
+  const lines: string[] = [];
+  for (const l of v) {
+    const t = text(l);
+    if (t === null) return null;
+    if (t) lines.push(t);
+  }
+  return lines;
+}
+
 function parseName(v: unknown): PrompterName | null {
   const x = v as Record<string, unknown> | null;
   if (!x || typeof x !== "object") return null;
@@ -69,7 +84,17 @@ function parseName(v: unknown): PrompterName | null {
   const pinyin = text(x.pinyin, 60);
   const one = text(x.one);
   if (!full || pinyin === null || one === null) return null;
-  return { full, pinyin, one };
+  const lines = x.lines === undefined ? undefined : parseLines(x.lines);
+  const tip = optText(x.tip);
+  if (lines === null || tip === null) return null;
+  return {
+    full,
+    pinyin,
+    one,
+    ...(lines?.length ? { lines } : {}),
+    ...(tip ? { tip } : {}),
+    ...(x.writing === true ? { writing: true } : {}),
+  };
 }
 
 function parsePrimary(v: unknown): PrompterPrimary | null {
@@ -78,17 +103,10 @@ function parsePrimary(v: unknown): PrompterPrimary | null {
   const x = v as Record<string, unknown>;
   const source = x.source;
   if (source !== "library" && source !== "model" && source !== "report") return null;
-  if (!Array.isArray(x.lines) || x.lines.length > LINES_MAX) return null;
-  const lines: string[] = [];
-  for (const l of x.lines) {
-    const t = text(l);
-    if (t === null) return null;
-    if (t) lines.push(t);
-  }
-  const tip = optText(x.tip);
+  const lines = parseLines(x.lines);
   const pinyinHint = optText(x.pinyinHint);
-  if (tip === null || pinyinHint === null) return null;
-  return { ...base, lines, source, ...(tip ? { tip } : {}), ...(pinyinHint ? { pinyinHint } : {}) };
+  if (lines === null || pinyinHint === null) return null;
+  return { ...base, lines, source, ...(pinyinHint ? { pinyinHint } : {}) };
 }
 
 /** 接口收到的东西按这里的形状收，多余字段丢掉、超长或不对就整份不收 */

@@ -36,7 +36,7 @@ async function main() {
     .filter(Boolean);
   // SESSION=1：像直播页一样，每轮把给出的名字记进 recent，模拟同一场连续出名
   const session = process.env.SESSION === "1";
-  // BIRTHDAY=2026-03-15：带生日跑（排盘 + 四柱进提示词）
+  // BIRTHDAY=2026-03-15：带生日跑（出生时节进提示词）
   const birthday = process.env.BIRTHDAY?.trim();
   const shownAll: string[] = [];
   const msAll: number[] = [];

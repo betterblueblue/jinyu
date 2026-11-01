@@ -56,6 +56,10 @@ export function pickSeeds(
   rand: () => number = Math.random,
   /** 这些字这次不抽：补发那一路要换一组起手字，不能和第一路一样 */
   exclude: ReadonlySet<string> = new Set(),
+  /** 起手字表；不传用 config/seed-chars.json。评测脚本换表来比 */
+  table: Readonly<Record<FastGender, readonly string[]>> = POOL,
+  /** 填了生日时呼应出生时节的字（birth.ts）：从里面抽一个放在第一位；本场最近用过的尽量不抽 */
+  first: readonly string[] = [],
 ): SeedPick {
   const shuffle = <T>(list: readonly T[]): T[] => {
     const out = [...list];
@@ -67,7 +71,7 @@ export function pickSeeds(
   };
 
   // 跟姓撞的字不抽：王姓不抽「望」，沈姓不抽「思」
-  const pool = POOL[gender].filter((ch) => !exclude.has(ch) && !firstCharConflict(ch, surname));
+  const pool = table[gender].filter((ch) => !exclude.has(ch) && !firstCharConflict(ch, surname));
 
   // 每个字在本场最后一次出现的位置（名字里任一位置都算）
   const lastSeen = new Map<string, number>();
@@ -75,12 +79,24 @@ export function pickSeeds(
     for (const ch of name) lastSeen.set(ch, i);
   });
 
-  // 先抽本场还没出现过的字
-  const seeds = shuffle(pool.filter((ch) => !lastSeen.has(ch))).slice(0, SEEDS_PER_ROUND);
+  // 呼应时节的那个字放第一位：本场没出现过的优先，都出现过就挑最久以前的
+  const firstPool = first.filter((ch) => pool.includes(ch));
+  const lead = firstPool.length
+    ? (shuffle(firstPool.filter((ch) => !lastSeen.has(ch)))[0] ??
+      [...firstPool].sort((a, b) => lastSeen.get(a)! - lastSeen.get(b)!)[0]!)
+    : undefined;
+
+  // 再抽本场还没出现过的字
+  const seeds = [
+    ...(lead ? [lead] : []),
+    ...shuffle(pool.filter((ch) => !lastSeen.has(ch) && ch !== lead)),
+  ].slice(0, SEEDS_PER_ROUND);
 
   // 不够就轮回：从最久没出现的那一批里随机补，不按固定顺序
   if (seeds.length < SEEDS_PER_ROUND) {
-    const used = pool.filter((ch) => lastSeen.has(ch)).sort((a, b) => lastSeen.get(a)! - lastSeen.get(b)!);
+    const used = pool
+      .filter((ch) => lastSeen.has(ch) && !seeds.includes(ch))
+      .sort((a, b) => lastSeen.get(a)! - lastSeen.get(b)!);
     const oldest = used.slice(0, Math.max(SEEDS_PER_ROUND * 2, Math.ceil(used.length / 2)));
     seeds.push(...shuffle(oldest).slice(0, SEEDS_PER_ROUND - seeds.length));
   }

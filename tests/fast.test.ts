@@ -7,6 +7,7 @@ import { buildFastSystem, buildFastUser } from "@/fast/prompt";
 import { __rankCandidates, __sanitizeRecent, __stripSurname } from "@/fast/run";
 import type { FastCandidate } from "@/fast/types";
 import { AVOID_MAX, SEEDS_PER_ROUND, pickSeeds } from "@/fast/seeds";
+import { seasonSeeds } from "@/fast/birth";
 import { FAST_RECENT_MAX } from "@/fast/types";
 
 /** 可复现的随机数（mulberry32），让抽字测试每次结果一样 */
@@ -138,6 +139,24 @@ describe("候选排序", () => {
     const ranked = __rankCandidates([cand("清朗"), cand("知远")], ["明朗"]);
     expect(ranked.map((c) => c.givenName)).toEqual(["知远", "清朗"]);
   });
+
+  it("最近四轮刚用过的字，有出处也排后面（怀瑾不紧跟在瑾言后面）", () => {
+    const withCite = {
+      ...cand("怀瑾"),
+      citation: { source: "楚辞", piece: "九章·怀沙", quote: "怀瑾握瑜兮", line: "怀瑾握瑜兮" },
+    };
+    expect(__rankCandidates([withCite, cand("知远")], ["瑾言"]).map((c) => c.givenName)).toEqual(["知远", "怀瑾"]);
+    expect(__rankCandidates([withCite, cand("知远")], []).map((c) => c.givenName)).toEqual(["怀瑾", "知远"]);
+  });
+
+  it("填了生日时，带按季节抽的那个起手字的名字排前面；但最近四轮刚用过的字更要避开", () => {
+    // 春天出生，这一轮按季节抽到「煦」
+    expect(__rankCandidates([cand("清朗"), cand("煦宁")], [], undefined, "煦").map((c) => c.givenName)).toEqual(["煦宁", "清朗"]);
+    // 「宁」上一轮刚出过：宁可不呼应时节，也不让观众连着看到同一个字
+    expect(__rankCandidates([cand("清朗"), cand("煦宁")], ["安宁"], undefined, "煦").map((c) => c.givenName)).toEqual(["清朗", "煦宁"]);
+    // 没填生日就按原来的顺序
+    expect(__rankCandidates([cand("清朗"), cand("煦宁")], []).map((c) => c.givenName)).toEqual(["清朗", "煦宁"]);
+  });
 });
 
 describe("名字里误带了姓", () => {
@@ -227,6 +246,33 @@ describe("精简版提示词", () => {
     const sys = buildFastSystem();
     for (const leak of ["令仪", "莫不令仪", "未晞", "景行", "观澜", "知宜", "书宁", "望舒", "时雨"]) {
       expect(sys).not.toContain(leak);
+    }
+  });
+
+  it("生日不进提示词：不给四柱，也不加「呼应时节」那一句（加了推理多一倍）", () => {
+    const withBirthday = buildFastUser({ surname: "王", gender: "female", birthday: "2026-03-15" }, { seeds: ["晴"], avoid: [] });
+    const without = buildFastUser({ surname: "王", gender: "female" }, { seeds: ["晴"], avoid: [] });
+    expect(withBirthday).toBe(without);
+    expect(withBirthday).not.toMatch(/[甲乙丙丁戊己庚辛壬癸][子丑寅卯辰巳午未申酉戌亥]/);
+  });
+
+  it("填了生日，第一个起手字按出生季节抽，本场用过的尽量不抽", () => {
+    const spring = seasonSeeds({ season: "春天", jieqi: "惊蛰" }, "female");
+    for (let i = 0; i < 30; i++) {
+      const { seeds } = pickSeeds("female", "苏", [], seeded(i), new Set(), undefined, spring);
+      expect(spring).toContain(seeds[0]);
+      expect(new Set(seeds).size).toBe(SEEDS_PER_ROUND);
+    }
+    // 春天的字只剩「棠」没出现过：就抽它
+    const used = spring.filter((ch) => ch !== "棠").map((ch) => `${ch}安`);
+    expect(pickSeeds("female", "苏", used, seeded(5), new Set(), undefined, spring).seeds[0]).toBe("棠");
+    // 补发那一路换一个季节字（第一路没把冬天的字都占掉的话）
+    const winter = seasonSeeds({ season: "冬天", jieqi: "冬至" }, "male");
+    for (let i = 0; i < 20; i++) {
+      const main = pickSeeds("male", "王", [], seeded(i), new Set(), undefined, winter);
+      const backup = pickSeeds("male", "王", [], seeded(i + 100), new Set(main.seeds), undefined, winter);
+      expect(backup.seeds[0]).not.toBe(main.seeds[0]);
+      if (winter.some((ch) => !main.seeds.includes(ch))) expect(winter).toContain(backup.seeds[0]);
     }
   });
 

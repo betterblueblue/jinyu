@@ -35,6 +35,8 @@ declare module "lunar-javascript" {
     /** 上一个「节」（立春、惊蛰……，月柱的分界） */
     getPrevJie(): JieQi;
     getNextJie(): JieQi;
+    /** 上一个节气，节和中气都算（惊蛰、春分……）；wholeDay 为 true 时按整天比 */
+    getPrevJieQi(wholeDay?: boolean): JieQi;
   }
 
   export class JieQi {

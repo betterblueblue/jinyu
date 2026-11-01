@@ -2,7 +2,16 @@ import { pinyin } from "pinyin-pro";
 import type { FastRequest } from "./types";
 
 /**
- * 精简版提示词（2026-10-31 第四轮：起手字）。
+ * 精简版提示词（2026-10-31 第四轮：起手字；2026-11-01 第五轮：生日改成出生时节）。
+ *
+ * 2026-11-01 直播首推改回模型起以后，用 scripts/eval-fast.ts 和旧版交替跑（每版 30–60 轮）：
+ *   - 往提示词里加名字标准 v5 的口味条目（先有寓意、别太柔别太刚、要有来处……），不要的名字少了，
+ *     但模型每条都想一遍：推理中位 157–169 字 → 408–509 字，超 5 秒的轮次翻倍。只换两处说法也多想一倍。
+ *   - 只换起手字表（scripts/build-seed-chars.ts 第三轮），提示词不动：耗时和旧版一样，不要的名字也大幅减少。
+ *   所以口味交给起手字表和本地过滤（taste.ts：用户评过不要的名字、叠字、否定字……），提示词不加条目。
+ *   - 生日也不进提示词：不再给四柱（直播只讲属相和季节，按四柱挑的字主播讲不出来）；
+ *     加一句「第 1 个名字呼应出生时节」，有生日的轮次中位从 3.4 秒涨到 5.6 秒。
+ *     改成第一个起手字按季节抽（birth.ts），首推优先用带这个字的名字，稿子里再讲时节。
  *
  * 要解决的问题：旧版每轮都回到模型最熟的那十几个名字（知夏、令仪、予安、景行……）。
  * 只用 DeepSeek v4.1 Flash 实测，每版 9 轮（沈女 / 王男 / 林女各 3 轮）：
@@ -25,7 +34,7 @@ import type { FastRequest } from "./types";
 export const FAST_JSON_SHAPE = '{"candidates":[{"givenName":"","why":""}]}';
 
 /** 姓氏读音，多音姓按姓的读法（曾 zēng、解 xiè、单 shàn） */
-function surnamePinyin(surname: string): string {
+export function surnamePinyin(surname: string): string {
   const raw = pinyin(surname, { toneType: "symbol", type: "array", surname: "head" });
   return (Array.isArray(raw) ? raw : [raw]).map(String).join(" ");
 }
@@ -49,7 +58,7 @@ export function buildFastSystem(): string {
   ].join("\n");
 }
 
-/** 每轮变的那部分：起手字、要避开的名字、可选的四柱 */
+/** 每轮变的那部分：起手字、要避开的名字（生日在 req 里） */
 export interface FastPromptRound {
   /** 这一轮的起手字，5 个名字各用一个 */
   seeds: string[];
@@ -57,7 +66,6 @@ export interface FastPromptRound {
   avoid: string[];
   /** 最近几轮配得太多的字（宁、禾这类），这一轮另一个字别用 */
   tired?: string[];
-  baziPillars?: string;
 }
 
 export function buildFastUser(req: FastRequest, round: FastPromptRound): string {
@@ -75,11 +83,8 @@ export function buildFastUser(req: FastRequest, round: FastPromptRound): string 
   if (round.tired?.length) {
     lines.push(`另一个字这一场用多了，这轮别用：${round.tired.join("、")}。`);
   }
-  if (round.baziPillars) {
-    lines.push(
-      `这个宝宝的四柱是：${round.baziPillars}。名字可以顺带呼应，但不要说天干地支、五行用神这类词，也别说「一定」「注定」——只作温和参考。`,
-    );
-  }
+  // 生日不进提示词：呼应出生时节交给起手字（birth.ts 的 seasonSeeds，第一个起手字按季节抽），
+  // 提示词里多一句「呼应时节」，有生日的轮次推理就多一倍
   lines.push("只输出 JSON。");
   return lines.join("\n");
 }

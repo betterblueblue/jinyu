@@ -5,7 +5,7 @@ import { FAST_RECENT_MAX, type FastFormInput } from "@/fast/types";
 import { AnalyzePanel } from "./analyze-panel";
 import { downloadCard } from "./card-export";
 import { readFastResponse } from "./fast-stream";
-import { GENDER_WORD, prompterFromFast, pushPrompter } from "./prompter-sync";
+import { GENDER_WORD, fetchTalks, prompterFromFast, pushPrompter } from "./prompter-sync";
 import { RevealView } from "./reveal-view";
 import { fastToShow, type Gender, type Phase, type ShowData, type Skin } from "./show-data";
 import { useLiveKeys } from "./use-live-keys";
@@ -41,6 +41,8 @@ export function LiveClient() {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const busy = useRef(false);
+  /** 第几轮：补写的稿子回来时用它认是不是还是这一轮 */
+  const roundToken = useRef(0);
   const bgImage = useRef<HTMLImageElement | null>(null);
   /** 这一场已经给过的名字（整场都记，最多 FAST_RECENT_MAX 个），随请求带给精简版：去重、抽起手字都靠它 */
   const recentRef = useRef<string[]>([]);
@@ -88,6 +90,7 @@ export function LiveClient() {
       return;
     }
     busy.current = true;
+    const token = ++roundToken.current;
     setPhase("generating");
     setFrames(["正在征名"]);
     setProgress(12);
@@ -131,6 +134,11 @@ export function LiveClient() {
 
       setShow(fastToShow(payload, cardNo, recentRef.current.length));
       pushPrompter(prompterFromFast(payload, cardNo));
+      // 模型起的名字没有现成稿子：再请模型写拆字、合起来，写好了补推一次提词页。
+      // 观众屏幕不等它；主播已经点了「下一个」的话（token 变了）就不推，免得盖掉下一位
+      void fetchTalks(payload, bday || undefined).then((talks) => {
+        if (roundToken.current === token) pushPrompter(prompterFromFast(payload, cardNo, talks));
+      });
       // 记下这一场已经给过哪些名字：下一轮带着去重，观众不会连着看到同一个名。
       // 重复出现的名字必须挪到队尾再截断——直接 Set + slice(-N) 会让它停在最早的位置，
       // 于是最常出现的那个名字反而最先被挤出去，下一轮又合法了。
@@ -169,6 +177,7 @@ export function LiveClient() {
   );
 
   const resetToInput = useCallback(() => {
+    roundToken.current++;
     pushPrompter({ state: "idle" });
     setShow(null);
     setReady(false);

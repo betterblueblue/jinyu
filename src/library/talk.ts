@@ -19,6 +19,8 @@ export const TALK_ONE_MAX = 15;
  * 按词查，不按单字查：「运行」「缺点」这类正常用法不误伤。
  */
 const BANNED = ["五行", "八字", "生辰", "命理", "命格", "运势", "运气", "好运", "转运", "补运", "风水", "喜用", "缺什么", "旺"];
+/** 模型现写的稿子（src/fast/talk.ts）也用这张表 */
+export const BANNED_TALK_WORDS: readonly string[] = BANNED;
 
 export function checkLine(surname: string): string {
   return `系统按${surname}姓查过，没查到不好的谐音和生僻字。`;

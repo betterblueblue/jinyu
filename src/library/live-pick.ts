@@ -120,6 +120,21 @@ function toCandidate(e: LibraryEntry, surname: string, hotChar: boolean): FastCa
 }
 
 /**
+ * 模型这一轮起的名字正好是名字库里的（晴川、徽音、煦宁……用户评过的），就换成库里那一条：
+ * 带上库里核过的出处、一句话寓意和整段口播稿。性别对不上的不算（男孩库里的名字不给女孩）。
+ */
+export function matchLibrary(
+  entries: readonly LibraryEntry[],
+  givenName: string,
+  surname: string,
+  gender: FastGender,
+  hotChar: boolean,
+): FastCandidate | null {
+  const e = entries.find((x) => x.givenName === givenName && (x.gender === gender || x.gender === "neutral"));
+  return e ? toCandidate(e, surname, hotChar) : null;
+}
+
+/**
  * 按上面的顺序挑最多 count 个。挑多个时（模型这一轮出错或给得不够，要从库里补）彼此不撞字，
  * 也不和 avoidChars 里的字撞（同一轮模型已经给出的名字）。
  */

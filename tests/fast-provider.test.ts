@@ -104,4 +104,23 @@ describe("精简版补发", () => {
     mock.script = [failNow(), failNow()];
     await expect(make(10).draft(req, round)).rejects.toThrow("LLM HTTP 502");
   });
+
+  it("给两组补发参数就补发两路：三路里最快的赢，记下是第几路，其余取消", async () => {
+    mock.script = [after(500, "第一路"), after(400, "第二路"), after(10, "第三路")];
+    const p = make(0);
+    const list = await p.draft(req, { seeds: ["禾"], avoid: [] }, [
+      { seeds: ["晏"], avoid: [] },
+      { seeds: ["澄"], avoid: [] },
+    ]);
+    expect(list[0]!.givenName).toBe("第三路");
+    expect(mock.calls.map((c) => c.user.match(/起手字：(.)/)?.[1])).toEqual(["禾", "晏", "澄"]);
+    expect(p.lastDraft).toMatchObject({ hedged: true, hedgeWon: true, lane: 2 });
+    expect(mock.calls[0]!.signal!.aborted).toBe(true);
+    expect(mock.calls[1]!.signal!.aborted).toBe(true);
+  });
+
+  it("三路都失败才报错", async () => {
+    mock.script = [failNow(), failNow(), failNow()];
+    await expect(make(0).draft(req, round, [round, round])).rejects.toThrow("LLM HTTP 502");
+  });
 });

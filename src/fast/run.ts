@@ -1,17 +1,20 @@
 import seedChars from "@/config/seed-chars.json";
 import { buildBaziSummary } from "@/domain/bazi";
 import { fullNamePinyin } from "@/domain/pinyin-name";
-import { loadLibrary, pickLibraryCandidate, pickLibraryCandidates } from "@/library/live-pick";
+import { loadLibrary, matchLibrary, pickLibraryCandidate, pickLibraryCandidates } from "@/library/live-pick";
 import { citeFromLine, locateCitation } from "./cite";
 import { checkFastCandidate } from "./gate";
 import { normalizeFastInput } from "./normalize";
-import { createFastProvider, type FastProvider } from "./provider";
+import { createFastProvider, type FastPromptBuilders, type FastProvider } from "./provider";
+import { birthTimeOf, seasonSeeds } from "./birth";
 import { pickSeeds } from "./seeds";
+import { tasteProblems } from "./taste";
 import {
   FAST_RECENT_MAX,
   type FastCandidate,
   type FastDebug,
   type FastFormInput,
+  type FastGender,
   type FastRequest,
   type FastResult,
   type FastStageEvent,
@@ -19,8 +22,9 @@ import {
 } from "./types";
 
 /**
- * 精简版主流程：校验 → 排盘（可选）→ 抽起手字 → 一次生成 → 闸门 → 核出处（模型给了才核）→ 排序
- * → 首推换成名字库里的（挑得到的话，见 src/library/live-pick.ts），备选仍用模型起的。
+ * 精简版主流程：校验 → 抽起手字（填了生日，第一个按出生季节抽）→ 一次生成 → 闸门 → 撞上名字库的换成库里那条
+ * → 口味过滤（taste.ts）→ 核出处（模型给了才核）→ 排序 → 首推取排第一的，备选取后三个。
+ * 首推默认是模型起的（2026-11-01 起）；FAST_PRIMARY=library 时先从名字库挑（src/library/live-pick.ts）。
  *
  * 不落盘：直播结果是即时产物，存图即交付。写进 data/reports 会污染历史页。
  */
@@ -32,6 +36,12 @@ const ALTERNATIVES_MAX = 3;
  * （同一姓 20 轮实测，100 个候选里这四个字占 41 个），最近没用过的字排前面。
  */
 const STALE_WINDOW = 40;
+/**
+ * 最近四轮（16 个名字）用过的字排在最前面考虑，比有出处、比呼应出生时节都靠前：观众连着看到「博远」「澄远」，
+ * 会觉得又是同一个字（用户 11-01：一场里挨得近的不能重复）。2026-11-01 评测里，起手字表收窄以后，
+ * 60 轮有 4–6 轮首推和前几轮共用字；其中一轮是名字库里的「怀瑾」紧跟在「瑾言」后面，因为有出处的排在最前。
+ */
+const NEAR_WINDOW = 16;
 
 /** 只收两字汉字名字，去重；超出上限时保留**最近**的，先给过的先忘 */
 function sanitizeRecent(recent: unknown): string[] {
@@ -74,21 +84,36 @@ export const __stripSurname = stripSurname;
 const NAME_CHARS = new Set([...seedChars.female, ...seedChars.male]);
 
 /**
- * 排序：有出处优先 → 非热门字 → 两个字都在名字用字表里 → 最近没用过的字 → 模型原序。
- * 一轮只出前 4 个，排在后面的就是被挤掉的。
+ * 排序：两个字都在名字用字表里 → 最近四轮没用过的字 → 呼应出生时节（填了生日才有）→ 有出处 → 非热门字
+ * → 最近十轮没用过的字 → 模型原序。一轮只出前 4 个，排在后面的就是被挤掉的。
+ * 2026-11-01 评测：呼应时节排在「有出处」后面时，有生日的轮次只有三四成首推带上季节的字。
  */
-function rankCandidates(pool: FastCandidate[], recent: readonly string[]): FastCandidate[] {
+function rankCandidates(
+  pool: FastCandidate[],
+  recent: readonly string[],
+  nameChars: ReadonlySet<string> = NAME_CHARS,
+  /** 填了生日时按出生季节抽的那个起手字（birth.ts）：带这个字的名字排在同档的前面 */
+  echo?: string,
+): FastCandidate[] {
   const recentChars = new Set(recent.slice(-STALE_WINDOW).flatMap((n) => [...n]));
+  const nearChars = new Set(recent.slice(-NEAR_WINDOW).flatMap((n) => [...n]));
   const staleOf = (c: FastCandidate) => [...c.givenName].filter((ch) => recentChars.has(ch)).length;
-  const offTableOf = (c: FastCandidate) => [...c.givenName].filter((ch) => !NAME_CHARS.has(ch)).length;
+  const nearOf = (c: FastCandidate) => [...c.givenName].filter((ch) => nearChars.has(ch)).length;
+  const offTableOf = (c: FastCandidate) => [...c.givenName].filter((ch) => !nameChars.has(ch)).length;
+  const echoOf = (c: FastCandidate) => (echo && c.givenName.includes(echo) ? 0 : 1);
   return pool
-    .map((c, i) => ({ c, i, stale: staleOf(c), off: offTableOf(c) }))
+    .map((c, i) => ({ c, i, stale: staleOf(c), near: nearOf(c), off: offTableOf(c), echo: echoOf(c) }))
     .sort((a, b) => {
+      // 用了起手字表以外的字（野、舟、茉这类模型爱拿来凑的）先压后面：放到「挨得近不重复」后面考虑时，
+      // 评测里首推「不要」的从 8% 涨到 18%
+      if (a.off !== b.off) return a.off - b.off;
+      if (a.near !== b.near) return a.near - b.near;
+      // 填了生日就让呼应出生时节的那个名字当首推（用户 11-01：走模型的话生日一定要考虑）
+      if (a.echo !== b.echo) return a.echo - b.echo;
       const ca = a.c.citation ? 0 : 1;
       const cb = b.c.citation ? 0 : 1;
       if (ca !== cb) return ca - cb;
       if (a.c.hotChar !== b.c.hotChar) return a.c.hotChar ? 1 : -1;
-      if (a.off !== b.off) return a.off - b.off;
       if (a.stale !== b.stale) return a.stale - b.stale;
       return a.i - b.i;
     })
@@ -148,18 +173,50 @@ function dedupeChars(list: FastCandidate[]): FastCandidate[] {
   return out;
 }
 
+export interface RunFastOptions {
+  /**
+   * 首推从哪来。model：用模型排第一的（2026-11-01 起的默认，用户定）；
+   * library：先从名字库挑，挑不到才用模型的（10-31 到 11-01 的做法）。
+   * 不传看环境变量 FAST_PRIMARY，设成 library 就切回名字库。
+   * 两种都一样：模型出错或能用的不够三个时，从名字库补；模型起出库里的名字时，换成库里那一条。
+   */
+  primary?: "library" | "model";
+  /** 评测脚本用：换一套提示词、起手字表或几路一起发来比，线上不传 */
+  variant?: {
+    prompt?: FastPromptBuilders;
+    seedTable?: Readonly<Record<FastGender, readonly string[]>>;
+    lanes?: number;
+  };
+}
+
+/**
+ * 一轮一共发几路（每路一组不同的起手字，谁先回用谁）。不设是 2（第一路 + 补发一路）；
+ * FAST_LANES=3 再多补一路：模型每轮想多想少差得很远，三路取最快的那一路，慢轮次少一截，代价是调用量多一半。
+ */
+function laneCount(options: RunFastOptions): number {
+  const n = options.variant?.lanes ?? Number(process.env.FAST_LANES);
+  return Number.isInteger(n) && n >= 2 && n <= 3 ? n : 2;
+}
+
+function primarySource(options: RunFastOptions): "library" | "model" {
+  if (options.primary) return options.primary;
+  return process.env.FAST_PRIMARY?.trim() === "library" ? "library" : "model";
+}
+
 export async function runFast(
   input: FastFormInput,
   onStage?: (e: FastStageEvent) => void,
+  options: RunFastOptions = {},
 ): Promise<FastResult> {
   const started = Date.now();
   const normalized = normalizeFastInput(input);
   if (!normalized.ok) return normalized;
   const req = normalized.value;
   const recent = sanitizeRecent(input.recent);
+  const seedTable = options.variant?.seedTable;
+  const nameChars = seedTable ? new Set([...seedTable.female, ...seedTable.male]) : NAME_CHARS;
 
-  // 生日可选：有才排盘，四柱交给模型当参考，句子由模型写
-  let baziPillars: string | undefined;
+  // 生日可选：屏幕上那行只给属相和季节；给模型的只到出生时节（prompt.ts 用 birth.ts 算），不给四柱
   let baziLine: string | undefined;
   if (req.birthday) {
     const bazi = buildBaziSummary({
@@ -169,7 +226,6 @@ export async function runFast(
       birthHour: undefined,
     });
     if (bazi.ok && bazi.summary) {
-      baziPillars = bazi.summary.pillarsText;
       const readable = bazi.summary.readable;
       const parts = [readable?.zodiac ? `属${readable.zodiac}` : "", readable?.season ? `生在${readable.season}` : ""];
       baziLine = parts.filter(Boolean).join("，") || undefined;
@@ -178,9 +234,16 @@ export async function runFast(
 
   // 这一轮从哪几个字起手：本场没出现过的字优先，轮回时把配过的名字提醒给模型，
   // 最近扎堆的配字（宁、禾）也提醒一句。补发那一路换一组字（provider.ts 的 HEDGE_MS 注释）
-  const main = pickSeeds(req.gender, req.surname, recent);
-  const backup = pickSeeds(req.gender, req.surname, recent, Math.random, new Set(main.seeds));
-  const bazi = baziPillars ? { baziPillars } : {};
+  // 填了生日：第一个起手字按出生季节抽（birth.ts），首推优先用带这个字的名字
+  const birthTime = req.birthday ? birthTimeOf(req.birthday) : null;
+  const timely = birthTime ? seasonSeeds(birthTime, req.gender) : [];
+  const main = pickSeeds(req.gender, req.surname, recent, Math.random, new Set(), seedTable, timely);
+  // 补发的每一路换一组起手字，和前面几路都不重
+  const backups: typeof main[] = [];
+  for (let i = 1; i < laneCount(options); i++) {
+    const taken = new Set([main, ...backups].flatMap((s) => s.seeds));
+    backups.push(pickSeeds(req.gender, req.surname, recent, Math.random, taken, seedTable, timely));
+  }
 
   const fallback = (
     filled: { primary: FastCandidate; alternatives: FastCandidate[] },
@@ -200,8 +263,8 @@ export async function runFast(
   let provider: FastProvider;
   let raw;
   try {
-    provider = createFastProvider();
-    raw = await provider.draft(req, { ...main, ...bazi }, { ...backup, ...bazi });
+    provider = createFastProvider(options.variant?.prompt);
+    raw = await provider.draft(req, main, backups);
   } catch (err) {
     const message = err instanceof Error ? err.message : "生成失败";
     const filled = fillFromLibrary(req, recent, []);
@@ -209,8 +272,9 @@ export async function runFast(
     return { ok: false, code: "UPSTREAM", message };
   }
   onStage?.({ stage: "draft", drafted: raw.length });
-  const { seeds, avoid, tired } = provider.lastDraft.hedgeWon ? backup : main;
+  const { seeds, avoid, tired } = [main, ...backups][provider.lastDraft.lane] ?? main;
 
+  const library = loadLibrary();
   const seen = new Set<string>();
   const kept: FastCandidate[] = [];
   const dropped: { name: string; reasons: string[] }[] = [];
@@ -223,6 +287,18 @@ export async function runFast(
     const verdict = checkFastCandidate(name, req.surname, req.gender);
     if (!verdict.keep) {
       dropped.push({ name, reasons: verdict.reasons });
+      continue;
+    }
+    // 模型起出了名字库里的名字（用户评过的）：换成库里那一条，带上核过的出处和整段口播稿
+    const fromLibrary = matchLibrary(library, name, req.surname, req.gender, verdict.hotChar);
+    if (fromLibrary) {
+      seen.add(name);
+      kept.push(fromLibrary);
+      continue;
+    }
+    const taste = tasteProblems(name);
+    if (taste.length) {
+      dropped.push({ name, reasons: taste });
       continue;
     }
     seen.add(name);
@@ -274,15 +350,32 @@ export async function runFast(
     };
   }
 
-  // 这一场给过的名字不再出（整场都记）。过滤后不够 3 个就不敢过滤了，
-  // 直播里宁可重复一次，也不能没名字可念。
+  // 这一场给过的名字不再出（整场都记）。用户 11-01 定：一场里不能重复。
+  // 过滤后不够 3 个，先从名字库补没给过的；还不够就少出几个备选；一个新名字都没有才放行重复。
+  // （评测里出过：起手字轮回时模型又配出徽音、昭宁，旧做法「不够 3 个就不过滤」让它们第二次上了屏）
   const distinct = dedupeChars(kept);
   const base = distinct.length >= KEEP_MIN ? distinct : kept;
   const fresh = recent.length ? base.filter((c) => !recent.includes(c.givenName)) : base;
-  const pool = fresh.length >= KEEP_MIN ? fresh : base;
+  let pool = fresh;
+  if (pool.length < KEEP_MIN) {
+    const extra = pickLibraryCandidates(
+      library,
+      req.surname,
+      req.gender,
+      [...recent, ...pool.map((c) => c.givenName)],
+      KEEP_MIN - pool.length,
+      Math.random,
+      pool.flatMap((c) => [...c.givenName]),
+    );
+    pool = [...pool, ...extra];
+  }
+  if (pool.length === 0) pool = base;
 
-  const ranked = rankCandidates(pool, recent);
-  const fromLibrary = pickLibraryCandidate(loadLibrary(), req.surname, req.gender, recent);
+  // 这一轮真用上的那组起手字里，按季节抽的是第一个
+  const timelyChar = timely.length && timely.includes(seeds[0] ?? "") ? seeds[0] : undefined;
+  const ranked = rankCandidates(pool, recent, nameChars, timelyChar);
+  const fromLibrary =
+    primarySource(options) === "library" ? pickLibraryCandidate(loadLibrary(), req.surname, req.gender, recent) : null;
   const primary = fromLibrary ?? ranked[0]!;
   const alternatives = fromLibrary ? alternativesBeside(fromLibrary, ranked) : ranked.slice(1, 1 + ALTERNATIVES_MAX);
 
