@@ -11,8 +11,8 @@
 | 用法 | 页面 | 接口 | 耗时 | 说明 |
 |---|---|---|---|---|
 | 直播起名 | `/live` | `POST /api/fast?stream=1`（NDJSON） | 3–5 秒 | 姓 + 性别（生日可选）→ 首推 1 个 + 备选 3 个，都是模型现起，能存图；出结果后 `POST /api/fast/talk` 给提词页补写稿子 |
-| 名字打分、改字 | `/live` 里按 A | `POST /api/analyze/score`、`/api/analyze/fix` | 打分几毫秒；改字调一次模型 | 观众报全名，按规则打分，告诉主播下一步 |
-| 主播提词 | `/live/prompter` | `GET` / `POST /api/live/prompter` | 每秒取一次 | 只给主播看的口播稿 |
+| 名字打分、改字 | `/live` 里按 A | `POST /api/analyze/score`、`POST /api/analyze/fix?stream=1`（NDJSON） | 打分几毫秒；改一个字调一次模型，改法写好一条推一条 | 观众报全名，按规则打分，告诉主播下一步；改哪个字由模型看扣分理由定 |
+| 主播提词 | `/live/prompter` | `GET` / `POST /api/live/prompter` | 每秒取一次 | 只给主播看的口播稿；打分榜开着时是选中那位观众的打分稿和改法寓意 |
 | 名字评审 | `/review` | `POST /api/review` | — | 用户给起草的名字评五档 |
 | 完整版起名 | `/name` → `/reports/[id]`、`/history` | `POST /api/generate`（SSE）、`GET /api/reports/[id]/summary`（PNG） | 约 20–40 秒 | 详细条件、详细报告、摘要图、历史快照。直播不用，**先不动** |
 | 八字排盘 | `/bazi` | `POST /api/bazi`（SSE） | 排盘 1 秒内，解读 15–25 秒 | 只在直播外用 |
@@ -28,7 +28,7 @@ pnpm install
 cp .env.example .env.local   # 填 LLM_API_KEY，改掉默认密码和 JINYU_SESSION_SECRET
 pnpm dev                     # next dev -p 9000；也可以 .\start-dev.ps1（先查依赖和端口）
 pnpm typecheck               # tsc --noEmit
-pnpm test                    # vitest：15 个文件、234 个用例，全走假模型
+pnpm test                    # vitest：16 个文件、244 个用例，全走假模型
 ```
 
 - **直播**：双击 `启动直播台.bat`，用 Edge 或 Chrome 的 `--app` 模式开纯净窗口，再调 `tools/fit-window.ps1` 把窗口内容区压成 9:16（1080p 屏上是 576×1024）。直播伴侣里用「窗口」捕获这个窗口，不要用显示器捕获。`启动提词页.bat` 在直播窗口右边开提词页；手机打开同一地址，登录后自动回到提词页。两个 bat 里写死了局域网 IP `192.168.31.211`，IP 变了要改。
@@ -67,7 +67,8 @@ app/
     reveal-view.tsx         揭晓画面
     card-export.ts          Canvas 存图
     fast-stream.ts          读 /api/fast 的 NDJSON 流
-    prompter-sync.ts        推提词页
+    fix-stream.ts           读 /api/analyze/fix 的 NDJSON 流（改法一条一条到）
+    prompter-sync.ts        推提词页：起名的稿子、打分榜的打分稿
     use-live-keys.ts        快捷键：1 男、2 女、空格开始或下一个、A 打分、S 换肤、Esc 关面板
     analyze-panel.tsx       打分榜
     live.css                四套皮肤：宣纸、青瓷、刻版、竹兰（默认竹兰，背景图 public/skins/）
@@ -81,7 +82,8 @@ src/
                           taste（口味过滤）、cite（核出处）、run（编排）、talk（给提词页补写稿子）
   library/                名字库：live-pick（挑首推）、talk（口播稿）、review-store（评审读写）、review-types
   live/                   提词页：prompter（格式校验）、prompter-store（只在内存）
-  domain/score/           打分规则 score.ts、推荐线 recommend.ts、改字 fix.ts、下一步 next-step.ts
+  domain/score/           打分规则 score.ts（含听出来 / 看出来的毛病 heardIssue）、推荐线 recommend.ts、
+                          改字 fix.ts（核验）和 fix-prompt.ts（提示词、边写边取）、下一步 next-step.ts
   domain/analysis/        打分和改字的输入校验、字表 chars.ts、语料核对 corpus.ts、拆姓名、性别倾向
   domain/（其余）          完整版：normalizer、orchestrator、gate、soft-ranker、assembler；bazi.ts 是完整版自己的排盘
   fortune/                八字页：normalize（含农历）、chart、strength、relations、prompt、provider、reading、consistency
@@ -94,6 +96,7 @@ scripts/
   corpus/                 下载语料、建字表
   fortune/build-places.mjs  从 Wikidata 重建出生地表
   probe-fast.ts           直播起名真模型探针
+  probe-fix.ts            改字真模型探针：一批名字打分、改一个字，表写到 data/eval/fix-*.md；不走接口、不推提词页
   eval-fast.ts            调提示词用的评测（版本表在 eval-fast-variants.ts）
   build-seed-chars.ts     生成起手字表
   name-library/           10-30 那版自动建库，已不用
@@ -123,7 +126,11 @@ data/                     不进 git：reports/、index.json、corpus/、name-li
 
 ### 名字打分、改字
 
-按 A 打开打分榜，输全名（2–4 个汉字，性别可不填）→ `/api/analyze/score`：拆姓名，`scoreName` 按规则打分并附扣分理由，`nextStep` 给出下一步（不用改 / 改字 / 先问观众 / 重新起名）。点「改字」才调 `/api/analyze/fix`：服务端重新打分，模型只从同音字里挑、只换一个字，服务端核过才给。90 分以上不出改字。「重新起名」走上面的直播起名。
+按 A 打开打分榜，输全名（2–4 个汉字，性别可不填）→ `/api/analyze/score`：拆姓名，`scoreName` 按规则打分并附扣分理由，`nextStep` 给出下一步：90 分以上不用改；有读音硬伤（谐音、娣）先问观众能不能接受只改一个字；其余直接给「改一个字」。
+
+点「改一个字」才调 `/api/analyze/fix?stream=1`：服务端重新打分，把扣分理由（标明听出来的还是看出来的）交给模型，改哪个字、改成什么、改一个字够不够由模型定。模型边写，服务端边取写完的改法、边核（`verifyOption`：只差一个字、分数变高、换上的字不被扣分、听出来的毛病读音得变、读音硬伤得去掉、寓意能念），核过一条推一条，最多 3 条。模型说改一个字解决不了的，面板写明原因、推重新起名。「重新起名」走上面的直播起名。
+
+面板开着时，提词页跟着选中的那位观众走：分数、扣分理由先念，改法和寓意到一条出一条。起名那边这时晚到的稿子先记着，关面板时补推。
 
 ### 建名字库
 
@@ -170,6 +177,10 @@ data/                     不进 git：reports/、index.json、corpus/、name-li
 | 11-01 | 直播起名默认三路一起发（`FAST_LANES`，不设是 3） | 用户定。三路和 10-31 那一版一样快，两路中位慢半秒左右；代价是调用量多一半 |
 | 11-01 | 存图前先把卡上要画的字按用到的字重加载好，最多等 3 秒 | Google Fonts 按字切片加载，没在屏幕上出现过的字、字重，第一张图会用替代字体画 |
 | 11-01 | 分支 `name-library` 合回 `main`，同一天推到 GitHub | 用户定（G9） |
+| 11-01 | 改字交给模型：改哪个字、改成什么、改一个字够不够，模型看扣分理由定；读音可以变。代码只核能机械判断的 | 用户定，取代 10-31 的「只换同音字」：代码一条条列「哪个字能换」穷举不完；只换同音字，听出来的毛病还在（文红艳换成文红雁，念出来还是「红艳」） |
+| 11-01 | 听出来的毛病（谐音、和姓同音或连读、年代感、撞名、热门字、同调、三声连读）读音不变的改法不收 | 名字多半是被念、被听到的。分数按字查表，同音换个写法分数会涨，毛病其实还在 |
+| 11-01 | 改字一轮最多等 25 秒（原来 12 秒） | 实测推理常写 2000–8000 字、一轮 5–20 秒；15 秒时文红艳超时，主播再点一次又是十几秒，不如多等一会儿把这一轮写完 |
+| 11-01 | 打分和改法接进提词页；改法一条一条推，不按字推 | 用户要求主播等的时候不冷场。每条要先核过才能给主播念，按字推就会念到没核过、可能被丢掉的东西；等第一条的两三秒，主播先念扣分理由和过渡的话 |
 
 ## 6. 别再踩的坑
 
@@ -184,7 +195,7 @@ data/                     不进 git：reports/、index.json、corpus/、name-li
 - 等模型的长命令（探针、真模型测试）要用后台进程跑，输出写进日志再读；执行工具会提前返回、丢掉后面的输出。
 - Next 的路由播报元素也是 `role="alert"`，Playwright 找表单报错要写 `form p[role='alert']`。
 - 比两版提示词的快慢，要放在同一时段交替跑（`scripts/eval-fast.ts` 就是这么跑的）：网关忙闲能让同一版的中位差一倍。
-- `reasoning_effort` 设成 `minimal`、`none`，这个网关照样推理，压不下来；只有 `low` 和「推理里只写候选名字」有用。
+- `reasoning_effort` 设成 `minimal`、`none`，这个网关照样推理，压不下来；只有 `low` 和「推理里只写候选名字」有用。这句只对起名管用：改字要权衡扣分理由，写了反而推理更长（11-01 实测，见 `docs/直播提示词.md` 第四节）。
 
 ## 7. 文档
 
