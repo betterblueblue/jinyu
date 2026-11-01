@@ -67,11 +67,38 @@ function wrapText(ctx: CanvasRenderingContext2D, text: string, maxW: number): st
   return lines;
 }
 
+/** 等字体最多等这么久：网络断了也不能让存图卡死，到点就用已经有的字体画 */
+const FONT_WAIT_MS = 3000;
+
+/**
+ * 画之前先把要用到的字加载好（总体方案 A8）。
+ *
+ * Noto Serif SC 从 Google Fonts 按字切片加载，页面上没显示过的字、没用过的字重（大字 500、品牌 600）
+ * 第一次存图时还没下下来，canvas 就拿替代字体画了那几个字，看着更粗；第二张起才正常。
+ * 所以按这张卡上真要画的字，把用到的几个字重各 load 一遍，等齐了再量宽度、再画。
+ * 黑体那几行用系统字体（Noto Sans SC 没有在线加载），不用等。
+ */
+async function ensureFonts(show: ShowData): Promise<void> {
+  if (typeof document === "undefined" || !document.fonts?.load) return;
+  const text = [
+    "瑾瑜取名参考备选生辰",
+    show.full,
+    show.one,
+    show.cite?.quote ?? "",
+    show.cite?.piece ?? "",
+    show.bazi ?? "",
+    ...show.alts.flatMap((a) => [a.n, a.one, a.cite ? `${a.cite.quote} ${a.cite.piece}` : ""]),
+  ].join("");
+  const loads = [300, 400, 500, 600].map((w) => document.fonts.load(`${w} 40px "Noto Serif SC"`, text).catch(() => []));
+  await Promise.race([Promise.all(loads), new Promise((r) => setTimeout(r, FONT_WAIT_MS))]);
+}
+
 /**
  * 按屏幕上同一份数据（ShowData）画卡并下载。竹兰皮肤要铺纸图，图由直播台预加载好传进来，
  * 还没加载完就用纯色底。
  */
-export function downloadCard(show: ShowData, skin: Skin, bg: HTMLImageElement | null): void {
+export async function downloadCard(show: ShowData, skin: Skin, bg: HTMLImageElement | null): Promise<void> {
+  await ensureFonts(show);
   const C = SKINC[skin];
   const W = 1080;
   const M = 120;

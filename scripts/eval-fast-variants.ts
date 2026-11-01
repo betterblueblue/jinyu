@@ -51,7 +51,7 @@ function oldUser(req: FastRequest, round: FastPromptRound): string {
 
 export const VARIANTS: Record<string, EvalVariant> = {
   base: { note: "线上现在这一版" },
-  base3: { note: "线上这一版，三路一起发（FAST_LANES=3）", lanes: 3 },
+  base2: { note: "线上这一版，只发两路（FAST_LANES=2，11-01 以前的默认）", lanes: 2 },
   old: {
     note: "10-31 那一版：旧起手字表 + 四柱进提示词（固定参照）",
     prompt: { system: buildFastSystem, user: oldUser },

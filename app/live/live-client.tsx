@@ -200,7 +200,7 @@ export function LiveClient() {
   /* ---------- 存图 ---------- */
   const exportCard = useCallback(() => {
     if (!show) return;
-    downloadCard(show, skin, bgImage.current);
+    void downloadCard(show, skin, bgImage.current);
   }, [show, skin]);
 
   const curSurname = draft.trim();

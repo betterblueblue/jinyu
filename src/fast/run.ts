@@ -190,12 +190,13 @@ export interface RunFastOptions {
 }
 
 /**
- * 一轮一共发几路（每路一组不同的起手字，谁先回用谁）。不设是 2（第一路 + 补发一路）；
- * FAST_LANES=3 再多补一路：模型每轮想多想少差得很远，三路取最快的那一路，慢轮次少一截，代价是调用量多一半。
+ * 一轮一共发几路（每路一组不同的起手字，谁先回用谁）。不设是 3（用户 11-01 定）；FAST_LANES=2 回到两路。
+ * 模型每轮想多想少差得很远，三路取最快的那一路：评测里中位和 10-31 那一版一样（2.9 秒），
+ * 两路时中位慢半秒左右、超 5 秒的轮次多。代价是调用量比两路多一半。
  */
 function laneCount(options: RunFastOptions): number {
   const n = options.variant?.lanes ?? Number(process.env.FAST_LANES);
-  return Number.isInteger(n) && n >= 2 && n <= 3 ? n : 2;
+  return Number.isInteger(n) && n >= 2 && n <= 3 ? n : 3;
 }
 
 function primarySource(options: RunFastOptions): "library" | "model" {
