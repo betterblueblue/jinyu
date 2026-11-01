@@ -1,4 +1,4 @@
-import type { FixOption, NameScore, NextStep } from "@/domain/score/types";
+import type { Deduction, FixOption, NameScore, NextStep, ScoreRuleId } from "@/domain/score/types";
 import type { FastCandidate, FastSuccess } from "@/fast/types";
 import { checkLine, talkLines } from "@/library/talk";
 import type { PrompterName, PrompterRound } from "@/live/prompter";
@@ -93,10 +93,72 @@ export interface ScoreForPrompter {
   score: NameScore;
   next: NextStep;
   fix: { phase: "idle" | "running" | "done" | "error"; options: FixOption[]; unfixable?: string; message?: string };
+  /** 这个名字好在哪（/api/analyze/merit）；没请或者没写出来就不给 */
+  merit?: { phase: "writing" | "done" | "error"; chars?: string; whole?: string };
+}
+
+/** 请模型写「这个名字好在哪」；写不出来返回 null，提词页只是少这一段 */
+export async function fetchMerit(input: unknown): Promise<{ chars: string; whole: string } | null> {
+  try {
+    const res = await fetch("/api/analyze/merit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) return null;
+    const body = (await res.json()) as { ok?: boolean; merit?: { chars: string; whole: string } };
+    return body.ok && body.merit ? body.merit : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
- * 打分榜 → 提词页。一打完分就推：分数、扣分理由先念起来；
+ * 打分规则查的十项（src/domain/score/score.ts），用观众听得懂的叫法。
+ * 提词页上告诉主播「查了哪几项、哪几项有毛病」，主播能讲出这个分是怎么来的。
+ */
+const CHECKS = ["谐音", "和姓连读", "生僻字", "容易念错", "字义", "男女用字", "重名", "年代感", "声调", "笔画"] as const;
+type Check = (typeof CHECKS)[number];
+const CHECK_OF: Record<ScoreRuleId, Check> = {
+  homophone: "谐音",
+  sameSound: "和姓连读",
+  trap: "和姓连读",
+  rare: "生僻字",
+  misread: "容易念错",
+  forbidden: "字义",
+  swap: "字义",
+  remind: "字义",
+  style: "字义",
+  gender: "男女用字",
+  template: "重名",
+  hot: "重名",
+  singleName: "重名",
+  era: "年代感",
+  eraName: "年代感",
+  flatTone: "声调",
+  sandhi: "声调",
+  strokes: "笔画",
+};
+const checkOf = (d: Deduction): Check => (d.rule === "swap" && d.soundBound ? "谐音" : CHECK_OF[d.rule]);
+
+/** 「按我们这套规则查了 10 项（谐音、……）；有毛病的是：年代感。」没填性别不查男女用字，照实说 */
+export function checksLine(score: NameScore): string {
+  const checked = CHECKS.filter((c) => c !== "男女用字" || score.gender !== "unknown");
+  const bad = checked.filter((c) => score.deductions.some((d) => checkOf(d) === c));
+  const head = `按我们这套规则查了 ${checked.length} 项（${checked.join("、")}）`;
+  const tail = score.gender === "unknown" ? "没填性别，男女用字这一项没查。" : "";
+  return `${head}；${bad.length ? `有毛病的是：${bad.join("、")}。` : `${checked.length} 项都过了。`}${tail}`;
+}
+
+function mathLine(score: NameScore): string {
+  if (score.deductions.length === 0) return "100 分，一分没扣。";
+  const total = score.deductions.reduce((s, d) => s + d.points, 0);
+  if (total >= 100) return `一共扣了 ${total} 分，按 0 分算。`;
+  return `100 − ${score.deductions.map((d) => d.points).join(" − ")} = ${score.score}`;
+}
+
+/**
+ * 打分榜 → 提词页。一打完分就推：分数、查了哪几项、扣分理由先念起来（观众屏幕上只有分数和能不能用）；
  * 点了「改一个字」，先推一句过渡的话，模型每核过一个改法再推一次，主播不冷场。
  */
 export function prompterFromScore(s: ScoreForPrompter): PrompterRound {
@@ -104,14 +166,16 @@ export function prompterFromScore(s: ScoreForPrompter): PrompterRound {
   const options = fix.options.slice(0, 3).map((o) => ({
     full: o.fullName,
     pinyin: o.pinyin,
-    change: `${o.from} → ${o.to} · ${o.soundLine}`,
+    change: `${o.from} → ${o.to} · ${o.soundLine} · ${o.why}`,
     score: o.score,
     meaning: o.meaning,
   }));
   let say: string | undefined;
   if (next.kind === "none") say = "这个名字已经很好，不用改。";
   else if (fix.phase === "running" && options.length === 0) say = "可以先说：我看看换哪个字更合适，毛病要去掉，意思也要好。";
-  else if (next.kind === "ask" && fix.phase === "idle") say = "先问观众：只改一个字，读音会跟着变，能接受吗？不接受就重新起名。";
+  else if (next.kind === "ask" && fix.phase === "idle") {
+    say = "先问观众：毛病出在读音上，换个同音的写法还是这个音；只改一个字，读音会跟着变，能接受吗？不接受就重新起名。";
+  }
   let note: string | undefined;
   if (fix.phase === "done" && options.length === 0) {
     note = fix.unfixable ? `改一个字解决不了：${fix.unfixable}。建议重新起名。` : (fix.message ?? "这次没挑出合适的字，可以再点一次。");
@@ -125,6 +189,12 @@ export function prompterFromScore(s: ScoreForPrompter): PrompterRound {
     pinyin: score.pinyin,
     score: score.score,
     bandLabel: score.bandLabel,
+    math: mathLine(score),
+    checks: checksLine(score),
+    ...(s.merit?.phase === "writing" ? { merit: { writing: true, lines: [] } } : {}),
+    ...(s.merit?.phase === "done" && s.merit.chars && s.merit.whole
+      ? { merit: { writing: false, lines: [s.merit.chars, s.merit.whole] } }
+      : {}),
     deductions: score.deductions.slice(0, 12).map((d) => ({ points: d.points, line: d.line })),
     folk: score.folk.slice(0, 4).map((f) => f.line),
     ...(say ? { say } : {}),

@@ -37,8 +37,8 @@ function squash(raw: unknown): string {
   return typeof raw === "string" ? raw.replace(/\s+/g, "").trim() : "";
 }
 
-/** 一句话能不能当众念：长度合适、没有命理词和五行说法、没有大段引文 */
-function sayable(text: string, max: number, min = 1): boolean {
+/** 一句话能不能当众念：长度合适、没有命理词和五行说法、没有大段引文。「名字好在哪」（merit.ts）也用 */
+export function sayable(text: string, max: number, min = 1): boolean {
   const n = [...text].length;
   if (n < min || n > max) return false;
   if (BANNED_TALK_WORDS.some((w) => text.includes(w)) || BANNED_FIX.test(text)) return false;

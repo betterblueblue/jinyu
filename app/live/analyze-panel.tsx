@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { splitFullName } from "@/domain/analysis/split-name";
 import type { FixOption, NameScore, NextStep } from "@/domain/score/types";
 import { readFixStream } from "./fix-stream";
-import { prompterFromScore, pushPrompter } from "./prompter-sync";
+import { fetchMerit, prompterFromScore, pushPrompter, type ScoreForPrompter } from "./prompter-sync";
 import "./analyze.css";
 
 /**
@@ -48,6 +48,8 @@ interface Row {
   next?: NextStep;
   error?: string;
   fix: FixState;
+  /** 提词页上「这个名字好在哪」：打完分就去请，只给主播看 */
+  merit?: ScoreForPrompter["merit"];
 }
 
 const IDLE_FIX: FixState = { phase: "idle", options: [], chosen: 0, misses: 0 };
@@ -79,13 +81,6 @@ function bestIndex(options: FixOption[]): number {
 /** 打分接口没给 next 时（面板更新前打的分）：90 分以上不用改，其余给改一个字 */
 function nextOf(row: Row, score: NameScore): NextStep {
   return row.next ?? { kind: score.band === "great" ? "none" : "fix", soundIssues: [] };
-}
-
-function mathLine(score: NameScore): string {
-  if (score.deductions.length === 0) return "一分没扣";
-  const total = score.deductions.reduce((s, d) => s + d.points, 0);
-  if (total >= 100) return `一共扣了 ${total} 分，按 0 分算`;
-  return `100 − ${score.deductions.map((d) => d.points).join(" − ")} = ${score.score}`;
 }
 
 async function postJson<T>(url: string, body: unknown): Promise<T> {
@@ -187,7 +182,11 @@ export function AnalyzePanel({ open, onClose, onRename }: Props) {
       );
       if (!out.ok || !out.result) throw new Error(out.message ?? "打分失败");
       const { result, next } = out;
-      patch(id, (r) => ({ ...r, score: result, ...(next ? { next } : {}) }));
+      patch(id, (r) => ({ ...r, score: result, ...(next ? { next } : {}), merit: { phase: "writing" } }));
+      // 「这个名字好在哪」要调模型，几秒后才到：不等它，也不占改字那把锁，主播先念分数和查了哪几项
+      void fetchMerit(input).then((merit) =>
+        patch(id, (r) => ({ ...r, merit: merit ? { phase: "done", ...merit } : { phase: "error" } })),
+      );
     } catch (e) {
       const message = e instanceof Error ? e.message : "打分失败";
       patch(id, (r) => ({ ...r, error: message }));
@@ -259,6 +258,7 @@ export function AnalyzePanel({ open, onClose, onRename }: Props) {
         score: selected.score,
         next: nextOf(selected, selected.score),
         fix: selected.fix,
+        ...(selected.merit ? { merit: selected.merit } : {}),
       }),
     );
   }, [open, selected, selectedNo]);
@@ -441,7 +441,6 @@ function Detail({
   const givenUp = missed && fix.misses >= MAX_MISSES;
   const asking = next.kind === "ask" && fix.phase === "idle";
   const showFixButton = (next.kind === "fix" || (next.kind === "ask" && !asking)) && !givenUp;
-  const soundLine = next.soundIssues[0]?.line;
   const rename = (ghost: boolean) => (
     <RenameButtons
       surname={score.surname}
@@ -470,32 +469,11 @@ function Detail({
           <b>{score.score}</b>
           <span>分 · {score.bandLabel}</span>
         </p>
-        <p className="ap-detail-math">{mathLine(score)}</p>
       </div>
 
-      {score.deductions.length > 0 && (
-        <ul className="ap-deds">
-          {score.deductions.map((d, i) => (
-            <li key={i}>
-              <b>−{d.points}</b>
-              <span>{d.line}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {score.folk.length > 0 && (
-        <details className="ap-folk">
-          <summary>民间说法 · 不扣分</summary>
-          {score.folk.map((f) => (
-            <p key={f.char}>{f.line}</p>
-          ))}
-        </details>
-      )}
-
+      {/* 扣分理由、算式、民间说法只放提词页，由主播讲（2026-11-01 用户定）：观众屏幕上只有分数和能不能用 */}
       {asking && (
         <div className="ap-next">
-          <p className="ap-next-why">毛病出在读音上，换同音字还是这个音：{soundLine}</p>
           <p className="ap-next-ask">只改一个字（读音会跟着变）能接受吗？不接受就重新起名。</p>
           <div className="ap-actions">
             <button type="button" className="ap-act" onClick={onFix} disabled={modelBusy}>

@@ -105,7 +105,27 @@ function ScoreView({ round }: { round: PrompterScoreRound }) {
       <p className="mt-3 text-2xl tracking-widest text-neutral-300 sm:text-3xl">{round.pinyin}</p>
       <p className="mt-4 text-4xl font-semibold text-amber-300">
         {round.score} 分 · {round.bandLabel}
+        {round.math ? <span className="ml-4 text-2xl font-normal text-neutral-400">{round.math}</span> : null}
       </p>
+      {round.merit ? (
+        <section className="mt-6" data-testid="prompter-merit">
+          <p className="text-lg tracking-widest text-neutral-400">先说好在哪 · 模型写的，念之前扫一眼</p>
+          {round.merit.lines.length ? (
+            <div className="mt-2 space-y-2 text-[clamp(22px,3.3vw,36px)] leading-relaxed text-neutral-50">
+              {round.merit.lines.map((l) => (
+                <p key={l}>{l}</p>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-2 text-lg text-neutral-500">字义和寓意还在写，几秒就到……</p>
+          )}
+        </section>
+      ) : null}
+      {round.checks ? (
+        <p className="mt-5 text-[clamp(20px,2.8vw,30px)] leading-relaxed text-neutral-300" data-testid="prompter-checks">
+          {round.checks}
+        </p>
+      ) : null}
       {round.deductions.length ? (
         <ol className="mt-6 space-y-4">
           {round.deductions.map((d, i) => (

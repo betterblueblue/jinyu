@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { FixOption, NameScore } from "@/domain/score/types";
 import { parsePrompterRound, type PrompterScoreRound } from "@/live/prompter";
-import { prompterFromScore, type ScoreForPrompter } from "../app/live/prompter-sync";
+import { checksLine, prompterFromScore, type ScoreForPrompter } from "../app/live/prompter-sync";
 
 const score: NameScore = {
   fullName: "文红艳",
@@ -59,18 +59,51 @@ describe("提词页：打分稿", () => {
     expect(r.fix).toEqual({ running: true, options: [] });
   });
 
-  it("改法到一条推一条：带读音变化、新分数和寓意", () => {
+  it("改法到一条推一条：带读音变化、一句理由、新分数和寓意", () => {
     const r = round({ phase: "running", options: [option] });
     expect(r.say).toBeUndefined();
     expect(r.fix!.options).toEqual([
-      { full: "文红安", pinyin: "wén hóng ān", change: "艳 → 安 · yàn → ān", score: 90, meaning: option.meaning },
+      { full: "文红安", pinyin: "wén hóng ān", change: "艳 → 安 · yàn → ān · 安字稳当", score: 90, meaning: option.meaning },
     ]);
+  });
+
+  it("观众屏幕上不放的算式和「查了哪几项」放在提词页上", () => {
+    const r = round({ phase: "idle", options: [] });
+    expect(r.math).toBe("100 − 25 = 75");
+    expect(r.checks).toBe(
+      "按我们这套规则查了 10 项（谐音、和姓连读、生僻字、容易念错、字义、男女用字、重名、年代感、声调、笔画）；有毛病的是：年代感。",
+    );
+  });
+
+  it("查了哪几项：没填性别不查男女用字，照实说；一项都没毛病就说都过了", () => {
+    const unknown = checksLine({ ...score, gender: "unknown" });
+    expect(unknown).toContain("查了 9 项");
+    expect(unknown).not.toContain("男女用字、");
+    expect(unknown).toContain("没填性别，男女用字这一项没查。");
+    expect(checksLine({ ...score, deductions: [] })).toContain("10 项都过了。");
+    // 娣是因为念着像「弟」才扣的，算谐音，不算字义
+    const di = checksLine({
+      ...score,
+      deductions: [{ rule: "swap", chars: ["娣"], positions: [1], points: 26, line: "x", soundBound: true }],
+    });
+    expect(di).toContain("有毛病的是：谐音。");
   });
 
   it("改一个字解决不了：写明原因，建议重新起名", () => {
     const r = round({ phase: "done", options: [], unfixable: "红艳两个字合在一起才是那个年代的名字" });
     expect(r.fix!.note).toContain("改一个字解决不了：红艳");
     expect(r.fix!.note).toContain("重新起名");
+  });
+
+  it("名字好在哪：还在写先占个位，写好了是拆字、合起来两句，没写出来就不放", () => {
+    const base: ScoreForPrompter = { no: 3, score, next: { kind: "fix", soundIssues: [] }, fix: { phase: "idle", options: [] } };
+    const writing = prompterFromScore({ ...base, merit: { phase: "writing" } }) as PrompterScoreRound;
+    expect(writing.merit).toEqual({ writing: true, lines: [] });
+    const done = prompterFromScore({ ...base, merit: { phase: "done", chars: "红是红火。", whole: "合起来是日子红火。" } }) as PrompterScoreRound;
+    expect(done.merit).toEqual({ writing: false, lines: ["红是红火。", "合起来是日子红火。"] });
+    expect((prompterFromScore({ ...base, merit: { phase: "error" } }) as PrompterScoreRound).merit).toBeUndefined();
+    for (const r of [writing, done]) expect(parsePrompterRound(JSON.parse(JSON.stringify(r)))).toEqual(r);
+    expect(parsePrompterRound({ ...done, merit: { writing: false, lines: ["一", "二", "三"] } })).toBeNull();
   });
 
   it("90 分以上说不用改；有读音硬伤时先问观众", () => {

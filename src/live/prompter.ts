@@ -36,7 +36,7 @@ export interface PrompterSection {
 export interface PrompterFix {
   full: string;
   pinyin: string;
-  /** 「红 → 鸿 · 读音不变」「艳 → 安 · yàn → ān」 */
+  /** 「艳 → 安 · yàn → ān · 换掉年代感重的艳」：换了哪个字、读音变没变、一句理由 */
   change: string;
   score: number;
   meaning: string;
@@ -54,6 +54,12 @@ export interface PrompterScoreRound {
   pinyin: string;
   score: number;
   bandLabel: string;
+  /** 算式：100 − 12 = 88（观众屏幕上不放，主播讲） */
+  math?: string;
+  /** 按规则查了哪几项、哪几项有毛病 */
+  checks?: string;
+  /** 这个名字好在哪：拆字、合起来（模型写的，打完分几秒后补上；writing 时还没到） */
+  merit?: { writing: boolean; lines: string[] };
   deductions: { points: number; line: string }[];
   /** 民间说法，不扣分 */
   folk: string[];
@@ -154,7 +160,7 @@ function parseFix(v: unknown): PrompterFix | null {
   if (!x || typeof x !== "object") return null;
   const full = text(x.full, 8);
   const pinyin = text(x.pinyin, 60);
-  const change = text(x.change, 40);
+  const change = text(x.change, 60);
   const meaning = text(x.meaning);
   if (!full || pinyin === null || !change || !meaning || !isScore(x.score)) return null;
   return { full, pinyin, change, score: x.score, meaning };
@@ -183,7 +189,17 @@ function parseScoreRound(x: Record<string, unknown>): PrompterScoreRound | null 
     folk.push(t);
   }
   const say = optText(x.say);
-  if (say === null) return null;
+  const math = optText(x.math);
+  const checks = optText(x.checks);
+  if (say === null || math === null || checks === null) return null;
+  let merit: PrompterScoreRound["merit"];
+  if (x.merit !== undefined) {
+    const m = x.merit as Record<string, unknown> | null;
+    if (!m || typeof m !== "object" || !Array.isArray(m.lines) || m.lines.length > 2) return null;
+    const lines = parseLines(m.lines);
+    if (lines === null) return null;
+    merit = { writing: m.writing === true, lines };
+  }
   let fix: PrompterScoreRound["fix"];
   if (x.fix !== undefined) {
     const f = x.fix as Record<string, unknown> | null;
@@ -205,6 +221,9 @@ function parseScoreRound(x: Record<string, unknown>): PrompterScoreRound | null 
     pinyin,
     score: x.score,
     bandLabel,
+    ...(math ? { math } : {}),
+    ...(checks ? { checks } : {}),
+    ...(merit ? { merit } : {}),
     deductions,
     folk,
     ...(say ? { say } : {}),
