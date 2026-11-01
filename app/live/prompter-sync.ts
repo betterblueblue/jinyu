@@ -92,7 +92,14 @@ export interface ScoreForPrompter {
   no: number;
   score: NameScore;
   next: NextStep;
-  fix: { phase: "idle" | "running" | "done" | "error"; options: FixOption[]; unfixable?: string; message?: string };
+  fix: {
+    phase: "idle" | "running" | "done" | "error";
+    options: FixOption[];
+    unfixable?: string;
+    message?: string;
+    /** 打完分在后台先改、主播还没点「改一个字」时为 false：提词页当没改过 */
+    shown?: boolean;
+  };
   /** 这个名字好在哪（/api/analyze/merit）；没请或者没写出来就不给 */
   merit?: { phase: "writing" | "done" | "error"; chars?: string; whole?: string };
 }
@@ -162,7 +169,8 @@ function mathLine(score: NameScore): string {
  * 点了「改一个字」，先推一句过渡的话，模型每核过一个改法再推一次，主播不冷场。
  */
 export function prompterFromScore(s: ScoreForPrompter): PrompterRound {
-  const { score, next, fix } = s;
+  const { score, next } = s;
+  const fix: ScoreForPrompter["fix"] = s.fix.shown === false ? { phase: "idle", options: [] } : s.fix;
   const options = fix.options.slice(0, 3).map((o) => ({
     full: o.fullName,
     pinyin: o.pinyin,

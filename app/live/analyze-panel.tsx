@@ -11,8 +11,9 @@ import "./analyze.css";
  * 名字分析面板：直播打分榜。
  *
  * 一行一位观众，往下累加——榜单本身就是吸引其他人报名字的东西。
- * 回车只按规则打分，几毫秒出分；观众想改，主播点「改一个字」才调模型：改哪个字、改成什么由模型看扣分理由定，
- * 服务端逐条核验，核过一条推一条（2026-11-01 用户定）。榜单在这一场里一直留着，关掉面板也不清。
+ * 回车只按规则打分，几毫秒出分。改一个字由模型看扣分理由定，服务端逐条核验，核过一条推一条（2026-11-01 用户定）。
+ * 90 分以下的，打完分改字就在后台开始写，观众屏幕和提词页都先不显示；主播点「改一个字」才亮出来，
+ * 主播讲扣分理由那几秒模型已经在写了（11-01 提速）。榜单在这一场里一直留着，关掉面板也不清。
  * 面板开着时，提词页跟着选中的那位观众走：分数、扣分理由、改法和寓意（prompter-sync.ts 的 prompterFromScore）。
  * 以前的「详细解读」（模型另写一段分析）和后面的「整个换新名」已删（2026-10-31，用户定）：
  * 解读和规则打分对不上，当着观众很尴尬。
@@ -28,6 +29,13 @@ interface Props {
 }
 
 interface FixState {
+  /**
+   * 打完分就在后台改（11-01 加，提速）：shown 为 false 时观众屏幕和提词页都当没改过；
+   * 主播点「改一个字」只是亮出来，主播讲扣分理由那几秒模型已经在写了
+   */
+  shown: boolean;
+  /** 第几次改：再改一次时，上一次晚到的结果认得出来、丢掉 */
+  run: number;
   phase: "idle" | "running" | "done" | "error";
   /** 模型写好、核过的改法，边收边加 */
   options: FixOption[];
@@ -52,7 +60,7 @@ interface Row {
   merit?: ScoreForPrompter["merit"];
 }
 
-const IDLE_FIX: FixState = { phase: "idle", options: [], chosen: 0, misses: 0 };
+const IDLE_FIX: FixState = { shown: false, run: 0, phase: "idle", options: [], chosen: 0, misses: 0 };
 /** 改字连着两次没结果，就别让主播再点了 */
 const MAX_MISSES = 2;
 const GENDERS: Gender[] = ["male", "female", "unknown"];
@@ -69,7 +77,7 @@ function markedPositions(score: NameScore): Set<number> {
 function verdictText(row: Row): string {
   if (row.error) return "没打出分";
   if (!row.score) return "…";
-  const picked = row.fix.phase === "done" ? row.fix.options[row.fix.chosen] : undefined;
+  const picked = row.fix.shown && row.fix.phase === "done" ? row.fix.options[row.fix.chosen] : undefined;
   return picked ? `改为：${picked.fullName}` : row.score.bandLabel;
 }
 
@@ -98,15 +106,13 @@ export function AnalyzePanel({ open, onClose, onRename }: Props) {
   const [surnameOverride, setSurnameOverride] = useState<string | null>(null);
   const [rows, setRows] = useState<Row[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  /** 改字要调模型，一次只跑一个，主播连点也不会叠着发 */
-  const [modelBusy, setModelBusy] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
 
   const inputRef = useRef<HTMLInputElement | null>(null);
   const boardRef = useRef<HTMLOListElement | null>(null);
   const detailRef = useRef<HTMLDivElement | null>(null);
   const nextId = useRef(1);
-  const modelLock = useRef(false);
+  const fixRun = useRef(0);
 
   const splitPreview = useMemo(() => {
     const trimmed = name.replace(/\s/g, "");
@@ -130,17 +136,73 @@ export function AnalyzePanel({ open, onClose, onRename }: Props) {
     setRows((all) => all.map((r) => (r.id === id ? fn(r) : r)));
   }, []);
 
-  const takeModel = useCallback(() => {
-    if (modelLock.current) return false;
-    modelLock.current = true;
-    setModelBusy(true);
-    return true;
-  }, []);
+  /**
+   * 改一个字：shown 为 false 是打完分在后台先改（观众屏幕、提词页都不显示），主播点了才亮出来。
+   * 每一行各改各的，不再一次只许一个：后台先改的那一行不能挡住主播在别的行上点改字。
+   */
+  const runFix = useCallback(
+    async (id: number, input: Row["input"], shown: boolean) => {
+      const run = ++fixRun.current;
+      patch(id, (r) => ({ ...r, fix: { ...IDLE_FIX, shown, run, phase: "running", misses: r.fix.misses } }));
+      const mine = (r: Row) => r.fix.run === run;
+      // 模型每核过一个改法，服务端推一帧：马上收下，亮着的话观众屏幕和提词页也跟着更新
+      const addOption = (option: FixOption) =>
+        patch(id, (r) => (mine(r) ? { ...r, fix: { ...r.fix, options: [...r.fix.options, option] } } : r));
+      try {
+        const res = await fetch("/api/analyze/fix?stream=1", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(input),
+        });
+        const out = await readFixStream(res, addOption);
+        if (!out) throw new Error("改字没成功");
+        if (!out.ok) throw new Error(out.message);
+        patch(id, (r) =>
+          mine(r)
+            ? {
+                ...r,
+                fix: {
+                  ...r.fix,
+                  phase: "done",
+                  options: out.options,
+                  chosen: bestIndex(out.options),
+                  // 没亮出来的不算「没改出来」：主播点了、看到了才算
+                  misses: out.options.length > 0 ? 0 : r.fix.misses + (r.fix.shown ? 1 : 0),
+                  ...(out.unfixable ? { unfixable: out.unfixable } : {}),
+                  ...(out.message ? { message: out.message } : {}),
+                },
+              }
+            : r,
+        );
+      } catch (e) {
+        const message = e instanceof Error ? e.message : "改字没成功";
+        // 已经收到的改法留着用，只是不再等后面的
+        patch(id, (r) =>
+          !mine(r)
+            ? r
+            : r.fix.options.length > 0
+              ? { ...r, fix: { ...r.fix, phase: "done", chosen: bestIndex(r.fix.options), misses: 0 } }
+              : { ...r, fix: { ...r.fix, phase: "error", message, misses: r.fix.misses + (r.fix.shown ? 1 : 0) } },
+        );
+      }
+    },
+    [patch],
+  );
 
-  const releaseModel = useCallback(() => {
-    modelLock.current = false;
-    setModelBusy(false);
-  }, []);
+  /** 主播点「改一个字」：后台已经在改或改完了就亮出来；没改过、后台出错了、或者是「再改一次」就重新改 */
+  const onFixClick = useCallback(
+    (row: Row) => {
+      const f = row.fix;
+      if (!f.shown && (f.phase === "running" || f.phase === "done")) {
+        const missed = f.phase === "done" && f.options.length === 0;
+        patch(row.id, (r) => ({ ...r, fix: { ...r.fix, shown: true, misses: missed ? r.fix.misses + 1 : r.fix.misses } }));
+        return;
+      }
+      if (f.shown && f.phase === "running") return;
+      void runFix(row.id, row.input, true);
+    },
+    [patch, runFix],
+  );
 
   useEffect(() => {
     if (open) requestAnimationFrame(() => inputRef.current?.focus());
@@ -187,53 +249,13 @@ export function AnalyzePanel({ open, onClose, onRename }: Props) {
       void fetchMerit(input).then((merit) =>
         patch(id, (r) => ({ ...r, merit: merit ? { phase: "done", ...merit } : { phase: "error" } })),
       );
+      // 90 分以下的，改字也马上在后台开始写（不亮出来）：主播讲分数、扣分理由那几秒，模型已经在写了
+      if (result.band !== "great") void runFix(id, input, false);
     } catch (e) {
       const message = e instanceof Error ? e.message : "打分失败";
       patch(id, (r) => ({ ...r, error: message }));
     }
-  }, [name, gender, splitPreview, patch]);
-
-  const runFix = useCallback(
-    async (row: Row) => {
-      if (!takeModel()) return;
-      patch(row.id, (r) => ({ ...r, fix: { ...IDLE_FIX, phase: "running", misses: r.fix.misses } }));
-      // 模型每核过一个改法，服务端推一帧：马上显示，提词页也跟着更新
-      const addOption = (option: FixOption) =>
-        patch(row.id, (r) => ({ ...r, fix: { ...r.fix, options: [...r.fix.options, option] } }));
-      try {
-        const res = await fetch("/api/analyze/fix?stream=1", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(row.input),
-        });
-        const out = await readFixStream(res, addOption);
-        if (!out) throw new Error("改字没成功");
-        if (!out.ok) throw new Error(out.message);
-        patch(row.id, (r) => ({
-          ...r,
-          fix: {
-            phase: "done",
-            options: out.options,
-            chosen: bestIndex(out.options),
-            misses: out.options.length > 0 ? 0 : r.fix.misses + 1,
-            ...(out.unfixable ? { unfixable: out.unfixable } : {}),
-            ...(out.message ? { message: out.message } : {}),
-          },
-        }));
-      } catch (e) {
-        const message = e instanceof Error ? e.message : "改字没成功";
-        // 已经收到的改法留着用，只是不再等后面的
-        patch(row.id, (r) =>
-          r.fix.options.length > 0
-            ? { ...r, fix: { ...r.fix, phase: "done", chosen: bestIndex(r.fix.options), misses: 0 } }
-            : { ...r, fix: { ...IDLE_FIX, phase: "error", message, misses: r.fix.misses + 1 } },
-        );
-      } finally {
-        releaseModel();
-      }
-    },
-    [patch, takeModel, releaseModel],
-  );
+  }, [name, gender, splitPreview, patch, runFix]);
 
   const moveSelection = useCallback(
     (step: number) => {
@@ -398,8 +420,8 @@ export function AnalyzePanel({ open, onClose, onRename }: Props) {
             <Detail
               row={selected}
               score={selected.score}
-              modelBusy={modelBusy}
-              onFix={() => void runFix(selected)}
+              running={selected.fix.shown && selected.fix.phase === "running"}
+              onFix={() => onFixClick(selected)}
               onChoose={(i) => patch(selected.id, (r) => ({ ...r, fix: { ...r.fix, chosen: i } }))}
               onRename={onRename}
             />
@@ -413,19 +435,21 @@ export function AnalyzePanel({ open, onClose, onRename }: Props) {
 function Detail({
   row,
   score,
-  modelBusy,
+  running,
   onFix,
   onChoose,
   onRename,
 }: {
   row: Row;
   score: NameScore;
-  modelBusy: boolean;
+  /** 主播点了、模型还在写 */
+  running: boolean;
   onFix: () => void;
   onChoose: (i: number) => void;
   onRename: Props["onRename"];
 }) {
-  const { fix } = row;
+  // 后台先改、还没亮出来的，观众屏幕上当没改过
+  const fix: FixState = row.fix.shown ? row.fix : { ...IDLE_FIX, misses: row.fix.misses };
   const next = nextOf(row, score);
   const fixLabel =
     fix.phase === "running"
@@ -446,7 +470,7 @@ function Detail({
       surname={score.surname}
       gender={row.input.gender}
       ghost={ghost}
-      disabled={modelBusy}
+      disabled={running}
       onRename={onRename}
     />
   );
@@ -476,7 +500,7 @@ function Detail({
         <div className="ap-next">
           <p className="ap-next-ask">只改一个字（读音会跟着变）能接受吗？不接受就重新起名。</p>
           <div className="ap-actions">
-            <button type="button" className="ap-act" onClick={onFix} disabled={modelBusy}>
+            <button type="button" className="ap-act" onClick={onFix} disabled={running}>
               只改一个字
             </button>
             {rename(true)}
@@ -486,7 +510,7 @@ function Detail({
 
       {showFixButton && (
         <div className="ap-actions">
-          <button type="button" className="ap-act" onClick={onFix} disabled={modelBusy}>
+          <button type="button" className="ap-act" onClick={onFix} disabled={running}>
             {fixLabel}
           </button>
           {missed && rename(true)}

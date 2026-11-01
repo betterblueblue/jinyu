@@ -106,6 +106,15 @@ describe("提词页：打分稿", () => {
     expect(parsePrompterRound({ ...done, merit: { writing: false, lines: ["一", "二", "三"] } })).toBeNull();
   });
 
+  it("后台先改、主播还没点的：提词页当没改过，不出过渡的话也不出改法", () => {
+    for (const phase of ["running", "done"] as const) {
+      const r = round({ phase, options: [option], shown: false });
+      expect(r.fix, phase).toBeUndefined();
+      expect(r.say, phase).toBeUndefined();
+    }
+    expect(round({ phase: "done", options: [option], shown: true }).fix!.options).toHaveLength(1);
+  });
+
   it("90 分以上说不用改；有读音硬伤时先问观众", () => {
     expect(round({ phase: "idle", options: [] }, "none").say).toBe("这个名字已经很好，不用改。");
     expect(round({ phase: "idle", options: [] }, "ask").say).toContain("先问观众");
