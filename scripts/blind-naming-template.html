@@ -1,0 +1,275 @@
+<title>直播起名盲选</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=Noto+Serif+SC:wght@500;700&display=swap">
+<style>
+/* 版式：一屏只放一对名字，两张名帖并排（窄屏上下叠）；挑完整页换成揭晓。配色取直播台竹兰皮肤：竹纸底、墨绿字、印章红 */
+:root {
+  --paper: #e3e7d4;
+  --card: #eff1e4;
+  --ink: #1f291d;
+  --ink-2: #566150;
+  --hair: rgba(35, 45, 32, 0.2);
+  --seal: #9c3a2b;
+  --seal-soft: rgba(156, 58, 43, 0.09);
+  --serif: "Noto Serif SC", "Source Han Serif SC", "Songti SC", "SimSun", serif;
+  --sans: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #141912;
+    --card: #1d2419;
+    --ink: #e2e6d3;
+    --ink-2: #a2aa95;
+    --hair: rgba(226, 230, 211, 0.16);
+    --seal: #d46b55;
+    --seal-soft: rgba(212, 107, 85, 0.15);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #141912;
+  --card: #1d2419;
+  --ink: #e2e6d3;
+  --ink-2: #a2aa95;
+  --hair: rgba(226, 230, 211, 0.16);
+  --seal: #d46b55;
+  --seal-soft: rgba(212, 107, 85, 0.15);
+  color-scheme: dark;
+}
+body { background: var(--paper); color: var(--ink); font-family: var(--sans); font-size: 15px; line-height: 1.65; }
+.wrap {
+  max-width: 860px; margin: 0 auto; display: grid; gap: 28px;
+  padding-block: 32px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+header { display: grid; gap: 10px; }
+h1 { font-family: var(--serif); font-weight: 700; font-size: clamp(26px, 5vw, 34px); letter-spacing: 0.06em; margin: 0; text-wrap: balance; }
+h2 { font-family: var(--serif); font-size: 24px; margin: 0; letter-spacing: 0.04em; text-wrap: balance; }
+h3 { font-family: var(--serif); font-size: 18px; margin: 0; letter-spacing: 0.04em; }
+.lede { margin: 0; color: var(--ink-2); max-width: 42em; }
+.lede b { color: var(--ink); font-weight: 500; }
+section { display: grid; gap: 18px; }
+.meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
+.who { display: inline-flex; align-items: center; gap: 10px; font-family: var(--serif); font-size: 18px; }
+.seal { display: inline-grid; place-items: center; min-width: 30px; height: 30px; padding: 0 4px; border: 1.5px solid var(--seal); color: var(--seal); border-radius: 3px; font-size: 16px; letter-spacing: 0; }
+.count { color: var(--ink-2); font-variant-numeric: tabular-nums; font-size: 14px; }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.name-card {
+  appearance: none; font: inherit; color: inherit; cursor: pointer; position: relative; min-width: 0;
+  background: var(--card); border: 1px solid var(--hair); border-radius: 6px;
+  padding: 40px 16px 30px; display: grid; justify-items: center; gap: 10px;
+  transition: border-color 0.15s, transform 0.15s;
+}
+.name-card:hover { border-color: var(--seal); }
+.name-card:active { transform: translateY(1px); }
+.name-card .nm { font-family: var(--serif); font-weight: 700; font-size: clamp(40px, 9vw, 58px); letter-spacing: 0.12em; padding-left: 0.12em; line-height: 1.15; overflow-wrap: anywhere; }
+.name-card .py { color: var(--ink-2); letter-spacing: 0.08em; font-size: 15px; }
+.name-card .side-label { position: absolute; top: 10px; left: 12px; font-size: 12px; color: var(--ink-2); letter-spacing: 0.1em; }
+.name-card kbd { position: absolute; top: 10px; right: 12px; }
+kbd { font-family: var(--sans); font-size: 12px; line-height: 1.5; border: 1px solid var(--hair); border-bottom-width: 2px; border-radius: 4px; padding: 0 6px; color: var(--ink-2); }
+.actions { display: flex; flex-wrap: wrap; gap: 10px 12px; align-items: center; }
+.btn { appearance: none; font: inherit; font-size: 14px; color: var(--ink); background: transparent; border: 1px solid var(--hair); border-radius: 6px; padding: 8px 16px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; }
+.btn:hover { border-color: var(--ink-2); }
+.btn[disabled] { opacity: 0.45; cursor: default; }
+.btn.solid { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.link { appearance: none; font: inherit; font-size: 14px; background: none; border: 0; color: var(--ink-2); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; padding: 8px 4px; margin-left: auto; }
+.bar { height: 3px; background: var(--hair); border-radius: 2px; overflow: hidden; }
+.bar i { display: block; height: 100%; width: 0; background: var(--seal); transition: width 0.2s; }
+:focus-visible { outline: 2px solid var(--seal); outline-offset: 3px; }
+.tally { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.fig { border-top: 2px solid var(--hair); padding-top: 10px; display: grid; gap: 2px; }
+.fig.ours { border-top-color: var(--seal); }
+.fig b { font-family: var(--serif); font-size: 40px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.fig span { color: var(--ink-2); font-size: 14px; }
+.verdict { margin: 0; font-size: 16px; }
+.copy { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.copy code { font-family: var(--sans); font-size: 14px; background: var(--seal-soft); padding: 6px 10px; border-radius: 4px; user-select: all; min-width: 0; overflow-wrap: anywhere; }
+.reveal { list-style: none; margin: 0; padding: 0; display: grid; gap: 16px; }
+.rv { border-top: 1px solid var(--hair); padding-top: 14px; display: grid; gap: 10px; }
+.rv-head { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; color: var(--ink-2); font-size: 14px; }
+.rv-head strong { color: var(--ink); font-weight: 500; }
+.rv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.side { min-width: 0; padding: 12px 14px; border-radius: 6px; border: 1px solid var(--hair); display: grid; gap: 4px; align-content: start; }
+.side.picked { border-color: var(--seal); background: var(--seal-soft); }
+.side .tag { font-size: 12px; letter-spacing: 0.1em; color: var(--ink-2); }
+.side .nm { font-family: var(--serif); font-size: 24px; font-weight: 700; letter-spacing: 0.08em; }
+.side p { margin: 0; font-size: 14px; }
+.side .sub { color: var(--ink-2); }
+.side .flag { color: var(--seal); }
+.facts { margin: 0; padding-left: 1.2em; display: grid; gap: 8px; }
+.facts li { max-width: 46em; }
+.flagged { margin: 0; padding-left: 1.2em; display: grid; gap: 4px; font-size: 14px; color: var(--ink-2); }
+details { display: grid; gap: 8px; }
+summary { cursor: pointer; color: var(--ink-2); font-size: 14px; }
+@media (max-width: 560px) {
+  .pair, .rv-grid { grid-template-columns: 1fr; }
+  .name-card { padding: 34px 16px 24px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .name-card, .bar i { transition: none; }
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>直播起名盲选</h1>
+    <p class="lede">每一对都是同一个姓、同一个性别。一个是<b>直播台</b>起的首推，一个是<b>随手问同一个模型</b>「帮我给姓王的女孩起几个好听、有文化的名字，每个名字说一句寓意」排第一的那个。左右随机放。凭第一感觉，挑你更愿意在直播间念出来的那个；挑完才揭晓哪个是哪边。</p>
+  </header>
+
+  <section id="pick" aria-live="polite">
+    <div class="meta">
+      <span class="who"><span class="seal" id="seal">王</span><span id="who">王姓女孩</span></span>
+      <span class="count" id="count">第 1 对</span>
+    </div>
+    <div class="pair">
+      <button type="button" class="name-card" id="left"><span class="side-label">甲</span><kbd>1</kbd><span class="nm" id="leftName"></span><span class="py" id="leftPy"></span></button>
+      <button type="button" class="name-card" id="right"><span class="side-label">乙</span><kbd>2</kbd><span class="nm" id="rightName"></span><span class="py" id="rightPy"></span></button>
+    </div>
+    <div class="actions">
+      <button type="button" class="btn" id="tie">差不多 <kbd>3</kbd></button>
+      <button type="button" class="btn" id="back">上一对</button>
+      <button type="button" class="link" id="stop">不挑了，看结果</button>
+    </div>
+    <div class="bar" aria-hidden="true"><i id="fill"></i></div>
+  </section>
+
+  <section id="result" hidden>
+    <h2>揭晓</h2>
+    <div class="tally">
+      <div class="fig ours"><b id="nOurs">0</b><span>选了直播台</span></div>
+      <div class="fig"><b id="nBase">0</b><span>选了随手问</span></div>
+      <div class="fig"><b id="nTie">0</b><span>差不多</span></div>
+    </div>
+    <p class="verdict" id="verdict"></p>
+    <div class="copy"><code id="summary"></code><button type="button" class="btn solid" id="copy">复制结果</button></div>
+    <p class="lede">把这一行发给我就行。</p>
+    <div class="actions">
+      <button type="button" class="btn" id="resume" hidden>接着挑剩下的</button>
+      <button type="button" class="btn" id="again">清空，重新挑一遍</button>
+    </div>
+    <h3>每一对</h3>
+    <ol class="reveal" id="reveal"></ol>
+    <h3>不靠挑、数出来的</h3>
+    <ul class="facts" id="facts"></ul>
+    <details id="flaggedBox">
+      <summary id="flaggedSum">随手问的名字里，直播台上屏前会拦掉的</summary>
+      <ul class="flagged" id="flagged"></ul>
+    </details>
+  </section>
+</div>
+
+<script>
+var DATA = /*DATA*/null;
+(function () {
+  var D = DATA;
+  var KEY = "jinyu-blind-" + D.id;
+  var G = { male: "男孩", female: "女孩" };
+  var picks = [];
+  var stopped = false;
+  try {
+    var s = JSON.parse(localStorage.getItem(KEY) || "null");
+    if (s && Array.isArray(s.picks)) { picks = s.picks.slice(0, D.pairs.length); stopped = !!s.stopped; }
+  } catch (e) { /* 存不了就只在这一页里记 */ }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify({ picks: picks, stopped: stopped })); } catch (e) {} }
+  function $(id) { return document.getElementById(id); }
+  function el(tag, cls, text) { var n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; }
+  function sideOf(p, isLeft) { return isLeft === p.oursLeft ? p.ours : p.base; }
+  function sourceOf(i) { var v = picks[i]; if (v === "T") return "tie"; return (v === "L") === D.pairs[i].oursLeft ? "ours" : "base"; }
+
+  function render() {
+    var done = stopped || picks.length >= D.pairs.length;
+    $("pick").hidden = done;
+    $("result").hidden = !done;
+    if (done) { renderResult(); return; }
+    var p = D.pairs[picks.length];
+    var l = sideOf(p, true), r = sideOf(p, false);
+    $("seal").textContent = p.surname;
+    $("who").textContent = p.surname + "姓" + G[p.gender];
+    $("count").textContent = "第 " + (picks.length + 1) + " / " + D.pairs.length + " 对";
+    $("leftName").textContent = l.fullName; $("leftPy").textContent = l.pinyin;
+    $("rightName").textContent = r.fullName; $("rightPy").textContent = r.pinyin;
+    $("back").disabled = picks.length === 0;
+    $("fill").style.width = (picks.length / D.pairs.length) * 100 + "%";
+  }
+
+  function sideBox(label, c, picked) {
+    var box = el("div", "side" + (picked ? " picked" : ""));
+    box.appendChild(el("span", "tag", label + (picked ? " · 你挑的" : "")));
+    box.appendChild(el("span", "nm", c.fullName));
+    if (c.why) box.appendChild(el("p", null, c.why));
+    if (c.chars) box.appendChild(el("p", "sub", c.chars));
+    if (c.whole) box.appendChild(el("p", "sub", c.whole));
+    if (c.note) box.appendChild(el("p", "sub", c.note));
+    if (c.flags && c.flags.length) box.appendChild(el("p", "flag", "直播台上屏前会拦：" + c.flags.join("；")));
+    return box;
+  }
+
+  function renderResult() {
+    var n = picks.length, c = { ours: 0, base: 0, tie: 0 };
+    for (var i = 0; i < n; i++) c[sourceOf(i)]++;
+    $("nOurs").textContent = c.ours; $("nBase").textContent = c.base; $("nTie").textContent = c.tie;
+    var v;
+    if (n === 0) v = "还没挑。";
+    else if (c.ours > c.base) v = "挑了 " + n + " 对，选直播台的比选随手问的多 " + (c.ours - c.base) + " 对。";
+    else if (c.base > c.ours) v = "挑了 " + n + " 对，选随手问的比选直播台的多 " + (c.base - c.ours) + " 对。";
+    else v = "挑了 " + n + " 对，两边选的一样多。";
+    $("verdict").textContent = v;
+    $("summary").textContent = "盲选结果：直播台 " + c.ours + "，随手问 " + c.base + "，差不多 " + c.tie + "（挑了 " + n + "/" + D.pairs.length + " 对，" + D.id + "）";
+    $("resume").hidden = n >= D.pairs.length;
+    var ol = $("reveal"); ol.textContent = "";
+    for (var j = 0; j < n; j++) {
+      var p = D.pairs[j], src = sourceOf(j);
+      var li = el("li", "rv");
+      var head = el("div", "rv-head");
+      head.appendChild(el("strong", null, p.surname + "姓" + G[p.gender]));
+      head.appendChild(el("span", null, src === "tie" ? "你选了差不多" : "你挑了" + (src === "ours" ? "直播台" : "随手问")));
+      li.appendChild(head);
+      var grid = el("div", "rv-grid");
+      grid.appendChild(sideBox("直播台", p.ours, src === "ours"));
+      grid.appendChild(sideBox("随手问", p.base, src === "base"));
+      li.appendChild(grid);
+      ol.appendChild(li);
+    }
+    var ul = $("facts");
+    if (!ul.childElementCount) D.facts.forEach(function (f) { ul.appendChild(el("li", null, f)); });
+    var fl = $("flagged");
+    if (!fl.childElementCount) {
+      D.flagged.forEach(function (f) { fl.appendChild(el("li", null, f)); });
+      $("flaggedSum").textContent = "随手问的名字里，直播台上屏前会拦掉的（" + D.flagged.length + " 个）";
+      $("flaggedBox").hidden = D.flagged.length === 0;
+    }
+  }
+
+  function pick(v) { if (stopped || picks.length >= D.pairs.length) return; picks.push(v); save(); render(); }
+  function back() { if (!picks.length) return; picks.pop(); stopped = false; save(); render(); }
+  $("left").addEventListener("click", function () { pick("L"); });
+  $("right").addEventListener("click", function () { pick("R"); });
+  $("tie").addEventListener("click", function () { pick("T"); });
+  $("back").addEventListener("click", back);
+  $("stop").addEventListener("click", function () { stopped = true; save(); render(); });
+  $("resume").addEventListener("click", function () { stopped = false; save(); render(); });
+  $("again").addEventListener("click", function () { picks = []; stopped = false; save(); render(); window.scrollTo(0, 0); });
+  $("copy").addEventListener("click", function () {
+    var btn = this, text = $("summary").textContent;
+    function ok() { btn.textContent = "已复制"; setTimeout(function () { btn.textContent = "复制结果"; }, 1600); }
+    function manual() {
+      var range = document.createRange(); range.selectNodeContents($("summary"));
+      var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+      btn.textContent = "已选中，按 Ctrl+C 复制";
+    }
+    try { navigator.clipboard.writeText(text).then(ok, manual); } catch (e) { manual(); }
+  });
+  document.addEventListener("keydown", function (e) {
+    if ($("pick").hidden || e.metaKey || e.ctrlKey || e.altKey) return;
+    var k = e.key;
+    if (k === "1" || k === "ArrowLeft") { e.preventDefault(); pick("L"); }
+    else if (k === "2" || k === "ArrowRight") { e.preventDefault(); pick("R"); }
+    else if (k === "3" || k === "ArrowDown") { e.preventDefault(); pick("T"); }
+    else if (k === "Backspace") { e.preventDefault(); back(); }
+  });
+  render();
+})();
+</script>
