@@ -1,119 +1,225 @@
 import { pinyin } from "pinyin-pro";
 import { toSimplified } from "@/domain/analysis/chars";
 import type { NameSplit } from "@/domain/analysis/types";
+import { nameSyllables } from "@/domain/pinyin-name";
+import { BANNED_TALK_WORDS } from "@/library/talk";
 import type { CharFixProvider } from "@/providers/fix-provider";
 import { sameSoundCandidates } from "./candidates";
-import type { FixTarget, RawFix } from "./fix-prompt";
-import { scoreName } from "./score";
-import type { FixOption, FixOutcome, NameScore } from "./types";
+import type { FixIssue, FixPromptInput, RawFix, RawFixOption } from "./fix-prompt";
+import { HARD_SOUND_POINTS } from "./next-step";
+import { heardIssue, scoreName } from "./score";
+import type { Deduction, FixOption, FixOutcome, NameScore } from "./types";
 
 /**
- * 改字：只换一个字、只换同音字。
+ * 改字：只改名里的一个字。改哪个、改成什么、改一个字够不够，由模型看扣分理由判断（2026-11-01 用户定）。
  *
- * 流程：代码列出哪几个字该换、每个字的同音候选 → 模型挑字配理由 → 代码核验。
- * 核验不过的（候选以外的字、换完分数没变高的）一律丢掉，宁可说「没挑出来」，也不念一个编的字。
+ * 代码只核能机械判断的，核不过的一律丢掉，宁可说「没挑出来」，也不让主播念一个没核过的名字：
+ *   1. 新旧名字只差一个字，姓不动；
+ *   2. 用同一套规则重新打分，必须比原来高；
+ *   3. 换上的字自己不被扣分（拿一个毛病换另一个毛病不算改好）；
+ *   4. 那个字身上是听出来的毛病（年代感、撞名、谐音……），读音必须变；
+ *   5. 有读音硬伤（谐音、娣）的，改完不能还带着；
+ *   6. 寓意不空、不超长、不碰命理禁词、不引大段原文。
+ * 模型一边写，这里一边核，核过一条就交给 onOption（接口推给直播台和提词页）。
  */
 
-/** 一次最多让模型看两个要换的字，再多推理会变长 */
-const MAX_TARGETS = 2;
 const MAX_OPTIONS = 3;
-const MAX_WHY = 20;
+const WHY_MAX = 20;
+const MEANING_MIN = 12;
+const MEANING_MAX = 120;
+const NONE_MAX = 100;
+/** 引号里超过这么多字，多半是诗句原文：没核过，不念 */
+const QUOTE_MAX = 6;
+/** 理由和寓意里不许出现分数和五格术语：分数由代码算，术语观众听不懂 */
+const BANNED_FIX = /(\d+\s*分|五格|三才|数理)/;
 
-/** 理由里不许出现分数和命理术语：分数由代码算，术语观众听不懂 */
-const BANNED_WHY = /(\d+\s*分|五格|三才|数理|五行|八字|命理|运势)/;
+function squash(raw: unknown): string {
+  return typeof raw === "string" ? raw.replace(/\s+/g, "").trim() : "";
+}
+
+/** 一句话能不能当众念：长度合适、没有命理词和五行说法、没有大段引文 */
+function sayable(text: string, max: number, min = 1): boolean {
+  const n = [...text].length;
+  if (n < min || n > max) return false;
+  if (BANNED_TALK_WORDS.some((w) => text.includes(w)) || BANNED_FIX.test(text)) return false;
+  if (/[补缺][金木水火土]/.test(text)) return false;
+  for (const m of text.matchAll(/[「“"]([^」”"]*)[」”"]/g)) if ([...(m[1] ?? "")].length > QUOTE_MAX) return false;
+  return true;
+}
 
 function cleanWhy(raw: unknown, from: string, to: string): string {
-  const text = typeof raw === "string" ? raw.replace(/[「」『』"“”]/g, "").replace(/\s+/g, "").trim() : "";
-  if (!text || BANNED_WHY.test(text)) return `同音字，「${to}」比「${from}」更合适`;
-  return [...text].slice(0, MAX_WHY).join("");
+  const text = squash(raw).replace(/[「」『』"“”]/g, "");
+  if (text && sayable(text, 200)) {
+    if ([...text].length <= WHY_MAX) return text;
+    const head = [...text].slice(0, WHY_MAX).join("");
+    const cut = head.search(/[，。；！？][^，。；！？]*$/);
+    return cut > 4 ? head.slice(0, cut) : head;
+  }
+  return `「${to}」换下「${from}」`;
 }
 
-/** 名里第 index 个字在整名里的读音（带声调） */
-function readingAt(split: NameSplit, index: number): string {
-  const marks = pinyin(`${toSimplified(split.surname)}${toSimplified(split.givenName)}`, {
-    type: "array",
-    surname: "head",
+function cleanMeaning(raw: unknown): string | null {
+  const text = squash(raw);
+  if (!sayable(text, MEANING_MAX, MEANING_MIN)) return null;
+  return /[。！？]$/.test(text) ? text : `${text}。`;
+}
+
+/** 模型说改不了的原因：太长的在句号逗号处截短，不整句换掉（原因本身主播要念）；碰禁词才换成固定说法 */
+function cleanNone(raw: unknown): string | undefined {
+  // 面板和提词页后面会接「建议重新起名」，模型自己写了就去掉，免得念两遍
+  let text = squash(raw)
+    .replace(/[。！？]+$/, "")
+    .replace(/[，,；;]?(建议|最好|可以|请)?(观众)?(直接)?重新起名$/, "");
+  if (!text) return undefined;
+  if ([...text].length > NONE_MAX) {
+    const head = [...text].slice(0, NONE_MAX).join("");
+    const cut = head.search(/[，。；！？][^，。；！？]*$/);
+    text = cut > 8 ? head.slice(0, cut) : head;
+  }
+  return sayable(text, NONE_MAX) ? text : "改一个字解决不了这个毛病";
+}
+
+/** 名里第 index 个字在整名里的读音（带声调），如 hóng */
+function markAt(surname: string, givenName: string, index: number): string {
+  const marks = pinyin(`${toSimplified(surname)}${toSimplified(givenName)}`, { type: "array", surname: "head" });
+  return String(marks[[...surname].length + index] ?? "");
+}
+
+/** 不带声调的读音，和打分时查谐音用的是同一个函数 */
+function plainAt(surname: string, givenName: string, index: number): string {
+  const syllables = nameSyllables(`${toSimplified(surname)}${toSimplified(givenName)}`);
+  return (syllables[[...surname].length + index]?.py ?? "").toLowerCase();
+}
+
+/**
+ * 落在这个字上、听出来的毛病：换同音字改不掉。
+ * 三声连读除外：同音同调的字换上去连读本来就还在，只扣 3 分，不因此挡掉看出来的毛病的改法。
+ */
+function heardAt(score: NameScore, index: number): Deduction[] {
+  return score.deductions.filter((d) => d.positions.includes(index) && heardIssue(d) && d.rule !== "sandhi");
+}
+
+/** 核验模型写的一个改法，见文件开头的 6 条。核不过返回 null */
+export function verifyOption(raw: RawFixOption | null | undefined, score: NameScore, split: NameSplit): FixOption | null {
+  if (!raw || typeof raw !== "object") return null;
+  const oldGiven = [...split.givenName];
+  let given = typeof raw.givenName === "string" ? raw.givenName.replace(/\s+/g, "") : "";
+  // 模型偶尔连姓一起写
+  if (given.startsWith(split.surname) && [...given].length === [...split.surname].length + oldGiven.length) {
+    given = given.slice(split.surname.length);
+  }
+  const next = [...given];
+  if (next.length !== oldGiven.length || next.some((c) => !/^[一-鿿]$/.test(c))) return null;
+  const diff = next.map((c, i) => (c === oldGiven[i] ? -1 : i)).filter((i) => i >= 0);
+  if (diff.length !== 1) return null;
+  const index = diff[0]!;
+  const from = oldGiven[index]!;
+  const to = next[index]!;
+  if (toSimplified(to) === toSimplified(from)) return null;
+
+  const after = scoreName({ surname: split.surname, givenName: given, alternatives: [] }, score.gender);
+  if (after.score <= score.score) return null;
+  if (after.deductions.some((d) => d.positions.includes(index) && d.rule !== "sandhi")) return null;
+  // 文红艳换成文红雁：分数按字查是变高了，可念出来还是「红艳」，等于没改
+  if (heardAt(score, index).length > 0 && plainAt(split.surname, given, index) === plainAt(split.surname, split.givenName, index)) {
+    return null;
+  }
+  if (after.deductions.some((d) => d.soundBound && d.points >= HARD_SOUND_POINTS)) return null;
+
+  const meaning = cleanMeaning(raw.meaning);
+  if (!meaning) return null;
+
+  const oldMark = markAt(split.surname, split.givenName, index);
+  const newMark = markAt(split.surname, given, index);
+  return {
+    fullName: `${split.surname}${given}`,
+    givenName: given,
+    from,
+    to,
+    index,
+    pinyin: after.pinyin,
+    soundLine: oldMark === newMark ? "读音不变" : `${oldMark} → ${newMark}`,
+    score: after.score,
+    band: after.band,
+    bandLabel: after.bandLabel,
+    why: cleanWhy(raw.why, from, to),
+    meaning,
+  };
+}
+
+/** 给模型的材料：扣分理由（标明听出来的还是看出来的），只有看出来的毛病的字附同音候选 */
+export function buildFixInput(score: NameScore, split: NameSplit): FixPromptInput {
+  const issues: FixIssue[] = score.deductions.map((d) => ({
+    chars: d.chars,
+    heard: heardIssue(d),
+    points: d.points,
+    line: d.line,
+  }));
+  const sameSound: FixPromptInput["sameSound"] = [];
+  [...split.givenName].forEach((char, index) => {
+    const here = score.deductions.filter((d) => d.positions.includes(index));
+    if (here.length === 0 || heardAt(score, index).length > 0) return;
+    const candidates = sameSoundCandidates(split, score.gender, index, 8).map((c) => c.char);
+    if (candidates.length) sameSound.push({ index, char, candidates });
   });
-  return String(marks[[...split.surname].length + index] ?? "");
+  return {
+    fullName: score.fullName,
+    surname: split.surname,
+    givenName: split.givenName,
+    gender: score.gender,
+    score: score.score,
+    issues,
+    sameSound,
+  };
 }
 
-export function buildFixTargets(score: NameScore, split: NameSplit): FixTarget[] {
-  const targets: FixTarget[] = [];
-  for (const f of score.fixable) {
-    if (targets.length >= MAX_TARGETS) break;
-    const candidates = sameSoundCandidates(split, score.gender, f.index);
-    if (candidates.length === 0) continue;
-    targets.push({
-      char: f.char,
-      index: f.index,
-      reading: readingAt(split, f.index),
-      reasons: score.deductions.filter((d) => d.positions.includes(f.index)).map((d) => d.line),
-      candidates: candidates.map(({ char, py, sameTone }) => ({ char, py, sameTone })),
-    });
-  }
-  return targets;
-}
-
-/** 核验模型挑的字：必须在候选里，换完必须比原名分高 */
-export function verifyPicks(raw: RawFix | null, targets: FixTarget[], split: NameSplit, score: NameScore): FixOption[] {
-  const out: FixOption[] = [];
-  const fixes = Array.isArray(raw?.fixes) ? (raw!.fixes as unknown[]) : [];
-  for (const item of fixes) {
-    if (!item || typeof item !== "object") continue;
-    const fix = item as { from?: unknown; picks?: unknown };
-    const from = typeof fix.from === "string" ? fix.from.trim() : "";
-    const target = targets.find((t) => t.char === from) ?? (targets.length === 1 ? targets[0] : undefined);
-    if (!target) continue;
-    const picks = Array.isArray(fix.picks) ? (fix.picks as unknown[]) : [];
-    for (const p of picks.slice(0, 2)) {
-      if (!p || typeof p !== "object") continue;
-      const pick = p as { char?: unknown; why?: unknown };
-      const ch = typeof pick.char === "string" ? pick.char.trim() : "";
-      if (!target.candidates.some((c) => c.char === ch)) continue;
-      const givenName = [...split.givenName].map((c, i) => (i === target.index ? ch : c)).join("");
-      if (out.some((o) => o.givenName === givenName)) continue;
-      const next = scoreName({ surname: split.surname, givenName, alternatives: [] }, score.gender);
-      if (next.score <= score.score) continue;
-      out.push({
-        fullName: `${split.surname}${givenName}`,
-        givenName,
-        from: target.char,
-        to: ch,
-        index: target.index,
-        score: next.score,
-        band: next.band,
-        bandLabel: next.bandLabel,
-        why: cleanWhy(pick.why, target.char, ch),
-      });
-    }
-  }
-  // 稳定排序：同分时保持「先换扣分最多的字、模型先挑的」顺序
-  return out.sort((a, b) => b.score - a.score).slice(0, MAX_OPTIONS);
-}
-
-export async function suggestFixes(score: NameScore, split: NameSplit, provider: CharFixProvider): Promise<FixOutcome> {
+export async function suggestFixes(
+  score: NameScore,
+  split: NameSplit,
+  provider: CharFixProvider,
+  onOption?: (option: FixOption) => void,
+): Promise<FixOutcome> {
   const started = Date.now();
-  if (score.fixable.length === 0) {
-    return { ok: true, options: [], message: "这个名字没有要换的字", tookMs: 0 };
+  if (score.band === "great") {
+    return { ok: true, options: [], message: "已经很好，不用改", tookMs: 0 };
   }
-  const targets = buildFixTargets(score, split);
-  if (targets.length === 0) {
-    return { ok: true, options: [], message: "要换的字找不到合适的同音字", tookMs: Date.now() - started };
-  }
+
+  const options: FixOption[] = [];
+  let firstMs: number | undefined;
+  let tried = 0;
+  const take = (raw: RawFixOption) => {
+    tried++;
+    if (options.length >= MAX_OPTIONS) return;
+    const option = verifyOption(raw, score, split);
+    if (!option || options.some((o) => o.givenName === option.givenName)) return;
+    options.push(option);
+    firstMs ??= Date.now() - started;
+    onOption?.(option);
+  };
 
   let raw: RawFix | null;
   try {
-    raw = await provider.pick({ fullName: score.fullName, gender: score.gender, targets });
+    raw = await provider.pick(buildFixInput(score, split), take);
   } catch (err) {
-    const message = err instanceof Error ? err.message : "挑字失败";
-    return { ok: false, message: `挑字没成功：${message}` };
+    // 写到一半超时或断了：已经核过、推出去的改法照样算数
+    if (options.length === 0) {
+      const message = err instanceof Error ? err.message : "改字失败";
+      return { ok: false, message: `改字没成功：${message}` };
+    }
+    raw = null;
   }
 
-  const options = verifyPicks(raw, targets, split, score);
+  // 边写边核时没赶上的（最后一条），收尾时补上
+  const all = Array.isArray(raw?.options) ? (raw!.options as RawFixOption[]) : [];
+  for (const item of all.slice(tried)) take(item);
+
+  const unfixable = options.length === 0 ? cleanNone(raw?.none) : undefined;
   return {
     ok: true,
     options,
-    ...(options.length ? {} : { message: "这次没挑出合适的字，可以再点一次" }),
+    ...(unfixable ? { unfixable } : {}),
+    ...(options.length === 0 && !unfixable ? { message: "这次没挑出合适的字，可以再点一次" } : {}),
     tookMs: Date.now() - started,
+    ...(firstMs !== undefined ? { firstMs } : {}),
   };
 }

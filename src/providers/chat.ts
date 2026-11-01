@@ -37,6 +37,8 @@ export async function streamChat(
     messages: ChatMessage[];
     maxTokens: number;
     onThinking?: (chunk: string) => void;
+    /** 正文增量，边收边交出去（改字要边写边核、写好一条推一条）。不传就只在最后一次性返回 */
+    onContent?: (chunk: string) => void;
     timeoutMs?: number;
     idleTimeoutMs?: number;
     /** 调用方主动取消（精简版补发时，输掉的那一路要停掉，别白占网关） */
@@ -122,7 +124,10 @@ export async function streamChat(
             reasoningChars += thinking.length;
             args.onThinking?.(thinking);
           }
-          if (delta?.content) content += delta.content;
+          if (delta?.content) {
+            content += delta.content;
+            args.onContent?.(delta.content);
+          }
           if (ev.choices?.[0]?.finish_reason) {
             finishReason = ev.choices[0].finish_reason;
           }

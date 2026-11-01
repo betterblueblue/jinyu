@@ -11,12 +11,19 @@ import badHomophones from "@/config/bad-homophones.json";
 import l2Chars from "@/config/l2-chars.json";
 import { resetCharTableCache } from "@/domain/analysis/chars";
 import { resetSoundIndex, sameSoundCandidates } from "@/domain/score/candidates";
-import { buildFixMessages, parseFixOutput, type FixPromptInput, type RawFix } from "@/domain/score/fix-prompt";
-import { buildFixTargets, suggestFixes } from "@/domain/score/fix";
+import {
+  buildFixMessages,
+  completedOptions,
+  parseFixOutput,
+  type FixPromptInput,
+  type RawFix,
+  type RawFixOption,
+} from "@/domain/score/fix-prompt";
+import { buildFixInput, suggestFixes, verifyOption } from "@/domain/score/fix";
 import { nextStep } from "@/domain/score/next-step";
 import { checkFastCandidate } from "@/fast/gate";
 import { ERA_CHARS, ERA_NAMES, FOLK } from "@/domain/score/lexicon";
-import { resolveSplit, scoreName } from "@/domain/score/score";
+import { heardIssue, resolveSplit, scoreName } from "@/domain/score/score";
 import type { AnalysisGender } from "@/domain/analysis/types";
 import type { CharFixProvider } from "@/providers/fix-provider";
 import { FakeFixProvider } from "@/providers/fix-provider";
@@ -27,14 +34,22 @@ function score(fullName: string, gender: AnalysisGender = "unknown", surnameOver
   return { split, result: scoreName(split, gender) };
 }
 
-function stub(raw: RawFix | null | Error): CharFixProvider & { calls: FixPromptInput[] } {
+/** 假模型：像真模型那样把 options 一条条交出去，最后返回整份。stream: false 只在最后返回；failAfterStream 交完再报错 */
+function stub(
+  raw: RawFix | null | Error,
+  opts: { stream?: boolean; failAfterStream?: Error } = {},
+): CharFixProvider & { calls: FixPromptInput[] } {
   const calls: FixPromptInput[] = [];
   return {
     name: "stub",
     calls,
-    pick: async (input) => {
+    pick: async (input, onItem) => {
       calls.push(input);
       if (raw instanceof Error) throw raw;
+      if (opts.stream !== false) {
+        for (const o of (Array.isArray(raw?.options) ? raw!.options : []) as RawFixOption[]) onItem?.(o);
+      }
+      if (opts.failAfterStream) throw opts.failAfterStream;
       return raw;
     },
   };
@@ -147,27 +162,24 @@ describe("打分规则", () => {
     expect(result.deductions[0]!.line).toContain("216 万");
   });
 
-  it("双名两个字都是年代字：整名算一条，两个字都能换", () => {
+  it("双名两个字都是年代字：整名算一条", () => {
     const { result } = score("文红梅", "female");
     const era = result.deductions.filter((d) => d.rule === "eraName");
     expect(era).toHaveLength(1);
     expect(era[0]!.line).toContain("「红梅」");
-    expect(result.fixable.map((f) => f.char)).toEqual(["红", "梅"]);
+    expect(era[0]!.positions).toEqual([0, 1]);
   });
 
-  it("单名就是年代字，比放在双名里扣得重，扣到能换字", () => {
+  it("单名就是年代字，比放在双名里扣得重", () => {
     const single = score("文娟", "female").result;
     const inDouble = score("李知娟", "female").result;
     expect(single.deductions[0]!.points).toBeGreaterThan(inDouble.deductions[0]!.points);
     expect(single.deductions[0]!.line).toContain("单名");
-    expect(single.fixable.map((f) => f.char)).toEqual(["娟"]);
-    expect(inDouble.fixable).toEqual([]);
   });
 
-  it("大姓配单名扣重名；小姓、双名不扣；换同音字解决不了，不算进可换的字", () => {
+  it("大姓配单名扣重名；小姓、双名不扣", () => {
     const wang = score("王军", "male").result;
     expect(wang.deductions.find((d) => d.rule === "singleName")!.line).toContain("张伟");
-    expect(wang.fixable.map((f) => f.char)).toEqual(["军"]); // 只有年代感那一条能靠换字解决
     expect(score("文娟", "female").result.deductions.some((d) => d.rule === "singleName")).toBe(false);
     expect(score("张建军", "male").result.deductions.some((d) => d.rule === "singleName")).toBe(false);
   });
@@ -229,15 +241,20 @@ describe("打分规则", () => {
     expect(result.folk[0]!.line).toContain("金鸡独立");
   });
 
-  it("可以换的字按扣分从多到少排，扣得少的不给换", () => {
-    expect(score("马梓宸", "male").result.fixable.map((f) => f.char)).toEqual(["宸", "梓"]);
-    expect(score("张知微", "female").result.fixable).toEqual([]);
+  it("听出来的毛病和看出来的毛病分开：谐音、年代感、撞名换同音字改不掉", () => {
+    const heard = (name: string, gender: AnalysisGender) =>
+      Object.fromEntries(score(name, gender).result.deductions.map((d) => [d.rule, heardIssue(d)]));
+    expect(heard("刘婵娟", "female")).toEqual({ homophone: true, era: true }); // 流产；娟是年代字
+    expect(heard("王招娣", "female")).toEqual({ swap: true }); // 娣 = 弟
+    expect(heard("王望舒", "female")).toEqual({ sameSound: true });
+    expect(heard("张子轩", "male")).toEqual({ template: true });
+    expect(heard("马梓宸", "male")).toEqual({ homophone: true, hot: true, swap: false }); // 宸是字太大，看出来的
+    expect(heard("张仡卓", "unknown")).toEqual({ misread: false });
+    expect(heard("李清幽", "female")).toEqual({ forbidden: false });
   });
 
-  it("毛病出在读音上的不给换字：换了同音字，读音和毛病都还在", () => {
-    expect(score("刘婵娟", "female").result.fixable).toEqual([]); // 谐音「流产」
-    expect(score("王望舒", "female").result.fixable).toEqual([]); // 王望同音
-    expect(score("王招娣", "female").result.fixable).toEqual([]); // 娣 = 弟
+  it("全名带声调的拼音给提词页用", () => {
+    expect(score("文红艳", "female").result.pinyin).toBe("wén hóng yàn");
   });
 
   it("手动切拆法时按指定的姓算", () => {
@@ -248,52 +265,26 @@ describe("打分规则", () => {
 });
 
 describe("打分之后推什么", () => {
-  const plan = (name: string, gender: AnalysisGender = "unknown") => {
-    const { split, result } = score(name, gender);
-    return nextStep(result, split);
-  };
+  const plan = (name: string, gender: AnalysisGender = "unknown") => nextStep(score(name, gender).result);
 
-  it("读音上的硬伤又没字可换：直接推重新起名", () => {
-    for (const name of ["吴驰", "刘婵娟", "王招娣"]) {
-      const next = plan(name, "female");
-      expect(next.kind, name).toBe("rename");
+  it("90 分以上已经很好，不推改字", () => {
+    expect(plan("李知微", "female").kind).toBe("none");
+    expect(plan("王望舒", "female").kind).toBe("none"); // 92 分，姓名同音只扣 8
+  });
+
+  it("有读音硬伤（谐音、娣）：先问观众能不能接受改一个字（读音会变），不接受就重新起名", () => {
+    for (const [name, gender] of [["吴驰", "male"], ["刘婵娟", "female"], ["王招娣", "female"], ["马梓宸", "male"]] as const) {
+      const next = plan(name, gender);
+      expect(next.kind, name).toBe("ask");
       expect(next.soundIssues.length, name).toBeGreaterThan(0);
     }
+    expect(plan("马梓宸", "male").soundIssues[0]!.line).toContain("「马子」");
   });
 
-  it("可换的字一个同音候选都没有，也算没字可换（杨伟的伟换哪个都还是那个谐音）", () => {
-    const { result } = score("杨伟", "male");
-    expect(result.fixable.map((f) => f.char)).toEqual(["伟"]);
-    const next = plan("杨伟", "male");
-    expect(next.kind).toBe("rename");
-    expect(next.fixable).toEqual([]);
-  });
-
-  it("有字可换但读音硬伤还在：先问能不能只改字", () => {
-    const next = plan("马梓宸", "male");
-    expect(next.kind).toBe("ask");
-    expect(next.fixable.map((f) => f.char)).toEqual(["宸"]);
-    expect(next.soundIssues[0]!.line).toContain("「马子」");
-  });
-
-  it("换同音字就能解决的推改字；读音小毛病（姓名同音 8 分）不推重新起名", () => {
-    // 夹具字表只收了 chen / yi / zi 三个音节的候选，所以用仡（yì）
+  it("其余低于 90 的直接给改一个字：改哪个字、改一个字够不够，交给模型判断", () => {
     expect(plan("张仡卓").kind).toBe("fix");
-    expect(plan("王望舒", "female").kind).toBe("none");
-    expect(plan("李知微", "female").kind).toBe("none");
-  });
-
-  it("90 分以上不推改字，哪怕某个字扣满了 8 分", () => {
-    const { split, result } = score("张仡卓");
-    expect(result.fixable.length).toBeGreaterThan(0);
-    const high = { ...result, score: 92, band: "great" as const, bandLabel: "非常优秀" };
-    expect(nextStep(high, split).kind).toBe("none");
-  });
-
-  it("75 分以下又没字可换，也推重新起名", () => {
-    const { split, result } = score("李知微", "female");
-    const low = { ...result, score: 70, band: "change" as const, fixable: [], deductions: [] };
-    expect(nextStep(low, split).kind).toBe("rename");
+    expect(plan("文红艳", "female").kind).toBe("fix");
+    expect(plan("张子轩", "male").kind).toBe("fix");
   });
 
   it("精简版闸门和打分榜用同一份谐音表：重新起名不会又起出同一个谐音", () => {
@@ -341,65 +332,141 @@ describe("同音候选", () => {
 });
 
 describe("改字", () => {
-  it("没有要换的字时不调模型", async () => {
+  const M = "益是增益、长进，卓是高而直立。合起来是一天比一天长进，愿孩子越学越有出息。";
+  const verify = (name: string, gender: AnalysisGender, givenName: string, extra: Partial<RawFixOption> = {}) => {
+    const { split, result } = score(name, gender);
+    return verifyOption({ givenName, why: "好", meaning: M, ...extra }, result, split);
+  };
+
+  it("只差一个字、分数变高、换上的字不扣分的才收", () => {
+    expect(verify("张仡卓", "unknown", "益卓")).toMatchObject({
+      fullName: "张益卓",
+      from: "仡",
+      to: "益",
+      index: 0,
+      score: 100,
+      soundLine: "读音不变",
+      pinyin: "zhāng yì zhuó",
+    });
+    expect(verify("张仡卓", "unknown", "张益卓")!.givenName).toBe("益卓"); // 模型连姓一起写也认
+    expect(verify("张仡卓", "unknown", "益明")).toBeNull(); // 改了两个字
+    expect(verify("张仡卓", "unknown", "益")).toBeNull(); // 字数变了
+    expect(verify("张仡卓", "unknown", "仡卓")).toBeNull(); // 没改
+    expect(verify("张仡卓", "unknown", "一卓")).toBeNull(); // 92 分，可换上的「一」是热门字：拿一个毛病换另一个
+  });
+
+  it("听出来的毛病读音必须变：文红艳换成文红雁那种同音改法不收", () => {
+    // 梓涵是烂大街名：紫涵按字查不撞名、分数还高（80 → 92），可念出来还是 zǐ hán
+    expect(score("王紫涵", "female").result.score).toBe(92);
+    expect(verify("王梓涵", "female", "紫涵")).toBeNull();
+    expect(verify("王梓涵", "female", "知涵")).toMatchObject({ score: 92, soundLine: "zǐ → zhī" });
+    // 年代名换成读音不同的字收
+    expect(verify("文红艳", "female", "红安")).toMatchObject({ score: 90, soundLine: "yàn → ān" });
+  });
+
+  it("有读音硬伤的，改完不能还带着：马梓宸只换宸，马子还在", () => {
+    expect(verify("马梓宸", "male", "梓晨")).toBeNull();
+    expect(verify("马梓宸", "male", "知宸")).toMatchObject({ score: 85 });
+    expect(verify("刘婵娟", "female", "婵安")).toBeNull(); // 流产还在
+    expect(verify("刘婵娟", "female", "明娟")).toMatchObject({ score: 97, soundLine: "chán → míng" });
+  });
+
+  it("寓意念不了的不收：命理词、太短、大段引文", () => {
+    expect(verify("张仡卓", "unknown", "益卓", { meaning: "益卓五行属土，八字喜土，所以选它最合适。" })).toBeNull();
+    expect(verify("张仡卓", "unknown", "益卓", { meaning: "很好的名字" })).toBeNull();
+    expect(verify("张仡卓", "unknown", "益卓", { meaning: "出自「君子以自强不息之意」，寓意孩子自强。" })).toBeNull();
+  });
+
+  it("理由带分数或命理词换成固定说法，太长的截短", () => {
+    expect(verify("张仡卓", "unknown", "益卓", { why: "五行补土，100分" })!.why).toBe("「益」换下「仡」");
+    const long = verify("张仡卓", "unknown", "益卓", { why: "益是增益，一看就懂，念起来也顺口，比原来的仡好认多了" })!.why;
+    expect([...long].length).toBeLessThanOrEqual(20);
+    expect(long.startsWith("益是增益")).toBe(true);
+  });
+
+  it("90 分以上不调模型", async () => {
     const { split, result } = score("李知微", "female");
-    const p = stub({ fixes: [] });
+    const p = stub({ options: [] });
     const out = await suggestFixes(result, split, p);
     expect(out.ok && out.options).toEqual([]);
     expect(p.calls).toHaveLength(0);
   });
 
-  it("模型挑的字在候选里：重新打分后给出", async () => {
-    const { split, result } = score("马梓宸", "male");
-    const p = stub({ fixes: [{ from: "宸", picks: [{ char: "晨", why: "同音，清晨的晨，干净" }] }] });
-    const out = await suggestFixes(result, split, p);
-    expect(out.ok).toBe(true);
-    if (!out.ok) return;
-    expect(out.options).toHaveLength(1);
-    // 宸换掉了，马梓（马子）和热门字梓还在：62 → 77
-    expect(out.options[0]).toMatchObject({ fullName: "马梓晨", from: "宸", to: "晨", index: 1, score: 77 });
-    expect(out.options[0]!.why).toBe("同音，清晨的晨，干净");
-    // 梓也该换，但它的同音字换上去还是「马子」，一个候选都没有，所以只问宸
-    expect(p.calls[0]!.targets.map((t) => t.char)).toEqual(["宸"]);
+  it("边写边核：一条一条核，核过的马上交出去，最多 3 条", async () => {
+    const { split, result } = score("张仡卓");
+    const seen: string[] = [];
+    const options = ["一卓", "益卓", "益卓", "仡明", "安卓", "逸卓", "毅卓"].map((givenName) => ({ givenName, why: "好", meaning: M }));
+    const out = await suggestFixes(result, split, stub({ options }), (o) => seen.push(o.fullName));
+    expect(seen).toEqual(["张益卓", "张安卓", "张逸卓"]); // 一卓（热门字）、重复的、仡明（分数没变）丢掉，第 4 条不要
+    expect(out.ok && out.options.map((o) => o.fullName)).toEqual(seen);
+    expect(out.ok && typeof out.firstMs).toBe("number");
   });
 
-  it("候选以外的字一律丢掉，宁可说没挑出来", async () => {
-    const { split, result } = score("马梓宸", "male");
-    const out = await suggestFixes(result, split, stub({ fixes: [{ from: "宸", picks: [{ char: "安", why: "平安" }] }] }));
+  it("模型说改一个字解决不了：不给改法，带上原因，面板推重新起名", async () => {
+    const { split, result } = score("文红艳", "female");
+    const out = await suggestFixes(result, split, stub({ options: [], none: "红艳两个字合在一起才是那个年代的名字。" }));
     expect(out.ok && out.options).toEqual([]);
-    expect(out.ok && out.message).toContain("没挑出");
+    expect(out.ok && out.unfixable).toBe("红艳两个字合在一起才是那个年代的名字");
+    // 模型自己写了「建议重新起名」的去掉：面板后面会接这一句
+    const dup = await suggestFixes(result, split, stub({ options: [], none: "只换一个字仍会留下旧意味，建议重新起名。" }));
+    expect(dup.ok && dup.unfixable).toBe("只换一个字仍会留下旧意味");
   });
 
-  it("理由里带分数或命理词的换成固定说法", async () => {
-    const { split, result } = score("马梓宸", "male");
-    const out = await suggestFixes(result, split, stub({ fixes: [{ from: "宸", picks: [{ char: "晨", why: "五行补火，92分" }] }] }));
-    expect(out.ok && out.options[0]!.why).toBe("同音字，「晨」比「宸」更合适");
+  it("一条都没核过：提示再点一次", async () => {
+    const { split, result } = score("张仡卓");
+    const out = await suggestFixes(result, split, stub({ options: [{ givenName: "仡明", why: "好", meaning: M }] }));
+    expect(out.ok && out.options).toEqual([]);
+    expect(out.ok && out.message).toContain("再点一次");
   });
 
-  it("模型返回空或报错时不崩", async () => {
-    const { split, result } = score("马梓宸", "male");
-    const empty = await suggestFixes(result, split, stub(null));
-    expect(empty.ok && empty.options).toEqual([]);
+  it("模型报错不崩；写到一半断了，已经核过的改法照样算", async () => {
+    const { split, result } = score("张仡卓");
     const failed = await suggestFixes(result, split, stub(new Error("LLM 生成超时，请重试")));
     expect(failed.ok).toBe(false);
+    const half = await suggestFixes(
+      result,
+      split,
+      stub({ options: [{ givenName: "益卓", why: "好", meaning: M }] }, { failAfterStream: new Error("LLM 生成超时，请重试") }),
+    );
+    expect(half.ok && half.options.map((o) => o.fullName)).toEqual(["张益卓"]);
+    const empty = await suggestFixes(result, split, stub(null));
+    expect(empty.ok && empty.options).toEqual([]);
   });
 
-  it("示例模式也能走通：每个要换的字挑第一个候选", async () => {
+  it("边写边核没赶上的，收尾时补上", async () => {
+    const { split, result } = score("张仡卓");
+    const raw = { options: [{ givenName: "益卓", why: "好", meaning: M }] };
+    const out = await suggestFixes(result, split, stub(raw, { stream: false }));
+    expect(out.ok && out.options.map((o) => o.fullName)).toEqual(["张益卓"]);
+  });
+
+  it("示例模式也能走通", async () => {
     const { split, result } = score("张仡卓");
     const out = await suggestFixes(result, split, new FakeFixProvider());
-    expect(out.ok && out.options.length).toBe(1);
-    expect(out.ok && out.options[0]!.score).toBe(100);
+    expect(out.ok && out.options.length).toBeGreaterThan(0);
+    expect(out.ok && out.options[0]).toMatchObject({ fullName: "张逸卓", score: 100 });
   });
 
-  it("提示词里带着原因、读音和候选，解析能剥掉代码块", () => {
+  it("给模型的扣分理由标明听出来的还是看出来的；只有看出来的毛病的字给同音候选", () => {
     const { split, result } = score("马梓宸", "male");
-    const targets = buildFixTargets(result, split);
-    const [, user] = buildFixMessages({ fullName: result.fullName, gender: "male", targets });
-    expect(user!.content).toContain("「宸」");
-    expect(user!.content).toContain("chén");
-    expect(user!.content).toContain("晨");
+    const input = buildFixInput(result, split);
+    expect(input.sameSound.map((s) => s.char)).toEqual(["宸"]); // 梓身上是谐音和热门字，同音字改不掉
+    expect(input.sameSound[0]!.candidates).toContain("晨");
+    const [, user] = buildFixMessages(input);
+    expect(user!.content).toContain("【看出来的】「宸」");
+    expect(user!.content).toContain("【听出来的】「梓」");
     expect(user!.content).toContain("宸本来是深宅大屋");
-    expect(parseFixOutput('```json\n{"fixes":[]}\n```')).toEqual({ fixes: [] });
+    const era = score("文红艳", "female");
+    expect(buildFixInput(era.result, era.split).sameSound).toEqual([]); // 红艳是年代名，听出来的
+  });
+
+  it("边写边取：只取 options 里写完的对象，字符串里的括号不算", () => {
+    const partial = '{"options":[{"givenName":"益卓","why":"括号}不算","meaning":"x"},{"givenName":"安';
+    expect(completedOptions(partial)).toEqual([{ givenName: "益卓", why: "括号}不算", meaning: "x" }]);
+    expect(completedOptions('{"options":[{"givenName":"a\\"b","why":"","meaning":""}]')[0]!.givenName).toBe('a"b');
+    expect(completedOptions('{"options":[],"none":"改不了"}')).toEqual([]);
+    expect(completedOptions('{"opt')).toEqual([]);
+    expect(parseFixOutput('```json\n{"options":[]}\n```')).toEqual({ options: [] });
     expect(parseFixOutput("不是 JSON")).toBeNull();
   });
 });

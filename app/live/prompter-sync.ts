@@ -1,3 +1,4 @@
+import type { FixOption, NameScore, NextStep } from "@/domain/score/types";
 import type { FastCandidate, FastSuccess } from "@/fast/types";
 import { checkLine, talkLines } from "@/library/talk";
 import type { PrompterName, PrompterRound } from "@/live/prompter";
@@ -82,6 +83,52 @@ export function prompterFromFast(data: FastSuccess, no: number, talks?: TalkMap)
     sections: data.alternatives.length
       ? [{ label: "备选", names: data.alternatives.map((c) => alternativeName(c, talks)) }]
       : [],
+  };
+}
+
+/** 打分榜上选中的那位观众：提词页要的东西 */
+export interface ScoreForPrompter {
+  /** 打分榜上第几位 */
+  no: number;
+  score: NameScore;
+  next: NextStep;
+  fix: { phase: "idle" | "running" | "done" | "error"; options: FixOption[]; unfixable?: string; message?: string };
+}
+
+/**
+ * 打分榜 → 提词页。一打完分就推：分数、扣分理由先念起来；
+ * 点了「改一个字」，先推一句过渡的话，模型每核过一个改法再推一次，主播不冷场。
+ */
+export function prompterFromScore(s: ScoreForPrompter): PrompterRound {
+  const { score, next, fix } = s;
+  const options = fix.options.slice(0, 3).map((o) => ({
+    full: o.fullName,
+    pinyin: o.pinyin,
+    change: `${o.from} → ${o.to} · ${o.soundLine}`,
+    score: o.score,
+    meaning: o.meaning,
+  }));
+  let say: string | undefined;
+  if (next.kind === "none") say = "这个名字已经很好，不用改。";
+  else if (fix.phase === "running" && options.length === 0) say = "可以先说：我看看换哪个字更合适，毛病要去掉，意思也要好。";
+  else if (next.kind === "ask" && fix.phase === "idle") say = "先问观众：只改一个字，读音会跟着变，能接受吗？不接受就重新起名。";
+  let note: string | undefined;
+  if (fix.phase === "done" && options.length === 0) {
+    note = fix.unfixable ? `改一个字解决不了：${fix.unfixable}。建议重新起名。` : (fix.message ?? "这次没挑出合适的字，可以再点一次。");
+  } else if (fix.phase === "error") {
+    note = fix.message ?? "改字没成功，可以再点一次。";
+  }
+  return {
+    state: "score",
+    no: s.no,
+    full: score.fullName,
+    pinyin: score.pinyin,
+    score: score.score,
+    bandLabel: score.bandLabel,
+    deductions: score.deductions.slice(0, 12).map((d) => ({ points: d.points, line: d.line })),
+    folk: score.folk.slice(0, 4).map((f) => f.line),
+    ...(say ? { say } : {}),
+    ...(fix.phase !== "idle" ? { fix: { running: fix.phase === "running", options, ...(note ? { note } : {}) } } : {}),
   };
 }
 

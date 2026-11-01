@@ -2,14 +2,18 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { splitFullName } from "@/domain/analysis/split-name";
-import type { FixOption, FixOutcome, NameScore, NextStep } from "@/domain/score/types";
+import type { FixOption, NameScore, NextStep } from "@/domain/score/types";
+import { readFixStream } from "./fix-stream";
+import { prompterFromScore, pushPrompter } from "./prompter-sync";
 import "./analyze.css";
 
 /**
  * 名字分析面板：直播打分榜。
  *
  * 一行一位观众，往下累加——榜单本身就是吸引其他人报名字的东西。
- * 回车只按规则打分，几毫秒出分；观众想改，主播点「改字」才去挑同音字。榜单在这一场里一直留着，关掉面板也不清。
+ * 回车只按规则打分，几毫秒出分；观众想改，主播点「改一个字」才调模型：改哪个字、改成什么由模型看扣分理由定，
+ * 服务端逐条核验，核过一条推一条（2026-11-01 用户定）。榜单在这一场里一直留着，关掉面板也不清。
+ * 面板开着时，提词页跟着选中的那位观众走：分数、扣分理由、改法和寓意（prompter-sync.ts 的 prompterFromScore）。
  * 以前的「详细解读」（模型另写一段分析）和后面的「整个换新名」已删（2026-10-31，用户定）：
  * 解读和规则打分对不上，当着观众很尴尬。
  */
@@ -25,7 +29,10 @@ interface Props {
 
 interface FixState {
   phase: "idle" | "running" | "done" | "error";
+  /** 模型写好、核过的改法，边收边加 */
   options: FixOption[];
+  /** 模型判断改一个字解决不了时的原因 */
+  unfixable?: string;
   message?: string;
   /** 主播选中的改法，榜单上显示成「改为」 */
   chosen: number;
@@ -62,6 +69,16 @@ function verdictText(row: Row): string {
   if (!row.score) return "…";
   const picked = row.fix.phase === "done" ? row.fix.options[row.fix.chosen] : undefined;
   return picked ? `改为：${picked.fullName}` : row.score.bandLabel;
+}
+
+/** 改法按写好的先后排；榜单上「改为」默认用分最高的那个（同分取先到的），主播可以点别的 */
+function bestIndex(options: FixOption[]): number {
+  return options.reduce((best, o, i) => (o.score > options[best]!.score ? i : best), 0);
+}
+
+/** 打分接口没给 next 时（面板更新前打的分）：90 分以上不用改，其余给改一个字 */
+function nextOf(row: Row, score: NameScore): NextStep {
+  return row.next ?? { kind: score.band === "great" ? "none" : "fix", soundIssues: [] };
 }
 
 function mathLine(score: NameScore): string {
@@ -181,22 +198,37 @@ export function AnalyzePanel({ open, onClose, onRename }: Props) {
     async (row: Row) => {
       if (!takeModel()) return;
       patch(row.id, (r) => ({ ...r, fix: { ...IDLE_FIX, phase: "running", misses: r.fix.misses } }));
+      // 模型每核过一个改法，服务端推一帧：马上显示，提词页也跟着更新
+      const addOption = (option: FixOption) =>
+        patch(row.id, (r) => ({ ...r, fix: { ...r.fix, options: [...r.fix.options, option] } }));
       try {
-        const out = await postJson<FixOutcome>("/api/analyze/fix", row.input);
+        const res = await fetch("/api/analyze/fix?stream=1", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(row.input),
+        });
+        const out = await readFixStream(res, addOption);
+        if (!out) throw new Error("改字没成功");
         if (!out.ok) throw new Error(out.message);
         patch(row.id, (r) => ({
           ...r,
           fix: {
             phase: "done",
             options: out.options,
-            chosen: 0,
+            chosen: bestIndex(out.options),
             misses: out.options.length > 0 ? 0 : r.fix.misses + 1,
+            ...(out.unfixable ? { unfixable: out.unfixable } : {}),
             ...(out.message ? { message: out.message } : {}),
           },
         }));
       } catch (e) {
         const message = e instanceof Error ? e.message : "改字没成功";
-        patch(row.id, (r) => ({ ...r, fix: { ...IDLE_FIX, phase: "error", message, misses: r.fix.misses + 1 } }));
+        // 已经收到的改法留着用，只是不再等后面的
+        patch(row.id, (r) =>
+          r.fix.options.length > 0
+            ? { ...r, fix: { ...r.fix, phase: "done", chosen: bestIndex(r.fix.options), misses: 0 } }
+            : { ...r, fix: { ...IDLE_FIX, phase: "error", message, misses: r.fix.misses + 1 } },
+        );
       } finally {
         releaseModel();
       }
@@ -214,11 +246,27 @@ export function AnalyzePanel({ open, onClose, onRename }: Props) {
     [rows, selectedId],
   );
 
+  const selected = rows.find((r) => r.id === selectedId) ?? null;
+  const selectedNo = selected ? rows.indexOf(selected) + 1 : 0;
+
+  // 提词页跟着选中的那位观众走：打完分、点了改字、每核过一个改法都推一次。
+  // 只看选中的这一行：别的行在改字也不推，免得盖掉主播正在念的稿子
+  useEffect(() => {
+    if (!open || !selected?.score) return;
+    pushPrompter(
+      prompterFromScore({
+        no: selectedNo,
+        score: selected.score,
+        next: nextOf(selected, selected.score),
+        fix: selected.fix,
+      }),
+    );
+  }, [open, selected, selectedNo]);
+
   if (!open) return null;
 
   const trimmed = name.replace(/\s/g, "");
   const canSubmit = trimmed.length >= 2 && trimmed.length <= 4;
-  const selected = rows.find((r) => r.id === selectedId) ?? null;
 
   return (
     <section className="ap" role="dialog" aria-label="名字打分榜">
@@ -378,26 +426,17 @@ function Detail({
   onRename: Props["onRename"];
 }) {
   const { fix } = row;
-  // 打分接口没给 next 时（面板更新前打的分）按老规矩：有可换的字就给改字，90 分以上不给
-  const next: NextStep = row.next ?? {
-    kind: score.band !== "great" && score.fixable.length > 0 ? "fix" : "none",
-    fixable: score.fixable,
-    soundIssues: [],
-  };
-  const swapChars = next.fixable
-    .slice(0, 2)
-    .map((f) => `「${f.char}」`)
-    .join("");
+  const next = nextOf(row, score);
   const fixLabel =
     fix.phase === "running"
-      ? "正在挑同音字…"
+      ? "正在改…"
       : fix.phase === "done"
-        ? "再挑一次"
+        ? "再改一次"
         : fix.phase === "error"
           ? "再试一次"
-          : `改字 · 换${swapChars}`;
+          : "改一个字";
 
-  // 改字没出结果：第一次给「再挑一次」和「重新起名」，连着两次就只留「重新起名」，不让主播干等
+  // 改字没出结果：第一次给「再改一次」和「重新起名」，连着两次就只留「重新起名」，不让主播干等
   const missed = (fix.phase === "done" && fix.options.length === 0) || fix.phase === "error";
   const givenUp = missed && fix.misses >= MAX_MISSES;
   const asking = next.kind === "ask" && fix.phase === "idle";
@@ -454,24 +493,13 @@ function Detail({
         </details>
       )}
 
-      {next.kind === "rename" && (
-        <div className="ap-next">
-          <p className="ap-next-why">
-            {soundLine ? "毛病出在读音上，换同音字还是这个音，建议直接重新起名。" : "没有能单独换掉的字，建议直接重新起名。"}
-          </p>
-          <div className="ap-actions">{rename(false)}</div>
-        </div>
-      )}
-
       {asking && (
         <div className="ap-next">
-          <p className="ap-next-why">
-            换{swapChars}能去掉一部分扣分，但这一条换同音字去不掉：{soundLine}
-          </p>
-          <p className="ap-next-ask">只改字能接受吗？不接受就重新起名。</p>
+          <p className="ap-next-why">毛病出在读音上，换同音字还是这个音：{soundLine}</p>
+          <p className="ap-next-ask">只改一个字（读音会跟着变）能接受吗？不接受就重新起名。</p>
           <div className="ap-actions">
             <button type="button" className="ap-act" onClick={onFix} disabled={modelBusy}>
-              只改字
+              只改一个字
             </button>
             {rename(true)}
           </div>
@@ -487,23 +515,30 @@ function Detail({
         </div>
       )}
 
-      {fix.phase === "running" && <p className="ap-wait">正在从同音字里挑，两三秒……</p>}
-      {missed && !givenUp && fix.message && <p className="ap-wait">{fix.message}</p>}
+      {fix.phase === "running" && fix.options.length === 0 && (
+        <p className="ap-wait">正在看换哪个字更合适，几秒钟……</p>
+      )}
+      {missed && !givenUp && (fix.unfixable || fix.message) && (
+        <p className="ap-wait">{fix.unfixable ? `改一个字解决不了：${fix.unfixable}。建议重新起名。` : fix.message}</p>
+      )}
       {givenUp && (
         <div className="ap-next">
-          <p className="ap-next-why">同音字里挑了两次都没有合适的，建议直接重新起名。</p>
+          <p className="ap-next-why">
+            {fix.unfixable ? `改一个字解决不了：${fix.unfixable}。` : "改了两次都没有合适的，"}建议直接重新起名。
+          </p>
           <div className="ap-actions">{rename(false)}</div>
         </div>
       )}
-      {fix.phase === "done" && fix.options.length > 0 && (
+      {fix.options.length > 0 && (
         <ul className="ap-fixes">
           {fix.options.map((o, i) => (
             <li key={o.fullName}>
-              <button type="button" className={i === fix.chosen ? "on" : ""} onClick={() => onChoose(i)}>
+              <button type="button" className={fix.phase === "done" && i === fix.chosen ? "on" : ""} onClick={() => onChoose(i)}>
                 <span className="ap-fix-name">{o.fullName}</span>
                 <span className="ap-fix-score">{o.score}</span>
                 <span className="ap-fix-change">
                   {o.from} → {o.to}
+                  {o.soundLine === "读音不变" ? "" : " · 读音变了"}
                 </span>
                 <span className="ap-fix-why">{o.why}</span>
               </button>
@@ -511,6 +546,7 @@ function Detail({
           ))}
         </ul>
       )}
+      {fix.phase === "running" && fix.options.length > 0 && <p className="ap-wait">还在写下一个……</p>}
     </>
   );
 }

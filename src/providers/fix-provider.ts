@@ -1,22 +1,34 @@
 import { streamChat, type ChatClientOptions } from "./chat";
-import { buildFixMessages, parseFixOutput, type FixPromptInput, type RawFix } from "@/domain/score/fix-prompt";
+import {
+  buildFixMessages,
+  completedOptions,
+  parseFixOutput,
+  type FixPromptInput,
+  type RawFix,
+  type RawFixOption,
+} from "@/domain/score/fix-prompt";
 
 /**
- * 改字的模型端口：从同音候选里挑字。
+ * 改字的模型端口：看扣分理由改一个字，配寓意。
  *
- * 和名字分析共用一个网关，但单独一个口子：这一步要快（直播里观众在等），
- * 推理强度固定 low，输出只有几个字和一句话。
+ * 和名字分析共用一个网关，但单独一个口子：直播里观众在等，推理强度固定 low；
+ * 一边收一边把写完的改法交给 onItem，核过一条就推一条，主播不用干等整份写完。
  */
 
 export interface CharFixProvider {
   readonly name: string;
-  pick(input: FixPromptInput): Promise<RawFix | null>;
+  /** onItem：options 里每写完一个对象就交一次（没核过）。返回整份解析结果，收尾时补漏用 */
+  pick(input: FixPromptInput, onItem?: (option: RawFixOption) => void): Promise<RawFix | null>;
 }
 
-/** 推理也计入 max_tokens；只挑几个字，2048 足够，截断了宁可当作没挑出来 */
-const MAX_TOKENS = 2048;
-/** 直播里等不起：12 秒没回来就放弃，主播可以再点一次 */
-const TIMEOUT_MS = 12_000;
+/** 推理也计入 max_tokens；三个改法带寓意约 400 字，3072 够用，截断了也只丢最后没写完的那一条 */
+const MAX_TOKENS = 3072;
+/**
+ * 25 秒没写完就放弃，已经核过的改法照样给。
+ * 11-01 实测这个网关上推理常写到 2000–8000 字，一轮 5–20 秒；设 15 秒时文红艳会超时，
+ * 主播再点一次又是十几秒，不如多等一会儿把这一轮写完。
+ */
+const TIMEOUT_MS = 25_000;
 const IDLE_TIMEOUT_MS = 8_000;
 
 export class LlmFixProvider implements CharFixProvider {
@@ -24,27 +36,51 @@ export class LlmFixProvider implements CharFixProvider {
 
   constructor(private readonly opts: ChatClientOptions) {}
 
-  async pick(input: FixPromptInput): Promise<RawFix | null> {
+  async pick(input: FixPromptInput, onItem?: (option: RawFixOption) => void): Promise<RawFix | null> {
+    let text = "";
+    let seen = 0;
     const res = await streamChat(this.opts, {
       messages: buildFixMessages(input),
       maxTokens: MAX_TOKENS,
       timeoutMs: TIMEOUT_MS,
       idleTimeoutMs: IDLE_TIMEOUT_MS,
+      onContent: (chunk) => {
+        text += chunk;
+        if (!onItem || !chunk.includes("}")) return;
+        const done = completedOptions(text);
+        for (; seen < done.length; seen++) onItem(done[seen]!);
+      },
     });
-    return parseFixOutput(res.content);
+    const parsed = parseFixOutput(res.content);
+    if (parsed) return parsed;
+    // 整份没解析出来（多半是截断了）：把写完的那几条交回去
+    const partial = completedOptions(res.content);
+    return partial.length ? { options: partial } : null;
   }
 }
 
-/** 测试与示例模式：每个要换的字挑第一个候选，不联网 */
+/** 示例模式（没配模型、测试）：不联网，保留读音的字挑第一个同音候选，其余试几个常用字，交给核验去筛 */
+const FAKE_CHARS = [..."安明清宁"];
+
 export class FakeFixProvider implements CharFixProvider {
   readonly name = "fake";
 
-  async pick(input: FixPromptInput): Promise<RawFix | null> {
-    return {
-      fixes: input.targets.map((t) => ({
-        from: t.char,
-        picks: t.candidates.slice(0, 1).map((c) => ({ char: c.char, why: `示例模式：同音的「${c.char}」` })),
-      })),
-    };
+  async pick(input: FixPromptInput, onItem?: (option: RawFixOption) => void): Promise<RawFix | null> {
+    const given = [...input.givenName];
+    const swap = (index: number, ch: string): RawFixOption => ({
+      givenName: given.map((c, i) => (i === index ? ch : c)).join(""),
+      why: `示例模式：换成「${ch}」`,
+      meaning: `示例模式：把「${given[index]}」换成「${ch}」，还没调模型，这里不是真寓意。`,
+    });
+    const options: RawFixOption[] = [];
+    for (const s of input.sameSound) {
+      const first = s.candidates[0];
+      if (first) options.push(swap(s.index, first));
+    }
+    given.forEach((_, index) => {
+      for (const ch of FAKE_CHARS) if (ch !== given[index]) options.push(swap(index, ch));
+    });
+    for (const o of options) onItem?.(o);
+    return { options };
   }
 }

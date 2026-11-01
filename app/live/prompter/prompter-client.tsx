@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { PrompterPrimary, PrompterRound, PrompterSnapshot } from "@/live/prompter";
+import type { PrompterPrimary, PrompterRound, PrompterScoreRound, PrompterSnapshot } from "@/live/prompter";
 
 /** 一秒问一次：直播页出结果到这里换稿，最多晚一秒 */
 const POLL_MS = 1000;
@@ -95,6 +95,66 @@ function Ready({ round }: { round: Extract<PrompterRound, { state: "ready" }> })
   );
 }
 
+/** 打分榜选中的那位观众：分数和扣分理由先念，改法写好一条出一条 */
+function ScoreView({ round }: { round: PrompterScoreRound }) {
+  const { fix } = round;
+  return (
+    <section data-testid="prompter-score">
+      <p className="text-lg tracking-wider text-neutral-400 sm:text-xl">打分榜第 {round.no} 位</p>
+      <p className="mt-4 text-6xl font-semibold tracking-[0.2em] text-white sm:text-7xl">{round.full}</p>
+      <p className="mt-3 text-2xl tracking-widest text-neutral-300 sm:text-3xl">{round.pinyin}</p>
+      <p className="mt-4 text-4xl font-semibold text-amber-300">
+        {round.score} 分 · {round.bandLabel}
+      </p>
+      {round.deductions.length ? (
+        <ol className="mt-6 space-y-4">
+          {round.deductions.map((d, i) => (
+            <li key={`${i}-${d.line}`} className="flex gap-4 text-[clamp(22px,3.3vw,36px)] leading-relaxed text-neutral-50">
+              <span className="w-14 shrink-0 text-right text-neutral-500">−{d.points}</span>
+              <span>{d.line}</span>
+            </li>
+          ))}
+        </ol>
+      ) : null}
+      {round.folk.length ? (
+        <div className="mt-5 space-y-2 text-[clamp(18px,2.4vw,26px)] leading-relaxed text-neutral-400">
+          <p>民间说法，不扣分，可以顺口提一句：</p>
+          {round.folk.map((f) => (
+            <p key={f}>{f}</p>
+          ))}
+        </div>
+      ) : null}
+      {round.say ? (
+        <p className="mt-6 text-[clamp(22px,3.3vw,36px)] leading-relaxed text-sky-200" data-testid="prompter-say">
+          {round.say}
+        </p>
+      ) : null}
+      {fix ? (
+        <section className="mt-8 border-t border-neutral-700 pt-5" data-testid="prompter-fixes">
+          <p className="text-lg tracking-widest text-neutral-400">改一个字 · 寓意是模型写的，没人审过，念之前扫一眼</p>
+          <ul className="mt-3 space-y-6">
+            {fix.options.map((o) => (
+              <li key={o.full} className="text-[clamp(20px,2.8vw,30px)] leading-relaxed" data-testid="prompter-fix">
+                <p>
+                  <span className="font-semibold text-white">{o.full}</span>
+                  <span className="ml-3 text-neutral-400">{o.pinyin}</span>
+                  <span className="ml-3 text-amber-300">{o.score} 分</span>
+                </p>
+                <p className="text-[clamp(16px,2.2vw,22px)] text-neutral-400">{o.change}</p>
+                <p className="mt-1 text-[clamp(22px,3.3vw,36px)] leading-relaxed text-neutral-50">{o.meaning}</p>
+              </li>
+            ))}
+          </ul>
+          {fix.running ? (
+            <p className="mt-3 text-lg text-neutral-500">{fix.options.length ? "下一个改法还在写……" : "改法还在写，几秒就到……"}</p>
+          ) : null}
+          {fix.note ? <p className="mt-3 text-[clamp(20px,2.8vw,30px)] text-amber-200">{fix.note}</p> : null}
+        </section>
+      ) : null}
+    </section>
+  );
+}
+
 export function PrompterClient() {
   const [snap, setSnap] = useState<PrompterSnapshot | null>(null);
   const [offline, setOffline] = useState(false);
@@ -165,6 +225,8 @@ export function PrompterClient() {
                 可以先说：稍等，我按{round.surname}姓把谐音和字义都过一遍。
               </p>
             </div>
+          ) : round.state === "score" ? (
+            <ScoreView round={round} />
           ) : (
             <Ready round={round} />
           )}

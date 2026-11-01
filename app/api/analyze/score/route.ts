@@ -32,5 +32,5 @@ export async function POST(req: Request) {
   }
 
   const result = scoreName(split, checked.input.gender);
-  return NextResponse.json({ ok: true, result, next: nextStep(result, split) });
+  return NextResponse.json({ ok: true, result, next: nextStep(result) });
 }

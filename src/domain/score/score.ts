@@ -3,7 +3,7 @@ import { gbLevel, strokesOf, toSimplified } from "@/domain/analysis/chars";
 import { leanFacts } from "@/domain/analysis/gender-lean";
 import { splitFullName } from "@/domain/analysis/split-name";
 import type { AnalysisGender, NameSplit } from "@/domain/analysis/types";
-import { nameSyllables } from "@/domain/pinyin-name";
+import { fullNamePinyin, nameSyllables } from "@/domain/pinyin-name";
 import {
   BAD_WORDS,
   BIG_SURNAMES,
@@ -18,7 +18,7 @@ import {
   SURNAME_TRAP,
   TEMPLATE_NAMES,
 } from "./lexicon";
-import type { Deduction, FixableChar, FolkNote, NameScore, ScoreBand } from "./types";
+import type { Deduction, FolkNote, NameScore, ScoreBand, ScoreRuleId } from "./types";
 
 /**
  * 直播打分：100 分减规则扣分。
@@ -49,8 +49,29 @@ export const POINTS = {
   strokes: 5,
 } as const;
 
-/** 一个字身上扣到这么多分，才值得给「改字」 */
-export const FIX_THRESHOLD = 8;
+/**
+ * 听出来的毛病：谐音、和姓同音、和姓连读成词、年代感、撞名、热门字、同调、三声连读。
+ * 名字多半是被念出来、被听到的（点名、自我介绍），这类毛病换个同音的写法还在：
+ * 文红艳换成文红雁，念出来还是「红艳」（2026-11-01 用户指出）。其余的（字义、字太大、生僻、
+ * 容易念错、男女用字、笔画）是看出来的，保留读音换个写法就能解决。
+ * 改字时告诉模型这一条，核验时也按它挡掉读音没变的改法（fix.ts）。
+ */
+const HEARD_RULES: ReadonlySet<ScoreRuleId> = new Set([
+  "homophone",
+  "sameSound",
+  "trap",
+  "era",
+  "eraName",
+  "template",
+  "hot",
+  "singleName",
+  "flatTone",
+  "sandhi",
+]);
+
+export function heardIssue(d: Deduction): boolean {
+  return d.soundBound === true || HEARD_RULES.has(d.rule);
+}
 
 /** 全名里最多和最少的两个字笔画差到这么多，算一边轻一边重 */
 const STROKE_GAP = 9;
@@ -332,18 +353,6 @@ export function scoreName(split: NameSplit, gender: AnalysisGender): NameScore {
   const score = Math.max(0, 100 - total);
   const { band, label } = bandOf(score);
 
-  // 只换同音字，所以毛病出在读音上的扣分不算：换了字读音还在，毛病也还在
-  const fixable: FixableChar[] = giv
-    .map((_, i) => ({
-      char: givOrig[i] ?? giv[i]!,
-      index: i,
-      points: deductions
-        .filter((d) => !d.soundBound && d.positions.includes(i))
-        .reduce((s, d) => s + d.points, 0),
-    }))
-    .filter((f) => f.points >= FIX_THRESHOLD)
-    .sort((a, b) => b.points - a.points || a.index - b.index);
-
   return {
     fullName,
     surname,
@@ -354,8 +363,8 @@ export function scoreName(split: NameSplit, gender: AnalysisGender): NameScore {
     band,
     bandLabel: label,
     syllables,
+    pinyin: fullNamePinyin(sur, givStr).text,
     deductions,
     folk,
-    fixable,
   };
 }
