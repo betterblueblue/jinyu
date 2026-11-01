@@ -13,6 +13,7 @@
 | 直播起名 | `/live` | `POST /api/fast?stream=1`（NDJSON） | 3–5 秒 | 姓 + 性别（生日可选）→ 首推 1 个 + 备选 3 个，都是模型现起，能存图；出结果后 `POST /api/fast/talk` 给提词页补写稿子 |
 | 名字打分、改字 | `/live` 里按 A | `POST /api/analyze/score`、`POST /api/analyze/fix?stream=1`（NDJSON）、`POST /api/analyze/merit`（名字好在哪，只推提词页） | 打分几毫秒；改一个字调一次模型，改法写好一条推一条 | 观众报全名，按规则打分，告诉主播下一步；改哪个字由模型看扣分理由定 |
 | 主播提词 | `/live/prompter` | `GET` / `POST /api/live/prompter` | 每秒取一次 | 只给主播看的口播稿；打分榜开着时是选中那位观众的打分稿和改法寓意 |
+| 直播日志 | （没有页面） | `POST /api/live/log` | — | 直播台、打分榜每个动作记一行到 `data/live-log/<日期>.jsonl`，只在这台电脑上；`pnpm tsx scripts/live-stats.ts [日期]` 出一场的统计 |
 | 名字评审 | `/review` | `POST /api/review` | — | 用户给起草的名字评五档 |
 | 完整版起名 | `/name` → `/reports/[id]`、`/history` | `POST /api/generate`（SSE）、`GET /api/reports/[id]/summary`（PNG） | 约 20–40 秒 | 详细条件、详细报告、摘要图、历史快照。直播不用，**先不动** |
 | 八字排盘 | `/bazi` | `POST /api/bazi`（SSE） | 排盘 1 秒内，解读 15–25 秒 | 只在直播外用 |
@@ -28,12 +29,13 @@ pnpm install
 cp .env.example .env.local   # 填 LLM_API_KEY，改掉默认密码和 JINYU_SESSION_SECRET
 pnpm dev                     # next dev -p 9000；也可以 .\start-dev.ps1（先查依赖和端口）
 pnpm typecheck               # tsc --noEmit
-pnpm test                    # vitest：17 个文件、259 个用例，全走假模型
+pnpm test                    # vitest：18 个文件、265 个用例，全走假模型
 ```
 
 - **直播**：双击 `启动直播台.bat`，用 Edge 或 Chrome 的 `--app` 模式开纯净窗口，再调 `tools/fit-window.ps1` 把窗口内容区压成 9:16（1080p 屏上是 576×1024）。直播伴侣里用「窗口」捕获这个窗口，不要用显示器捕获。`启动提词页.bat` 在直播窗口右边开提词页；手机打开同一地址，登录后自动回到提词页。两个 bat 里写死了局域网 IP `192.168.31.211`，IP 变了要改。
 - **直播跑的就是 9000 端口上的 `next dev`**：改代码会热更新到正在直播的页面，直播时不要改代码。测试也会往同一个提词页推内容，测完让提词页回到等待。
 - **备份名字库**：双击 `备份名字库.bat`，打包到 `backups/`（不进 git），再拷到 U 盘或网盘。库有改动就跑一次。
+- **一场直播的统计**：`pnpm tsx scripts/live-stats.ts`，不给日期就是最近一天，也可以写 `2026-11-01`。读的是 `data/live-log/`，备份名字库的 bat 不打包它。在 9000 上走查、手动试的动作也会记进去，试完删掉自己那几行，不然算进一场的统计。
 - **e2e**：`pnpm e2e`，只覆盖完整版（`e2e/golden-path`、`e2e/unknown-gender`）。9000 上开着开发服务时直接复用它，走真模型，要几分钟；没开时自己起一个、强制假模型。账号从 `.env.local` 读，跑完把新增的报告挪进 `data/_trash/`。
 - **真模型探针**：`$env:ROUNDS=4; $env:SURNAME="沈"; $env:GENDER="female"; pnpm tsx scripts/probe-fast.ts`；再设 `SESSION=1` 模拟同一场连续出名，`BIRTHDAY=2026-03-15` 带生日。
 - **调提示词用的评测**：`$env:ROUNDS=40; pnpm tsx scripts/eval-fast.ts base v2`。按一场直播的样子连着起名（几十个姓、男女、一半带生日、同一场去重），几个版本交替跑，结果在 `data/eval/<时间>/summary.md`：耗时、重复、相邻几轮共用字、生日呼应，加每轮名单给人逐个看。新版本先写在 `scripts/eval-fast-variants.ts`，比线上好了再搬进 `src/fast`。
@@ -71,6 +73,7 @@ app/
     prompter-sync.ts        推提词页：起名的稿子、打分榜的打分稿
     use-live-keys.ts        快捷键：1 男、2 女、空格开始或下一个、A 打分、S 换肤、Esc 关面板
     analyze-panel.tsx       打分榜
+    live-log-client.ts      往 /api/live/log 发一行日志，不等回应、失败不管
     live.css                四套皮肤：宣纸、青瓷、刻版、竹兰（默认竹兰，背景图 public/skins/）
     prompter/               提词页
   review/                 名字评审页
@@ -81,7 +84,8 @@ src/
   fast/                   直播起名：normalize、seeds（起手字）、birth（出生时节）、prompt、provider（模型、补发）、gate（闸门）、
                           taste（口味过滤）、cite（核出处）、run（编排）、talk（给提词页补写稿子）
   library/                名字库：live-pick（挑首推）、talk（口播稿）、review-store（评审读写）、review-types
-  live/                   提词页：prompter（格式校验）、prompter-store（只在内存）
+  live/                   提词页：prompter（格式校验）、prompter-store（只在内存）；
+                          直播日志：live-log（每种动作记哪些字段、接口收什么、一场的统计）、live-log-store（写 data/live-log/）
   domain/score/           打分规则 score.ts（含听出来 / 看出来的毛病 heardIssue）、推荐线 recommend.ts、
                           改字 fix.ts（核验）和 fix-prompt.ts（提示词、边写边取）、下一步 next-step.ts、
                           名字好在哪 merit.ts（提词页上的字义和寓意）
@@ -98,12 +102,13 @@ scripts/
   fortune/build-places.mjs  从 Wikidata 重建出生地表
   probe-fast.ts           直播起名真模型探针
   probe-fix.ts            改字真模型探针：一批名字打分、改一个字，表写到 data/eval/fix-*.md；不走接口、不推提词页
+  live-stats.ts           一场直播的统计：读 data/live-log/<日期>.jsonl，写成几行白话
   eval-fast.ts            调提示词用的评测（版本表在 eval-fast-variants.ts）
   build-seed-chars.ts     生成起手字表
   name-library/           10-30 那版自动建库，已不用
   其余 bench-*、probe-*、e2e-real-llm.mjs  早期比模型、测完整版用的
 tests/                    单元测试；e2e/ 只有完整版
-data/                     不进 git：reports/、index.json、corpus/、name-library/v2/{drafts,review,library.json}；v2 以外是旧版
+data/                     不进 git：reports/、index.json、corpus/、name-library/v2/{drafts,review,library.json}（v2 以外是旧版）、live-log/（直播日志）
 ```
 
 ## 4. 关键流程
@@ -189,6 +194,7 @@ data/                     不进 git：reports/、index.json、corpus/、name-li
 | 11-01 | 90 分以下的打完分就在后台改字，主播点了才亮出来 | 用户要求提速。模型这一步压不下来（改提示词、给候选字都试过，不快反慢）；主播讲分数和扣分理由那几秒拿来让模型先写，点了以后只等剩下的时间。代价：打了分没点改字的，这一次调用白花 |
 | 11-01 | 改字一轮最多等 25 秒（原来 12 秒） | 实测推理常写 2000–8000 字、一轮 5–20 秒；15 秒时文红艳超时，主播再点一次又是十几秒，不如多等一会儿把这一轮写完 |
 | 11-01 | 打分和改法接进提词页；改法一条一条推，不按字推 | 用户要求主播等的时候不冷场。每条要先核过才能给主播念，按字推就会念到没核过、可能被丢掉的东西；等第一条的两三秒，主播先念扣分理由和过渡的话 |
+| 11-01 | 直播日志只记在这台电脑上，一个动作一行；不记生日本身，只记填没填；观众报的名字照记；浏览器发出去不等、失败不管；改字等这次改完才记，等多久算到第一条改法出来 | 用户要的：试播时校准分数、补字表、看速度，要真实数据，原来打分榜只在页面内存里。名字要留着，事后才能对着看哪些分被质疑过。日志不能拖慢直播台。改字是一条一条推来的，出第一条就记会漏掉后面的（走查时真漏了） |
 
 ## 6. 别再踩的坑
 
@@ -203,6 +209,7 @@ data/                     不进 git：reports/、index.json、corpus/、name-li
 - 删掉接口路由以后，`.next/types/` 里会留着旧的类型文件，`pnpm typecheck` 报错，删掉那个旧文件即可。
 - 等模型的长命令（探针、真模型测试）要用后台进程跑，输出写进日志再读；执行工具会提前返回、丢掉后面的输出。
 - Next 的路由播报元素也是 `role="alert"`，Playwright 找表单报错要写 `form p[role='alert']`。
+- 临时走查脚本里每一处等待都要有时限。11-01 一次走查卡了七分多钟，日志停在「等后台改字的流结束」（Playwright 的 `response.finished()`，没有时限）之前；事后直接请这个接口三次，流都正常关了（7.6–20.7 秒）。停掉卡住的后台命令只杀了外层 shell，node 和无头 Chromium 还活着，那个 `/live` 页面还开着、还会推提词页；要按进程树杀（`taskkill /PID <pid> /T /F`）。
 - 比两版提示词的快慢，要放在同一时段交替跑（`scripts/eval-fast.ts` 就是这么跑的）：网关忙闲能让同一版的中位差一倍。
 - `reasoning_effort` 设成 `minimal`、`none`，这个网关照样推理，压不下来；只有 `low` 和「推理里只写候选名字」有用。这句只对起名管用：改字要权衡扣分理由，写了反而推理更长（11-01 实测，见 `docs/直播提示词.md` 第五节）。
 
