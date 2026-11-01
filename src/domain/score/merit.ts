@@ -16,10 +16,16 @@ export interface NameMerit {
   chars: string;
   /** 合起来：画面和爸妈的心意 */
   whole: string;
+  /**
+   * 只给主播看的一句提醒（11-01 加）：连着姓念像不像难听的词、和名人同名。
+   * 谐音表收不全，表里没有的靠这一句兜着；不算进分数，观众屏幕上也没有
+   */
+  tip?: string;
 }
 
 const LINE_MIN = 8;
 const LINE_MAX = 90;
+const TIP_MAX = 60;
 /** 这一段只讲好在哪；评好坏、讲毛病是打分规则和主播的事，模型写了就整段不要 */
 const JUDGING = ["扣分", "毛病", "缺点", "不足", "老气", "过时", "土气", "俗气", "谐音", "重名", "撞名", "烂大街", "不好", "好名字", "完美", "满分"];
 
@@ -28,18 +34,19 @@ export function buildMeritSystem(): string {
     "你是直播起名间的主播助理。观众报了自己孩子的名字，你写一段「这个名字好在哪」，主播照着念给观众听。只输出 JSON。",
     "推理只写怎么拆字，一两句。不要复述规则。",
     "",
-    "写两样：",
+    "写三样：",
     "- chars：拆字，一句话，说每个字是什么意思，用大白话，像「星是星星，远是远方。」。字义要准，用这个字在名字里最常见的意思。名是一个字的，可以连姓一起讲；名是两个字的，只讲名。",
     "- whole：合起来，一句话，以「合起来」开头，说这几个字拼成的画面或说法，再说一句爸妈起这个名字的心意，60 字以内。名字来自成语的，可以点出这个成语。",
+    "- tip：只给主播看的一句提醒，没有就留空字符串。只写两种：整个名字连着姓念，像不像一个难听、会被起外号的词（下面扣分理由里已经说了的不用再写）；和大家都知道的名人、角色同名或者很像。没把握就留空，不要编。",
     "",
-    "只讲字义和寓意，不评这个名字好不好：不要写「好名字」「老气」「过时」「重名」「谐音」这类话，扣分是主播另外讲的。",
+    "chars 和 whole 只讲字义和寓意，不评这个名字好不好：不要写「好名字」「老气」「过时」「重名」「谐音」这类话，扣分是主播另外讲的。",
     "下面给的扣分理由只用来提醒你：被扣分的那一点不要夸。比如扣的是字太大，就只讲字的本义，不要夸它尊贵、大气；扣的是年代感，照常讲字义就行。",
     "不要写：五行、八字、命理、运势、旺；「寓意深远」「气质不凡」这类空话；诗句原文和出处（没核过的不能念）；分数。",
     "",
     "参考格式（只看格式，别照抄内容）：",
-    '{"chars":"清是水清见底，禾是田里的禾苗。","whole":"合起来是一片清清亮亮的青苗，干干净净又有生气，爸妈盼孩子心地干净、踏踏实实往上长。"}',
+    '{"chars":"清是水清见底，禾是田里的禾苗。","whole":"合起来是一片清清亮亮的青苗，干干净净又有生气，爸妈盼孩子心地干净、踏踏实实往上长。","tip":""}',
     "",
-    '输出：{"chars":"","whole":""}',
+    '输出：{"chars":"","whole":"","tip":""}',
   ].join("\n");
 }
 
@@ -77,7 +84,10 @@ export function parseMerit(content: string): NameMerit | null {
   const raw = x as Record<string, unknown>;
   const chars = meritLine(raw.chars);
   const whole = meritLine(raw.whole);
-  return chars && whole ? { chars, whole } : null;
+  // 提醒写不好（太长、碰禁词）就不要这一句，拆字、合起来照样给
+  const tipText = typeof raw.tip === "string" ? raw.tip.replace(/\s+/g, "").trim() : "";
+  const tip = tipText && sayable(tipText, TIP_MAX) ? tipText : undefined;
+  return chars && whole ? { chars, whole, ...(tip ? { tip } : {}) } : null;
 }
 
 export async function writeMerit(score: NameScore, client: ChatClientOptions, signal?: AbortSignal): Promise<NameMerit | null> {

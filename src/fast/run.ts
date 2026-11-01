@@ -6,7 +6,7 @@ import { citeFromLine, locateCitation } from "./cite";
 import { checkFastCandidate } from "./gate";
 import { normalizeFastInput } from "./normalize";
 import { createFastProvider, type FastPromptBuilders, type FastProvider } from "./provider";
-import { birthTimeOf, seasonSeeds } from "./birth";
+import { birthTimeOf, seasonSeeds, zodiacOf } from "./birth";
 import { pickSeeds } from "./seeds";
 import { tasteProblems } from "./taste";
 import {
@@ -228,7 +228,9 @@ export async function runFast(
     });
     if (bazi.ok && bazi.summary) {
       const readable = bazi.summary.readable;
-      const parts = [readable?.zodiac ? `属${readable.zodiac}` : "", readable?.season ? `生在${readable.season}` : ""];
+      // 属相按春节换年（zodiacOf），不用八字年柱的立春换年：直播讲的是老百姓说的属相
+      const zodiac = zodiacOf(req.birthday) ?? readable?.zodiac;
+      const parts = [zodiac ? `属${zodiac}` : "", readable?.season ? `生在${readable.season}` : ""];
       baziLine = parts.filter(Boolean).join("，") || undefined;
     }
   }

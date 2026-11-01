@@ -1,4 +1,4 @@
-import type { Deduction, FixOption, NameScore, NextStep, ScoreRuleId } from "@/domain/score/types";
+import type { Deduction, FixOption, GenderRisk, NameScore, NextStep, ScoreRuleId } from "@/domain/score/types";
 import type { FastCandidate, FastSuccess } from "@/fast/types";
 import { checkLine, talkLines } from "@/library/talk";
 import type { PrompterName, PrompterRound } from "@/live/prompter";
@@ -100,12 +100,22 @@ export interface ScoreForPrompter {
     /** 打完分在后台先改、主播还没点「改一个字」时为 false：提词页当没改过 */
     shown?: boolean;
   };
-  /** 这个名字好在哪（/api/analyze/merit）；没请或者没写出来就不给 */
-  merit?: { phase: "writing" | "done" | "error"; chars?: string; whole?: string };
+  /** 这个名字好在哪（/api/analyze/merit）；没请或者没写出来就不给。tip 是只给主播看的一句提醒 */
+  merit?: { phase: "writing" | "done" | "error"; chars?: string; whole?: string; tip?: string };
+  /** 没填性别时，换成男孩 / 女孩男女用字会扣多少（打分接口给的） */
+  genderRisk?: GenderRisk[];
+}
+
+/** 没填性别、名字又偏一边：提醒主播先问男宝女宝 */
+export function genderAskLine(risks: readonly GenderRisk[]): string | undefined {
+  if (!risks.length) return undefined;
+  const word = (g: GenderRisk["gender"]) => (g === "male" ? "男孩" : "女孩");
+  const parts = risks.map((r) => `要是${word(r.gender)}，男女用字扣 ${r.points} 分，${r.score} 分${r.bandLabel}`);
+  return `没填性别：${parts.join("；")}。先问一句「是男宝还是女宝？」，选好性别再打一次分。`;
 }
 
 /** 请模型写「这个名字好在哪」；写不出来返回 null，提词页只是少这一段 */
-export async function fetchMerit(input: unknown): Promise<{ chars: string; whole: string } | null> {
+export async function fetchMerit(input: unknown): Promise<{ chars: string; whole: string; tip?: string } | null> {
   try {
     const res = await fetch("/api/analyze/merit", {
       method: "POST",
@@ -113,7 +123,7 @@ export async function fetchMerit(input: unknown): Promise<{ chars: string; whole
       body: JSON.stringify(input),
     });
     if (!res.ok) return null;
-    const body = (await res.json()) as { ok?: boolean; merit?: { chars: string; whole: string } };
+    const body = (await res.json()) as { ok?: boolean; merit?: { chars: string; whole: string; tip?: string } };
     return body.ok && body.merit ? body.merit : null;
   } catch {
     return null;
@@ -124,7 +134,7 @@ export async function fetchMerit(input: unknown): Promise<{ chars: string; whole
  * 打分规则查的十项（src/domain/score/score.ts），用观众听得懂的叫法。
  * 提词页上告诉主播「查了哪几项、哪几项有毛病」，主播能讲出这个分是怎么来的。
  */
-const CHECKS = ["谐音", "和姓连读", "生僻字", "容易念错", "字义", "男女用字", "重名", "年代感", "声调", "笔画"] as const;
+const CHECKS = ["谐音", "和姓连读", "生僻字", "容易念错", "字义", "男女用字", "重名", "和反面人物同名", "年代感", "声调", "笔画"] as const;
 type Check = (typeof CHECKS)[number];
 const CHECK_OF: Record<ScoreRuleId, Check> = {
   homophone: "谐音",
@@ -145,6 +155,7 @@ const CHECK_OF: Record<ScoreRuleId, Check> = {
   flatTone: "声调",
   sandhi: "声调",
   strokes: "笔画",
+  infamous: "和反面人物同名",
 };
 const checkOf = (d: Deduction): Check => (d.rule === "swap" && d.soundBound ? "谐音" : CHECK_OF[d.rule]);
 
@@ -171,6 +182,7 @@ function mathLine(score: NameScore): string {
 export function prompterFromScore(s: ScoreForPrompter): PrompterRound {
   const { score, next } = s;
   const fix: ScoreForPrompter["fix"] = s.fix.shown === false ? { phase: "idle", options: [] } : s.fix;
+  const genderAsk = genderAskLine(s.genderRisk ?? []);
   const options = fix.options.slice(0, 3).map((o) => ({
     full: o.fullName,
     pinyin: o.pinyin,
@@ -179,7 +191,8 @@ export function prompterFromScore(s: ScoreForPrompter): PrompterRound {
     meaning: o.meaning,
   }));
   let say: string | undefined;
-  if (next.kind === "none") say = "这个名字已经很好，不用改。";
+  // 没填性别、名字又偏一边时，「不用改」只对一个性别成立：不说，主播先按上面那句问清楚
+  if (next.kind === "none") say = genderAsk ? undefined : "这个名字已经很好，不用改。";
   else if (fix.phase === "running" && options.length === 0) say = "可以先说：我看看换哪个字更合适，毛病要去掉，意思也要好。";
   else if (next.kind === "ask" && fix.phase === "idle") {
     say = "先问观众：毛病出在读音上，换个同音的写法还是这个音；只改一个字，读音会跟着变，能接受吗？不接受就重新起名。";
@@ -201,8 +214,9 @@ export function prompterFromScore(s: ScoreForPrompter): PrompterRound {
     checks: checksLine(score),
     ...(s.merit?.phase === "writing" ? { merit: { writing: true, lines: [] } } : {}),
     ...(s.merit?.phase === "done" && s.merit.chars && s.merit.whole
-      ? { merit: { writing: false, lines: [s.merit.chars, s.merit.whole] } }
+      ? { merit: { writing: false, lines: [s.merit.chars, s.merit.whole], ...(s.merit.tip ? { tip: s.merit.tip } : {}) } }
       : {}),
+    ...(genderAsk ? { genderAsk } : {}),
     deductions: score.deductions.slice(0, 12).map((d) => ({ points: d.points, line: d.line })),
     folk: score.folk.slice(0, 4).map((f) => f.line),
     ...(say ? { say } : {}),

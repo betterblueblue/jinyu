@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { splitFullName } from "@/domain/analysis/split-name";
-import type { FixOption, NameScore, NextStep } from "@/domain/score/types";
+import type { FixOption, GenderRisk, NameScore, NextStep } from "@/domain/score/types";
 import { readFixStream } from "./fix-stream";
 import { fetchMerit, prompterFromScore, pushPrompter, type ScoreForPrompter } from "./prompter-sync";
 import "./analyze.css";
@@ -58,6 +58,8 @@ interface Row {
   fix: FixState;
   /** 提词页上「这个名字好在哪」：打完分就去请，只给主播看 */
   merit?: ScoreForPrompter["merit"];
+  /** 没填性别时，换成男孩 / 女孩男女用字会扣多少（提词页提醒主播先问） */
+  genderRisk?: GenderRisk[];
 }
 
 const IDLE_FIX: FixState = { shown: false, run: 0, phase: "idle", options: [], chosen: 0, misses: 0 };
@@ -238,17 +240,30 @@ export function AnalyzePanel({ open, onClose, onRename }: Props) {
     inputRef.current?.focus();
 
     try {
-      const out = await postJson<{ ok: boolean; result?: NameScore; next?: NextStep; message?: string }>(
-        "/api/analyze/score",
-        input,
-      );
+      const out = await postJson<{
+        ok: boolean;
+        result?: NameScore;
+        next?: NextStep;
+        genderRisk?: GenderRisk[];
+        message?: string;
+      }>("/api/analyze/score", input);
       if (!out.ok || !out.result) throw new Error(out.message ?? "打分失败");
-      const { result, next } = out;
-      patch(id, (r) => ({ ...r, score: result, ...(next ? { next } : {}), merit: { phase: "writing" } }));
+      const { result, next, genderRisk } = out;
+      // 和反面人物同名（潘金莲）不夸「金色的莲花」：不请「名字好在哪」
+      const infamous = result.deductions.some((d) => d.rule === "infamous");
+      patch(id, (r) => ({
+        ...r,
+        score: result,
+        ...(next ? { next } : {}),
+        ...(genderRisk?.length ? { genderRisk } : {}),
+        ...(infamous ? {} : { merit: { phase: "writing" as const } }),
+      }));
       // 「这个名字好在哪」要调模型，几秒后才到：不等它，也不占改字那把锁，主播先念分数和查了哪几项
-      void fetchMerit(input).then((merit) =>
-        patch(id, (r) => ({ ...r, merit: merit ? { phase: "done", ...merit } : { phase: "error" } })),
-      );
+      if (!infamous) {
+        void fetchMerit(input).then((merit) =>
+          patch(id, (r) => ({ ...r, merit: merit ? { phase: "done", ...merit } : { phase: "error" } })),
+        );
+      }
       // 90 分以下的，改字也马上在后台开始写（不亮出来）：主播讲分数、扣分理由那几秒，模型已经在写了
       if (result.band !== "great") void runFix(id, input, false);
     } catch (e) {
@@ -281,6 +296,7 @@ export function AnalyzePanel({ open, onClose, onRename }: Props) {
         next: nextOf(selected, selected.score),
         fix: selected.fix,
         ...(selected.merit ? { merit: selected.merit } : {}),
+        ...(selected.genderRisk?.length ? { genderRisk: selected.genderRisk } : {}),
       }),
     );
   }, [open, selected, selectedNo]);

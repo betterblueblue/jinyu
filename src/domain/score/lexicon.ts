@@ -4,6 +4,7 @@ import forbiddenChars from "@/config/forbidden-chars.json";
 import forbiddenMild from "@/config/forbidden-mild.json";
 import folkChars from "@/config/folk-chars.json";
 import badHomophones from "@/config/bad-homophones.json";
+import infamousNames from "@/config/infamous-names.json";
 import eraNames from "@/config/era-names.json";
 import nameChars from "@/config/name-chars.json";
 
@@ -69,6 +70,15 @@ export const BAD_WORDS: ReadonlyMap<string, BadWord> = new Map(
     b.py,
     { word: b.word, say: b.say, points: b.points ?? 30 },
   ]),
+);
+
+/**
+ * 和反面人物同名（秦桧、潘金莲……），值是主播念的「和谁同名」。全名一个字不差才算，按简体比（2026-11-01 加）。
+ * 只收古代、戏文里公认的反面人物；同音不算（秦慧、王静薇是常见的好名字）。
+ * 和明星同名不扣分，由提词页上模型写的那句提醒带出来（merit.ts）。
+ */
+export const INFAMOUS: ReadonlyMap<string, string> = new Map(
+  (infamousNames as { name: string; who: string }[]).map((x) => [x.name, x.who]),
 );
 
 /**

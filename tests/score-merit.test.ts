@@ -45,4 +45,14 @@ describe("提词页：这个名字好在哪", () => {
     expect(parseMerit(json("梓是树", whole))).toBeNull();
     expect(parseMerit("不是 JSON")).toBeNull();
   });
+
+  it("只给主播看的那句提醒：有就带上，空的不要，碰禁词只丢这一句", () => {
+    const base = { chars: "菲是花草芳香，王是姓。", whole: "合起来是一片芬芳，爸妈盼孩子日子香甜。" };
+    expect(parseMerit(JSON.stringify({ ...base, tip: "和歌手王菲同名，观众可能会提。" }))!.tip).toBe("和歌手王菲同名，观众可能会提。");
+    expect(parseMerit(JSON.stringify({ ...base, tip: "" }))).not.toHaveProperty("tip");
+    const banned = parseMerit(JSON.stringify({ ...base, tip: "五行缺木，补一个草字头。" }))!;
+    expect(banned).not.toHaveProperty("tip");
+    expect(banned.chars).toBe(base.chars);
+    expect(buildMeritSystem()).toContain("tip：只给主播看的一句提醒");
+  });
 });

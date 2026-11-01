@@ -65,3 +65,18 @@ export function birthTimeOf(birthday: string): BirthTime | null {
     return null;
   }
 }
+
+/**
+ * 属相：按春节换年，和老百姓的说法一样（2026-11-01 改）。
+ * 原来用八字年柱（立春换年），生在立春和春节之间的宝宝对不上：2026-02-10 出生，八字算属马，可春节还没过，家长说属蛇。
+ * 八字页（src/fortune）照旧按立春，那边排八字本来就该那样算。
+ */
+export function zodiacOf(birthday: string): string | null {
+  const m = birthday.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  try {
+    return Solar.fromYmd(Number(m[1]), Number(m[2]), Number(m[3])).getLunar().getYearShengXiao() || null;
+  } catch {
+    return null;
+  }
+}

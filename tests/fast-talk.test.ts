@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { birthTimeOf } from "@/fast/birth";
+import { birthTimeOf, zodiacOf } from "@/fast/birth";
 import { buildTalkUser, parseTalks } from "@/fast/talk";
 import { tasteProblems } from "@/fast/taste";
 import type { FastCandidate, FastSuccess } from "@/fast/types";
@@ -49,6 +49,13 @@ describe("出生时节", () => {
 
   it("格式不对返回空", () => {
     expect(birthTimeOf("2026/03/15")).toBeNull();
+  });
+
+  it("属相按春节换年（和老百姓说的一样），不按八字的立春", () => {
+    expect(zodiacOf("2026-02-10")).toBe("蛇"); // 立春已过、春节（2 月 17 日）还没到
+    expect(zodiacOf("2026-02-20")).toBe("马");
+    expect(zodiacOf("2025-01-30")).toBe("蛇"); // 春节（1 月 29 日）已过、立春还没到
+    expect(zodiacOf("2026/02/10")).toBeNull();
   });
 });
 

@@ -23,7 +23,7 @@ import { buildFixInput, suggestFixes, verifyOption } from "@/domain/score/fix";
 import { nextStep } from "@/domain/score/next-step";
 import { checkFastCandidate } from "@/fast/gate";
 import { ERA_CHARS, ERA_NAMES, FOLK } from "@/domain/score/lexicon";
-import { heardIssue, resolveSplit, scoreName } from "@/domain/score/score";
+import { genderRisk, heardIssue, resolveSplit, scoreName } from "@/domain/score/score";
 import { leanOf } from "@/domain/analysis/gender-lean";
 import type { AnalysisGender } from "@/domain/analysis/types";
 import type { CharFixProvider } from "@/providers/fix-provider";
@@ -113,7 +113,7 @@ describe("打分词表", () => {
 describe("打分规则", () => {
   const cases: [string, AnalysisGender, number, string[]][] = [
     ["马梓宸", "male", 62, ["swap", "hot", "homophone"]], // 马梓 = 马子
-    ["张子轩", "male", 80, ["template"]],
+    ["张子轩", "male", 85, ["template"]], // 撞名 11-01 起扣 15（原来 20）
     ["杜子腾", "male", 65, ["homophone", "strokes"]],
     ["王招娣", "female", 74, ["swap"]],
     ["李知微", "female", 100, []],
@@ -128,7 +128,7 @@ describe("打分规则", () => {
     ["王死", "unknown", 60, ["forbidden", "singleName"]],
     ["李婷婷", "male", 55, ["gender", "eraName"]], // 两个字都偏女孩：男女用字扣 25（11-01 前是 15）
     ["张伟丽", "female", 75, ["gender", "eraName"]],
-    ["李一诺", "unknown", 75, ["template", "strokes"]], // 一 1 画、诺 10 画
+    ["李一诺", "unknown", 80, ["template", "strokes"]], // 一 1 画、诺 10 画；撞名扣 15，回到可以用
     ["王秀英", "female", 70, ["eraName"]],
     ["张建军", "male", 70, ["eraName"]],
     ["文娟", "female", 88, ["era"]], // 单名就是年代字
@@ -137,7 +137,7 @@ describe("打分规则", () => {
     ["王秀娟", "female", 75, ["eraName"]], // 祖辈字配父母辈字
     ["李知娟", "female", 97, ["era"]], // 双名里只有一个父母辈字
     ["王军", "male", 75, ["era", "singleName"]],
-    ["孙梓涵", "female", 65, ["template", "homophone"]], // 孙梓 = 孙子
+    ["孙梓涵", "female", 70, ["template", "homophone"]], // 孙梓 = 孙子；撞名 11-01 起扣 15
     ["吴驰", "male", 60, ["homophone", "singleName"]], // 吴驰 = 无耻
     ["李雅", "unknown", 87, ["sandhi", "singleName"]],
     ["李予安", "unknown", 97, ["sandhi"]],
@@ -167,6 +167,34 @@ describe("打分规则", () => {
     expect(score("文海军", "male").result.deductions.some((d) => d.rule === "gender")).toBe(false);
     const single = score("文军", "female").result.deductions.find((d) => d.rule === "gender")!;
     expect(single).toMatchObject({ points: 25, positions: [0] }); // 单名那一个字偏，也是整个名字偏
+  });
+
+  it("姓 + 常见名连起来念成难听的词也扣（11-01 谐音表补词）；整名和姓+首字都撞上取重的", () => {
+    for (const [name, say] of [["冯梓涵", "「疯子」"], ["吴智宇", "「无知」"], ["马彤", "「马桶」"], ["皮艳", "不雅"]] as const) {
+      const homo = score(name).result.deductions.find((d) => d.rule === "homophone");
+      expect(homo, name).toBeDefined();
+      expect(homo!.line, name).toContain(say);
+    }
+    expect(checkFastCandidate("智宇", "吴").keep).toBe(false); // 直播起名的闸门也拦
+    // 胡丽晶：姓+首字是「狐狸」（15），整名是「狐狸精」（30），取整名
+    expect(score("胡丽晶").result.deductions.find((d) => d.rule === "homophone")).toMatchObject({ points: 30 });
+  });
+
+  it("和反面人物同名（秦桧、潘金莲）当硬伤扣，同音的不算", () => {
+    const pan = score("潘金莲", "female").result;
+    expect(pan.deductions.find((d) => d.rule === "infamous")!.line).toContain("《水浒传》");
+    expect(pan.bandLabel).toBe("建议改");
+    expect(score("秦桧").result.deductions.some((d) => d.rule === "infamous")).toBe(true);
+    expect(score("秦慧").result.deductions.some((d) => d.rule === "infamous")).toBe(false); // 秦慧是常见的好名字
+    expect(heardIssue(pan.deductions.find((d) => d.rule === "infamous")!)).toBe(true); // 换个同音字还是那个名字
+  });
+
+  it("没填性别时，按男孩、女孩各打一次，名字偏一边就给提醒", () => {
+    expect(genderRisk(resolveSplit("文海军")!, "unknown")).toEqual([
+      { gender: "female", points: 25, score: 65, bandLabel: "建议改" },
+    ]);
+    expect(genderRisk(resolveSplit("文海军")!, "female")).toEqual([]); // 填了性别就不用提醒
+    expect(genderRisk(resolveSplit("李知微")!, "unknown")).toEqual([]); // 中性的名字两边都不扣
   });
 
   it("性别倾向表补了漏的字（俊、飞、雅、梦……）；男女都常用的字照旧算中性", () => {
@@ -377,7 +405,7 @@ describe("改字", () => {
   });
 
   it("听出来的毛病读音必须变：文红艳换成文红雁那种同音改法不收", () => {
-    // 梓涵是烂大街名：紫涵按字查不撞名、分数还高（80 → 92），可念出来还是 zǐ hán
+    // 梓涵是烂大街名：紫涵按字查不撞名、分数还高（85 → 92），可念出来还是 zǐ hán
     expect(score("王紫涵", "female").result.score).toBe(92);
     expect(verify("王梓涵", "female", "紫涵")).toBeNull();
     expect(verify("王梓涵", "female", "知涵")).toMatchObject({ score: 92, soundLine: "zǐ → zhī" });

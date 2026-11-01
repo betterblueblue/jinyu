@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { isAuthenticated } from "@/auth/session";
 import { validateAnalysisInput } from "@/domain/analysis/analyze";
 import { nextStep } from "@/domain/score/next-step";
-import { resolveSplit, scoreName } from "@/domain/score/score";
+import { genderRisk, resolveSplit, scoreName } from "@/domain/score/score";
 
 /**
  * 打分榜：按规则打分，不调模型，几毫秒返回。
@@ -32,5 +32,6 @@ export async function POST(req: Request) {
   }
 
   const result = scoreName(split, checked.input.gender);
-  return NextResponse.json({ ok: true, result, next: nextStep(result) });
+  // 没填性别时，换成男孩 / 女孩会不会在男女用字上扣分：提词页提醒主播先问
+  return NextResponse.json({ ok: true, result, next: nextStep(result), genderRisk: genderRisk(split, checked.input.gender) });
 }

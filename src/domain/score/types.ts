@@ -22,7 +22,8 @@ export type ScoreRuleId =
   | "flatTone"
   | "sandhi"
   | "strokes"
-  | "style";
+  | "style"
+  | "infamous";
 
 export interface Deduction {
   rule: ScoreRuleId;
@@ -41,6 +42,14 @@ export interface Deduction {
 export interface FolkNote {
   char: string;
   line: string;
+}
+
+/** 没填性别时，换成这个性别会在男女用字上扣多少、得几分（提词页提醒主播先问是男宝还是女宝） */
+export interface GenderRisk {
+  gender: "male" | "female";
+  points: number;
+  score: number;
+  bandLabel: string;
 }
 
 export interface NameScore {

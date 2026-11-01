@@ -32,6 +32,8 @@ declare module "lunar-javascript" {
     getDayInChinese(): string;
     /** 以立春为界的年干支 */
     getYearInGanZhiExact(): string;
+    /** 属相，以春节（正月初一）为界，如「蛇」 */
+    getYearShengXiao(): string;
     /** 上一个「节」（立春、惊蛰……，月柱的分界） */
     getPrevJie(): JieQi;
     getNextJie(): JieQi;

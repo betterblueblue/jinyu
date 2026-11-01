@@ -26,6 +26,7 @@ const BLOCKING: Partial<Record<ScoreRuleId, string>> = {
   rare: "有不常用的字",
   misread: "有容易念错的字",
   eraName: "年代感重",
+  infamous: "和反面人物同名",
 };
 
 /** 理由后面带上是哪几个字 */

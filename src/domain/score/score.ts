@@ -14,11 +14,12 @@ import {
   FORBIDDEN,
   FORBIDDEN_MILD,
   HOT_CHARS,
+  INFAMOUS,
   SANDHI_SURNAME,
   SURNAME_TRAP,
   TEMPLATE_NAMES,
 } from "./lexicon";
-import type { Deduction, FolkNote, NameScore, ScoreBand, ScoreRuleId } from "./types";
+import type { Deduction, FolkNote, GenderRisk, NameScore, ScoreBand, ScoreRuleId } from "./types";
 
 /**
  * 直播打分：100 分减规则扣分。
@@ -34,7 +35,13 @@ import type { Deduction, FolkNote, NameScore, ScoreBand, ScoreRuleId } from "./t
 export const POINTS = {
   forbiddenSevere: 30,
   forbiddenMild: 15,
-  template: 20,
+  /**
+   * 撞烂大街名。11-01 由 20 改成 15：分界改到 80 以后，刘一诺（再扣笔画 5）、李子轩（再扣三声连读 3）掉进建议改，
+   * 和王梓涵 80 分可以用一比，像在找茬。直播起名和名字库照样把撞名当硬伤拦，不看分数
+   */
+  template: 15,
+  /** 和反面人物同名（11-01 加） */
+  infamous: 25,
   /**
    * 名里每个字都偏另一个性别（双名两个字都偏、单名那一个字偏），一听就是另一个性别的名字。
    * 11-01 由 15 / 8 改成 25（用户：文海军给女孩 75 分「可以用」不合理）：和整名年代感一样是整个名字的毛病，单这一条就落到「建议改」
@@ -72,6 +79,7 @@ const HEARD_RULES: ReadonlySet<ScoreRuleId> = new Set([
   "singleName",
   "flatTone",
   "sandhi",
+  "infamous",
 ]);
 
 export function heardIssue(d: Deduction): boolean {
@@ -86,8 +94,8 @@ const CN_NUM = ["", "一", "两", "三", "四", "五"];
 
 /**
  * 90 分以上非常优秀，80–89 可以用，80 以下建议改。
- * 11-01 「可以用」从 75 起改成 80 起（用户：75 分可以用，标准低了）：整个名字的毛病（整名年代感、整名偏另一个性别，
- * 都扣 25）单这一条就落到「建议改」；只撞了烂大街名（扣 20）还算可以用，再带一点别的毛病就是建议改。
+ * 11-01 「可以用」从 75 起改成 80 起（用户：75 分可以用，标准低了）：整个名字的毛病（整名年代感、整名偏另一个性别、
+ * 和反面人物同名，都扣 25）单这一条就落到「建议改」；只撞了烂大街名（扣 15）还算可以用，笔画轻重这类小毛病再带一条也还是可以用。
  */
 export function bandOf(score: number): { band: ScoreBand; label: string } {
   if (score >= 90) return { band: "great", label: "非常优秀" };
@@ -145,15 +153,29 @@ export function scoreName(split: NameSplit, gender: AnalysisGender): NameScore {
   const surLen = surOrig.length;
 
   const headHit = giv.length > 0 ? BAD_WORDS.get(flat.slice(0, surLen + 1).join("")) : undefined;
-  const fullHit = headHit ? undefined : BAD_WORDS.get(flat.join(""));
-  const bad = headHit ?? fullHit;
+  const fullHit = BAD_WORDS.get(flat.join(""));
+  // 姓 + 名首字和整个名字都撞上时取重的那个，一样重取整名（更具体：胡丽晶是「狐狸精」，不只是「狐狸」）
+  const useHead = Boolean(headHit) && (!fullHit || headHit!.points > fullHit.points);
+  const bad = useHead ? headHit : fullHit;
   if (bad) {
-    const span = headHit ? `${surname}${givOrig[0]}` : fullName;
+    const span = useHead ? `${surname}${givOrig[0]}` : fullName;
     add({
       rule: "homophone",
-      positions: headHit ? [0] : giv.map((_, i) => i),
+      positions: useHead ? [0] : giv.map((_, i) => i),
       points: bad.points,
       line: `「${span}」连起来念像${bad.say}，上学容易被起外号。`,
+      soundBound: true,
+    });
+  }
+
+  // 和反面人物同名（秦桧、潘金莲）：观众一听就想到那个人。全名一个字不差才算（2026-11-01 加）
+  const infamous = INFAMOUS.get(`${sur}${givStr}`);
+  if (infamous) {
+    add({
+      rule: "infamous",
+      positions: giv.map((_, i) => i),
+      points: POINTS.infamous,
+      line: `「${fullName}」和${infamous}同名，一报名字就有人想到这个人，上学容易被拿来开玩笑。`,
       soundBound: true,
     });
   }
@@ -379,4 +401,20 @@ export function scoreName(split: NameSplit, gender: AnalysisGender): NameScore {
     deductions,
     folk,
   };
+}
+
+/**
+ * 没填性别时，按男孩、女孩各打一次，看男女用字会不会扣分（2026-11-01 加）。
+ * 打分面板每打完一位就把性别清回「不填」，主播忘了按 1、2，文海军给女孩也是 90 分非常优秀；
+ * 提词页拿这个提醒主播先问一句是男宝还是女宝。填了性别、或者两边都不扣，返回空。
+ */
+export function genderRisk(split: NameSplit, gender: AnalysisGender): GenderRisk[] {
+  if (gender !== "unknown") return [];
+  const out: GenderRisk[] = [];
+  for (const g of ["male", "female"] as const) {
+    const r = scoreName(split, g);
+    const points = r.deductions.filter((d) => d.rule === "gender").reduce((s, d) => s + d.points, 0);
+    if (points > 0) out.push({ gender: g, points, score: r.score, bandLabel: r.bandLabel });
+  }
+  return out;
 }

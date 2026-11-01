@@ -119,7 +119,20 @@ function ScoreView({ round }: { round: PrompterScoreRound }) {
           ) : (
             <p className="mt-2 text-lg text-neutral-500">字义和寓意还在写，几秒就到……</p>
           )}
+          {round.merit.tip ? (
+            <p
+              className="mt-3 rounded border border-amber-400/50 bg-amber-400/10 px-4 py-3 text-[clamp(18px,2.4vw,26px)] leading-relaxed text-amber-200"
+              data-testid="prompter-merit-tip"
+            >
+              只给主播看：{round.merit.tip}
+            </p>
+          ) : null}
         </section>
+      ) : null}
+      {round.genderAsk ? (
+        <p className="mt-5 text-[clamp(22px,3.3vw,36px)] leading-relaxed text-sky-200" data-testid="prompter-gender-ask">
+          {round.genderAsk}
+        </p>
       ) : null}
       {round.checks ? (
         <p className="mt-5 text-[clamp(20px,2.8vw,30px)] leading-relaxed text-neutral-300" data-testid="prompter-checks">

@@ -58,8 +58,10 @@ export interface PrompterScoreRound {
   math?: string;
   /** 按规则查了哪几项、哪几项有毛病 */
   checks?: string;
-  /** 这个名字好在哪：拆字、合起来（模型写的，打完分几秒后补上；writing 时还没到） */
-  merit?: { writing: boolean; lines: string[] };
+  /** 这个名字好在哪：拆字、合起来（模型写的，打完分几秒后补上；writing 时还没到）。tip 只给主播看：谐音、撞名人 */
+  merit?: { writing: boolean; lines: string[]; tip?: string };
+  /** 没填性别、名字又偏一边：提醒主播先问男宝女宝 */
+  genderAsk?: string;
   deductions: { points: number; line: string }[];
   /** 民间说法，不扣分 */
   folk: string[];
@@ -197,9 +199,12 @@ function parseScoreRound(x: Record<string, unknown>): PrompterScoreRound | null 
     const m = x.merit as Record<string, unknown> | null;
     if (!m || typeof m !== "object" || !Array.isArray(m.lines) || m.lines.length > 2) return null;
     const lines = parseLines(m.lines);
-    if (lines === null) return null;
-    merit = { writing: m.writing === true, lines };
+    const tip = optText(m.tip);
+    if (lines === null || tip === null) return null;
+    merit = { writing: m.writing === true, lines, ...(tip ? { tip } : {}) };
   }
+  const genderAsk = optText(x.genderAsk);
+  if (genderAsk === null) return null;
   let fix: PrompterScoreRound["fix"];
   if (x.fix !== undefined) {
     const f = x.fix as Record<string, unknown> | null;
@@ -224,6 +229,7 @@ function parseScoreRound(x: Record<string, unknown>): PrompterScoreRound | null 
     ...(math ? { math } : {}),
     ...(checks ? { checks } : {}),
     ...(merit ? { merit } : {}),
+    ...(genderAsk ? { genderAsk } : {}),
     deductions,
     folk,
     ...(say ? { say } : {}),

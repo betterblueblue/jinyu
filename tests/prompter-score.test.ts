@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { FixOption, NameScore } from "@/domain/score/types";
 import { parsePrompterRound, type PrompterScoreRound } from "@/live/prompter";
-import { checksLine, prompterFromScore, type ScoreForPrompter } from "../app/live/prompter-sync";
+import { checksLine, genderAskLine, prompterFromScore, type ScoreForPrompter } from "../app/live/prompter-sync";
 
 const score: NameScore = {
   fullName: "文红艳",
@@ -71,16 +71,16 @@ describe("提词页：打分稿", () => {
     const r = round({ phase: "idle", options: [] });
     expect(r.math).toBe("100 − 25 = 75");
     expect(r.checks).toBe(
-      "按我们这套规则查了 10 项（谐音、和姓连读、生僻字、容易念错、字义、男女用字、重名、年代感、声调、笔画）；有毛病的是：年代感。",
+      "按我们这套规则查了 11 项（谐音、和姓连读、生僻字、容易念错、字义、男女用字、重名、和反面人物同名、年代感、声调、笔画）；有毛病的是：年代感。",
     );
   });
 
   it("查了哪几项：没填性别不查男女用字，照实说；一项都没毛病就说都过了", () => {
     const unknown = checksLine({ ...score, gender: "unknown" });
-    expect(unknown).toContain("查了 9 项");
+    expect(unknown).toContain("查了 10 项");
     expect(unknown).not.toContain("男女用字、");
     expect(unknown).toContain("没填性别，男女用字这一项没查。");
-    expect(checksLine({ ...score, deductions: [] })).toContain("10 项都过了。");
+    expect(checksLine({ ...score, deductions: [] })).toContain("11 项都过了。");
     // 娣是因为念着像「弟」才扣的，算谐音，不算字义
     const di = checksLine({
       ...score,
@@ -113,6 +113,31 @@ describe("提词页：打分稿", () => {
       expect(r.say, phase).toBeUndefined();
     }
     expect(round({ phase: "done", options: [option], shown: true }).fix!.options).toHaveLength(1);
+  });
+
+  it("没填性别、名字偏一边：提醒主播先问男宝女宝；只给主播看的那句提醒照样带上", () => {
+    const base: ScoreForPrompter = { no: 3, score, next: { kind: "fix", soundIssues: [] }, fix: { phase: "idle", options: [] } };
+    const ask = prompterFromScore({
+      ...base,
+      genderRisk: [{ gender: "female", points: 25, score: 65, bandLabel: "建议改" }],
+    }) as PrompterScoreRound;
+    expect(ask.genderAsk).toBe("没填性别：要是女孩，男女用字扣 25 分，65 分建议改。先问一句「是男宝还是女宝？」，选好性别再打一次分。");
+    expect((prompterFromScore(base) as PrompterScoreRound).genderAsk).toBeUndefined();
+    // 90 分以上、没填性别、名字偏一边：「不用改」只对一个性别成立，不说
+    const risky = prompterFromScore({
+      ...base,
+      next: { kind: "none", soundIssues: [] },
+      genderRisk: [{ gender: "female", points: 25, score: 65, bandLabel: "建议改" }],
+    }) as PrompterScoreRound;
+    expect(risky.say).toBeUndefined();
+    expect(risky.genderAsk).toContain("先问一句");
+    expect(genderAskLine([])).toBeUndefined();
+    const tip = prompterFromScore({
+      ...base,
+      merit: { phase: "done", chars: "红是红火。", whole: "合起来是日子红火。", tip: "和歌手王菲同名，观众可能会提。" },
+    }) as PrompterScoreRound;
+    expect(tip.merit).toEqual({ writing: false, lines: ["红是红火。", "合起来是日子红火。"], tip: "和歌手王菲同名，观众可能会提。" });
+    for (const r of [ask, tip]) expect(parsePrompterRound(JSON.parse(JSON.stringify(r)))).toEqual(r);
   });
 
   it("90 分以上说不用改；有读音硬伤时先问观众", () => {

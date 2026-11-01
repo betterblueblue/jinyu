@@ -29,10 +29,15 @@ export async function POST(req: Request) {
   if (!split) {
     return NextResponse.json({ ok: false, message: "姓名无法拆分" }, { status: 400 });
   }
+  const score = scoreName(split, checked.input.gender);
+  // 和反面人物同名（潘金莲）不夸「金色的莲花」：提词页不放这一段
+  if (score.deductions.some((d) => d.rule === "infamous")) {
+    return NextResponse.json({ ok: false, message: "和反面人物同名，不写好在哪" }, { status: 422 });
+  }
   const client = talkClient();
   if (!client) return NextResponse.json({ ok: false, message: "没有配模型钥匙" }, { status: 503 });
   try {
-    const merit = await writeMerit(scoreName(split, checked.input.gender), client, req.signal);
+    const merit = await writeMerit(score, client, req.signal);
     if (!merit) return NextResponse.json({ ok: false, message: "这次没写出来" }, { status: 502 });
     return NextResponse.json({ ok: true, merit });
   } catch (err) {
