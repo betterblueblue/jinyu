@@ -35,7 +35,12 @@ export const POINTS = {
   forbiddenSevere: 30,
   forbiddenMild: 15,
   template: 20,
-  genderBoth: 15,
+  /**
+   * 名里每个字都偏另一个性别（双名两个字都偏、单名那一个字偏），一听就是另一个性别的名字。
+   * 11-01 由 15 / 8 改成 25（用户：文海军给女孩 75 分「可以用」不合理）：和整名年代感一样是整个名字的毛病，单这一条就落到「建议改」
+   */
+  genderWhole: 25,
+  /** 偏另一个性别的字和中性字搭着用 */
   genderOne: 8,
   genderMixed: 5,
   misread: 12,
@@ -79,9 +84,14 @@ const STROKE_GAP = 9;
 const TONE_NAME = ["", "一声", "二声", "三声", "四声"];
 const CN_NUM = ["", "一", "两", "三", "四", "五"];
 
+/**
+ * 90 分以上非常优秀，80–89 可以用，80 以下建议改。
+ * 11-01 「可以用」从 75 起改成 80 起（用户：75 分可以用，标准低了）：整个名字的毛病（整名年代感、整名偏另一个性别，
+ * 都扣 25）单这一条就落到「建议改」；只撞了烂大街名（扣 20）还算可以用，再带一点别的毛病就是建议改。
+ */
 export function bandOf(score: number): { band: ScoreBand; label: string } {
   if (score >= 90) return { band: "great", label: "非常优秀" };
-  if (score >= 75) return { band: "ok", label: "可以用" };
+  if (score >= 80) return { band: "ok", label: "可以用" };
   return { band: "change", label: "建议改" };
 }
 
@@ -192,12 +202,14 @@ export function scoreName(split: NameSplit, gender: AnalysisGender): NameScore {
     const self = gender === "male" ? "男孩" : "女孩";
     const otherLabel = other === "male" ? "男孩" : "女孩";
     if (opp.length > 0 && same === 0) {
-      const both = opp.length >= 2;
+      const whole = opp.length === giv.length;
       add({
         rule: "gender",
         positions: opp,
-        points: both ? POINTS.genderBoth : POINTS.genderOne,
-        line: `${opp.map(q).join("")}在人名里${both ? "都" : ""}更多用在${otherLabel}身上，${self}用容易被认错。`,
+        points: whole ? POINTS.genderWhole : POINTS.genderOne,
+        line: whole
+          ? `${opp.map(q).join("")}在人名里${opp.length > 1 ? "都" : ""}更多用在${otherLabel}身上，整个名字一听就是${otherLabel}名，${self}用容易被认错。`
+          : `${opp.map(q).join("")}在人名里更多用在${otherLabel}身上，${self}用容易被认错。`,
       });
     } else if (opp.length > 0) {
       add({

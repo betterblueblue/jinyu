@@ -125,7 +125,7 @@ describe("打分规则", () => {
     ["皇甫明", "unknown", 100, []],
     ["李清幽", "female", 85, ["forbidden"]],
     ["王死", "unknown", 60, ["forbidden", "singleName"]],
-    ["李婷婷", "male", 65, ["gender", "eraName"]],
+    ["李婷婷", "male", 55, ["gender", "eraName"]], // 两个字都偏女孩：男女用字扣 25（11-01 前是 15）
     ["张伟丽", "female", 75, ["gender", "eraName"]],
     ["李一诺", "unknown", 75, ["template", "strokes"]], // 一 1 画、诺 10 画
     ["王秀英", "female", 70, ["eraName"]],
@@ -150,10 +150,22 @@ describe("打分规则", () => {
     });
   }
 
-  it("档位：90 以上非常优秀，75 到 89 可以用，75 以下建议改", () => {
+  it("档位：90 以上非常优秀，80 到 89 可以用，80 以下建议改", () => {
     expect(score("李知微", "female").result.bandLabel).toBe("非常优秀");
-    expect(score("张仡卓").result.bandLabel).toBe("可以用");
-    expect(score("王招娣", "female").result.bandLabel).toBe("建议改");
+    expect(score("张仡卓").result.bandLabel).toBe("可以用"); // 88
+    expect(score("王招娣", "female").result.bandLabel).toBe("建议改"); // 74
+    expect(score("文红艳", "female").result.bandLabel).toBe("建议改"); // 75：整名年代感
+  });
+
+  it("整个名字都偏另一个性别扣 25，单这一条就是建议改；一个字偏、一个字中性只扣 8", () => {
+    const hai = score("文海军", "female").result;
+    expect(hai.deductions.find((d) => d.rule === "gender")).toMatchObject({ points: 25, positions: [0, 1] });
+    expect(hai.deductions.find((d) => d.rule === "gender")!.line).toContain("一听就是男孩名");
+    expect(hai.score).toBe(65); // 还有「军」的年代感 10
+    expect(hai.bandLabel).toBe("建议改");
+    expect(score("文海军", "male").result.deductions.some((d) => d.rule === "gender")).toBe(false);
+    const single = score("文军", "female").result.deductions.find((d) => d.rule === "gender")!;
+    expect(single).toMatchObject({ points: 25, positions: [0] }); // 单名那一个字偏，也是整个名字偏
   });
 
   it("老一辈的常见名整名算一条，不再按单字重复扣", () => {

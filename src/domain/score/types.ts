@@ -1,7 +1,7 @@
 import type { AnalysisGender } from "@/domain/analysis/types";
 import type { NameSyllable } from "@/domain/pinyin-name";
 
-/** 90 分以上 great，75–89 ok，75 以下 change */
+/** 90 分以上 great，80–89 ok，80 以下 change（11-01 起；原来 75 起算 ok） */
 export type ScoreBand = "great" | "ok" | "change";
 
 export type ScoreRuleId =
