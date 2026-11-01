@@ -24,6 +24,7 @@ import { nextStep } from "@/domain/score/next-step";
 import { checkFastCandidate } from "@/fast/gate";
 import { ERA_CHARS, ERA_NAMES, FOLK } from "@/domain/score/lexicon";
 import { heardIssue, resolveSplit, scoreName } from "@/domain/score/score";
+import { leanOf } from "@/domain/analysis/gender-lean";
 import type { AnalysisGender } from "@/domain/analysis/types";
 import type { CharFixProvider } from "@/providers/fix-provider";
 import { FakeFixProvider } from "@/providers/fix-provider";
@@ -166,6 +167,14 @@ describe("打分规则", () => {
     expect(score("文海军", "male").result.deductions.some((d) => d.rule === "gender")).toBe(false);
     const single = score("文军", "female").result.deductions.find((d) => d.rule === "gender")!;
     expect(single).toMatchObject({ points: 25, positions: [0] }); // 单名那一个字偏，也是整个名字偏
+  });
+
+  it("性别倾向表补了漏的字（俊、飞、雅、梦……）；男女都常用的字照旧算中性", () => {
+    for (const c of "俊飞豪轩") expect(leanOf(c), c).toBe("male");
+    for (const c of "雅梦彤菲") expect(leanOf(c), c).toBe("female");
+    for (const c of "宇辰涵欣诺子晴") expect(leanOf(c), c).toBe("neutral"); // 晴：名字库里男孩的晴川、女孩的晴光都有
+    // 李雅给男孩：雅偏女孩，单名那一个字偏就是整个名字偏
+    expect(score("李雅", "male").result.deductions.find((d) => d.rule === "gender")).toMatchObject({ points: 25 });
   });
 
   it("老一辈的常见名整名算一条，不再按单字重复扣", () => {
