@@ -412,10 +412,11 @@
   display: flex;
 }
 
-/* 输入态 */
+/* 输入态：从上往下排，整块落在画面 65% 高度以上（再往下会被抖音评论盖住） */
 .live-stage .pane-input {
-  justify-content: center;
-  gap: 38px;
+  justify-content: flex-start;
+  padding-top: 96px;
+  gap: 40px;
 }
 .live-stage .hint {
   margin: 0;
@@ -452,6 +453,11 @@
 }
 .live-stage .surname-input:focus {
   border-bottom-color: var(--accent);
+}
+/* 全站输入框聚焦时有一圈方框（globals.css），直播画面上姓氏和生日只用底线变色表示在输入 */
+.live-stage .surname-input:focus-visible,
+.live-stage .birth-input:focus-visible {
+  box-shadow: none;
 }
 .live-stage .genders {
   display: flex;
@@ -556,33 +562,54 @@
   0%, 100% { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18), 0 3px 0 rgba(29, 26, 22, 0.2), 0 10px 30px rgba(29, 26, 22, 0.16); }
   50% { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.26), 0 3px 0 rgba(29, 26, 22, 0.2), 0 10px 44px rgba(29, 26, 22, 0.3); }
 }
-.live-stage .extra-bar {
+/* 生日一行：原生日期框去掉白底和系统蓝，字体、颜色跟着皮肤走 */
+.live-stage .birth-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-  width: 100%;
-  padding: 22px 0;
-  background: transparent;
-  border: 0;
-  border-top: 1px dashed var(--hair);
-  border-bottom: 1px dashed var(--hair);
-  font-family: inherit;
-  font-size: 28px;
-  letter-spacing: 0.12em;
+  padding: 12px 4px 12px 6px;
+  border-bottom: 1px solid var(--input-line);
+  font-size: 32px;
+  letter-spacing: 0.16em;
   color: var(--ink-2);
   cursor: pointer;
 }
-.live-stage .extra-bar:hover {
-  color: var(--ink-2);
+.live-stage .birth-row:focus-within {
+  border-bottom-color: var(--accent);
 }
-.live-stage .extra-sum {
-  color: var(--accent);
+.live-stage .birth-label small {
+  margin-left: 16px;
+  font-family: "Noto Sans SC", "PingFang SC", system-ui, sans-serif;
+  font-size: 22px;
   letter-spacing: 0.1em;
-}
-.live-stage .extra-sum.empty {
   color: var(--ink-3);
-  opacity: 0.6;
+  opacity: 0.8;
+}
+.live-stage .birth-input {
+  appearance: none;
+  -webkit-appearance: none;
+  padding: 6px 0;
+  background: transparent;
+  border: 0;
+  outline: none;
+  font-family: inherit;
+  font-size: 36px;
+  letter-spacing: 0.06em;
+  color: var(--ink);
+  color-scheme: light;
+  cursor: pointer;
+}
+.live-stage .birth-input.empty::-webkit-datetime-edit {
+  color: var(--ink-3);
+  opacity: 0.55;
+}
+/* 正在输入的那一段（年、月、日）是浏览器自带的蓝色高亮，CSS 改不了（Chrome 149 实测）；
+   盖掉就看不出在改哪一段，所以留着 */
+.live-stage .birth-input::-webkit-calendar-picker-indicator {
+  margin-left: 14px;
+  opacity: 0.4;
+  cursor: pointer;
 }
 .live-stage .queue {
   display: flex;
@@ -647,45 +674,93 @@
   cursor: pointer;
 }
 
-/* 生成态 */
+/* 生成态：等模型的那几秒只有圈在转（不演进度），结果到了再逐帧放真实阶段（.gen-log） */
 .live-stage .pane-gen {
-  justify-content: center;
-  gap: 44px;
+  justify-content: flex-start;
+  align-items: center;
+  padding-top: 150px;
+}
+.live-stage .gen-seal {
+  position: relative;
+  width: 400px;
+  height: 400px;
+  display: grid;
+  place-items: center;
+}
+.live-stage .gen-ring {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  animation: live-gen-spin 2.8s linear infinite;
+}
+.live-stage .gen-ring circle {
+  fill: none;
+}
+.live-stage .gen-ring-track {
+  stroke: var(--hair);
+  stroke-width: 1;
+}
+/* 内圈一圈小点，反着慢转，像印章的边 */
+.live-stage .gen-ring-dots {
+  stroke: var(--ink-3);
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-dasharray: 0.6 7.78;
+  opacity: 0.35;
+  transform-origin: 100px 100px;
+  animation: live-gen-spin-back 9s linear infinite;
+}
+.live-stage .gen-ring-arc {
+  stroke: var(--accent);
+  stroke-width: 3.2;
+  stroke-linecap: round;
+  stroke-dasharray: 1 578;
+  animation: live-gen-arc 1.9s ease-in-out infinite;
+}
+.live-stage .gen-char {
+  position: relative;
+  font-size: 176px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--ink-name);
+  animation: live-gen-ink 0.5s ease-out both, live-gen-breathe 2.4s ease-in-out 0.5s infinite;
+}
+@keyframes live-gen-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes live-gen-spin-back {
+  to { transform: rotate(-360deg); }
+}
+@keyframes live-gen-arc {
+  0% { stroke-dasharray: 1 578; stroke-dashoffset: 0; }
+  50% { stroke-dasharray: 260 578; stroke-dashoffset: -70; }
+  100% { stroke-dasharray: 1 578; stroke-dashoffset: -577; }
+}
+@keyframes live-gen-ink {
+  from { opacity: 0; filter: blur(6px); transform: scale(0.94); }
+  to { opacity: 1; filter: blur(0); transform: none; }
+}
+@keyframes live-gen-breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.8; }
 }
 .live-stage .gen-title {
-  margin: 0;
+  margin: 64px 0 0;
   text-align: center;
-  font-size: 46px;
-  letter-spacing: 0.18em;
-  color: var(--ink-3);
-}
-.live-stage .gen-title em {
-  font-style: normal;
-  font-size: 86px;
-  font-weight: 600;
-  color: var(--accent);
-  letter-spacing: 0.08em;
+  font-size: 44px;
+  letter-spacing: 0.16em;
+  padding-left: 0.16em;
+  color: var(--ink-2);
 }
 .live-stage .gen-extra {
-  margin: -26px 0 0;
+  margin: 20px 0 0;
   text-align: center;
-  font-size: 27px;
-  letter-spacing: 0.14em;
+  font-family: "Noto Sans SC", "PingFang SC", system-ui, sans-serif;
+  font-size: 24px;
+  letter-spacing: 0.1em;
   color: var(--ink-3);
-  min-height: 34px;
-}
-.live-stage .bar {
-  height: 6px;
-  background: var(--accent-soft);
-  border-radius: 999px;
-  overflow: hidden;
-}
-.live-stage .bar i {
-  display: block;
-  height: 100%;
-  width: 0;
-  background: var(--accent);
-  transition: width 0.6s linear;
 }
 
 /* 揭晓态 */
@@ -755,7 +830,7 @@
   filter: blur(6px);
 }
 .live-stage .pinyin {
-  margin: 34px 0 0;
+  margin: 28px 0 0;
   font-family: "Noto Sans SC", "PingFang SC", system-ui, sans-serif;
   font-size: var(--fs-py);
   /* 200 字重在直播画面缩到一半后基本看不见了，回到常规字重 */
@@ -776,15 +851,38 @@
   opacity: 0.8;
 }
 .live-stage .meaning {
-  margin: 44px 0 0;
+  margin: 36px 0 0;
   font-size: var(--fs-mean);
   font-weight: 500;
   letter-spacing: 0.14em;
   padding-left: 0.14em;
   color: var(--ink-2);
 }
+/* 名字下面的两行：标签，再一行「按 X 姓查过……」和生在什么时节 */
+.live-stage .facts {
+  margin: 36px 0 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.live-stage .assure {
+  margin: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-family: "Noto Sans SC", "PingFang SC", system-ui, sans-serif;
+  font-size: 22px;
+  letter-spacing: 0.08em;
+  color: var(--ink-2);
+}
+.live-stage .assure span + span {
+  margin-left: 22px;
+  padding-left: 22px;
+  border-left: 1px solid var(--hair);
+}
 .live-stage .tags {
-  margin: 52px 0 0;
+  margin: 0;
   padding: 0;
   list-style: none;
   display: flex;
@@ -826,67 +924,99 @@
   border-left: 0;
 }
 
-/* 四柱：只在开了生辰时出现，一行，压在下半部详解与备选之间 */
-.live-stage .bazi {
-  margin: 22px auto 0;
-  max-width: 900px;
-  text-align: center;
-  font-size: 22px;
-  letter-spacing: 0.16em;
-  color: var(--ink-3);
-}
-.live-stage .bazi .bazi-label {
-  color: var(--accent);
-  letter-spacing: 0.3em;
-  margin-right: 14px;
-}
-
-/* 多出「八字」一行和生辰行时会顶到备选，整体降一档并收紧间距 */
-.live-stage.has-bazi .sheet {
-  padding-bottom: 200px;
-}
-.live-stage.has-bazi .bazi {
-  margin-top: 8px;
-}
-.live-stage.has-bazi .alt {
-  margin-top: 10px;
-}
-.live-stage.has-bazi .alt-name {
-  font-size: 44px;
-}
-.live-stage.has-bazi .alt-one {
-  font-size: 24px;
-  -webkit-line-clamp: 2;
-}
 .live-stage .alt {
-  margin-top: 28px;
+  margin-top: 44px;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 20px;
 }
-.live-stage .alt-label {
-  font-size: 23px;
+/* 「备选」两边各一道细线，把首推和备选隔开 */
+.live-stage .alt-head {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  width: 72%;
+  font-size: 24px;
   letter-spacing: 0.4em;
   color: var(--ink-3);
-  position: relative;
+}
+.live-stage .alt-head::before,
+.live-stage .alt-head::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--hair);
+}
+.live-stage .alt-head span {
   padding-left: 0.4em;
 }
-.live-stage .alt-label::before {
-  content: "";
-  position: absolute;
-  left: -22px;
-  top: 50%;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--accent);
-  transform: translateY(-50%);
+
+/* 带出处时多出两行：整体上提、间距收一档、引文小一号，寓意两行时备选也落在 65% 高度以上 */
+.live-stage.has-cite .hero {
+  margin-top: calc(var(--hero-mt) - 24px);
 }
+.live-stage.has-cite .meaning {
+  margin-top: 28px;
+}
+.live-stage.has-cite .evidence {
+  margin-top: 26px;
+}
+.live-stage.has-cite .ev-quote {
+  font-size: 42px;
+}
+.live-stage.has-cite .facts {
+  margin-top: 28px;
+}
+.live-stage.has-cite .alt {
+  margin-top: 34px;
+}
+[data-skin="celadon"] .live-stage.has-cite .tags li {
+  padding: 8px 30px;
+}
+[data-skin="silver"] .live-stage.has-cite .kicker {
+  margin-top: 12px;
+}
+/*
+ * 还是压到 65% 线以下时（出处 + 两行寓意、名字库补位时备选都带出处这类），
+ * live-client 量出来给舞台打上 data-tight，各段间距再收一档。平常的卡片不受影响。
+ */
+.live-stage[data-tight] .hero {
+  margin-top: calc(var(--hero-mt) - 40px);
+}
+.live-stage[data-tight] .pinyin {
+  margin-top: 20px;
+}
+.live-stage[data-tight] .meaning {
+  margin-top: 22px;
+}
+.live-stage[data-tight] .evidence {
+  margin-top: 20px;
+}
+.live-stage[data-tight] .facts {
+  margin-top: 22px;
+  gap: 8px;
+}
+.live-stage[data-tight] .alt {
+  margin-top: 26px;
+  gap: 14px;
+}
+.live-stage[data-tight] .alt-item {
+  gap: 6px;
+}
+.live-stage[data-tight] .credit {
+  margin-top: 16px;
+}
+[data-skin="silver"] .live-stage[data-tight] .kicker {
+  margin-top: 0;
+}
+/* 备选三列等宽：列宽跟着内容走时，寓意长的那列会把别的列挤窄，折出单独一个字的一行 */
 .live-stage .alt-list {
-  display: flex;
-  justify-content: center;
-  gap: 96px;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 40px;
   width: 100%;
 }
 .live-stage .alt-item {
@@ -914,6 +1044,9 @@
   letter-spacing: 0.03em;
   color: var(--ink-2);
   line-height: 1.55;
+  /* 优先在逗号后折行（「开朗明媚，/ 像春天的阳光」），整句没有标点又放不下才逐字折 */
+  word-break: keep-all;
+  overflow-wrap: anywhere;
   max-width: 400px;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -925,6 +1058,8 @@
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
   max-width: 900px;
   margin-left: auto;
   margin-right: auto;
@@ -1212,23 +1347,31 @@
 
 /* ---------- 引文证据：原文凸排 + 核验戳 ---------- */
 .live-stage .evidence {
-  margin: 40px 0 0;
+  margin: 34px 0 0;
   padding: 0;
   text-align: center;
 }
 .live-stage .ev-quote {
   margin: 0;
-  font-size: var(--fs-mean);
+  font-size: 46px;
   font-weight: 400;
   letter-spacing: 0.08em;
   color: var(--ink);
-  line-height: 1.5;
+  line-height: 1.45;
+}
+/* 出处和核验戳并成一行 */
+.live-stage .ev-src {
+  margin: 12px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 10px 20px;
 }
 .live-stage .ev-piece {
-  margin: 12px 0 0;
   font-family: "Noto Sans SC", "PingFang SC", system-ui, sans-serif;
-  font-size: 20px;
-  font-weight: 300;
+  font-size: 22px;
+  font-weight: 400;
   letter-spacing: 0.08em;
   color: var(--ink-3);
 }
@@ -1236,7 +1379,7 @@
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  margin: 16px 0 0;
+  margin: 0;
   padding: 7px 16px;
   border: 1px solid var(--accent);
   border-radius: 3px;
@@ -1252,32 +1395,9 @@
   font-weight: 400;
   letter-spacing: 0.18em;
 }
-/* 体检一行：按观众的姓查过谐音和生僻字，压在「本场第几个」上面，存图同一个位置 */
-.live-stage .check {
-  margin: 26px 0 0;
-  text-align: center;
-  font-family: "Noto Sans SC", "PingFang SC", system-ui, sans-serif;
-  font-size: 20px;
-  font-weight: 400;
-  letter-spacing: 0.08em;
-  color: var(--ink-2);
-}
-.live-stage.has-bazi .check {
-  margin-top: 14px;
-}
-.live-stage .ledger {
-  margin: 18px 0 0;
-  text-align: center;
-  font-family: "Noto Sans SC", "PingFang SC", system-ui, sans-serif;
-  font-size: 18px;
-  font-weight: 300;
-  letter-spacing: 0.1em;
-  color: var(--ink-3);
-  opacity: 0.85;
-}
-/* 揭晓页最后一行，和存图底部同一句 */
+/* 揭晓页最后一行：本场第几个（和存图对得上）+ 和存图底部同一句落款 */
 .live-stage .credit {
-  margin: 22px 0 0;
+  margin: 28px 0 0;
   text-align: center;
   font-family: "Noto Sans SC", "PingFang SC", system-ui, sans-serif;
   font-size: 18px;
@@ -1317,6 +1437,9 @@
   font-weight: 300;
   letter-spacing: 0.04em;
   line-height: 1.4;
+  /* 在引文和篇名之间折，不把《》里的篇名拆成两半 */
+  word-break: keep-all;
+  overflow-wrap: anywhere;
   color: var(--accent);
   opacity: 0.92;
   display: -webkit-box;
@@ -1324,26 +1447,58 @@
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-/* 加载页：真实阶段，不是演的 */
+/* 加载页：真实阶段，不是演的。等模型时只有「正在起草候选」一行，三个点在跳 */
 .live-stage .gen-log {
-  margin: 26px 0 0;
+  margin: 56px 0 0;
   padding: 0;
   list-style: none;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 14px;
 }
 .live-stage .gen-log li {
   font-family: "Noto Sans SC", "PingFang SC", system-ui, sans-serif;
-  font-size: 20px;
-  font-weight: 300;
+  font-size: 24px;
+  font-weight: 400;
   letter-spacing: 0.08em;
   color: var(--ink-3);
-  opacity: 0.6;
+  opacity: 0.7;
+  animation: live-gen-line 0.24s ease-out both;
+}
+.live-stage .gen-log li::before {
+  content: "✓";
+  margin-right: 12px;
+  color: var(--accent);
 }
 .live-stage .gen-log li.on {
-  font-size: 27px;
+  font-size: 30px;
   color: var(--ink);
   opacity: 1;
+}
+.live-stage .gen-log li.wait::before {
+  content: none;
+}
+.live-stage .gen-log li.wait i {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-left: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+  vertical-align: middle;
+  animation: live-gen-dot 1.2s ease-in-out infinite;
+}
+.live-stage .gen-log li.wait i:nth-of-type(2) {
+  animation-delay: 0.2s;
+}
+.live-stage .gen-log li.wait i:nth-of-type(3) {
+  animation-delay: 0.4s;
+}
+@keyframes live-gen-dot {
+  0%, 80%, 100% { opacity: 0.2; }
+  40% { opacity: 1; }
+}
+@keyframes live-gen-line {
+  from { opacity: 0; transform: translateY(8px); }
 }

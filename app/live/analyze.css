@@ -1,32 +1,38 @@
-/* 输入态里的入口：已经有名字的人走这条 */
+/* 输入态最下面的入口：已经有名字的人走这条。一行小字，不和「开始取名」抢 */
 .live-stage .entry-bar {
-  display: flex;
+  align-self: center;
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  width: 100%;
-  padding: 24px 2px;
+  gap: 10px;
+  padding: 8px 16px;
   background: transparent;
   border: 0;
-  border-bottom: 1px dashed var(--hair);
   font-family: inherit;
-  font-size: 25px;
-  letter-spacing: 0.16em;
-  color: var(--ink-2);
+  font-size: 27px;
+  letter-spacing: 0.12em;
+  color: var(--ink-3);
   cursor: pointer;
   transition: color 0.16s ease-out;
 }
-.live-stage .entry-bar span:last-child {
+.live-stage .entry-bar b {
+  font-weight: 500;
+  color: var(--ink-2);
+  padding-bottom: 2px;
+  border-bottom: 1px solid var(--hair);
+}
+.live-stage .entry-bar em {
+  margin-left: 6px;
+  padding: 1px 8px;
+  border: 1px solid var(--hair);
+  border-radius: 3px;
+  font-style: normal;
   font-family: "Noto Sans SC", system-ui, sans-serif;
-  font-size: 21px;
-  font-weight: 300;
-  letter-spacing: 0.1em;
+  font-size: 18px;
+  letter-spacing: 0;
   color: var(--ink-3);
 }
-.live-stage .entry-bar:hover {
-  color: var(--accent);
-}
-.live-stage .entry-bar:hover span:last-child {
+.live-stage .entry-bar:hover,
+.live-stage .entry-bar:hover b {
   color: var(--accent);
 }
 

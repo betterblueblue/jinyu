@@ -3,8 +3,8 @@ import type { Gender, Phase } from "./show-data";
 
 /**
  * 直播台快捷键：A 打开名字打分、S 换肤、Esc 关面板；
- * 揭晓态空格或回车回到输入，输入态空格开始取名；1、2、3 选男、女、未知。
- * 输入框里的 1、2、3 和回车由输入框自己处理，这里不管。
+ * 揭晓态空格或回车回到输入，输入态空格开始取名；1、2 选男、女（起名没有「未知」）。
+ * 输入框里的 1、2 和回车由输入框自己处理，这里不管。
  */
 export function useLiveKeys(o: {
   phase: Phase;
@@ -50,7 +50,6 @@ export function useLiveKeys(o: {
       }
       if (e.key === "1") setGender("male");
       if (e.key === "2") setGender("female");
-      if (e.key === "3") setGender("unknown");
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);

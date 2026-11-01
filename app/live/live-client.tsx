@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { FAST_RECENT_MAX, type FastFormInput } from "@/fast/types";
 import { AnalyzePanel } from "./analyze-panel";
 import { downloadCard } from "./card-export";
@@ -19,7 +19,10 @@ import "./live.css";
 
 const SKIN_LABEL: Record<Skin, string> = { paper: "宣纸", celadon: "青瓷", silver: "刻版", bamboo: "竹兰" };
 const SKINS: Skin[] = ["paper", "celadon", "silver", "bamboo"];
-const G_LABEL: Record<Gender, string> = { male: "男", female: "女", unknown: "未知" };
+/** 起名只能是男或女：不选就是没选（gender 为 unknown），按钮是灰的 */
+const G_LABEL = { male: "男", female: "女" } as const;
+/** 每帧真实阶段在加载页停多久 */
+const FRAME_MS = 240;
 
 export function LiveClient() {
   // 默认开竹兰；S 键仍按 paper → celadon → silver → bamboo 循环
@@ -29,9 +32,11 @@ export function LiveClient() {
   const [draft, setDraft] = useState("");
   /** 精简版唯一的可选项：生日。填了才排盘，不填不提八字 */
   const [birthday, setBirthday] = useState("");
-  /** 加载页的真实阶段：候选几个、拦了谁、核到几条。内容全部来自服务端事件 */
+  /**
+   * 加载页的真实阶段：候选几个、拦了谁、核到几条。内容全部来自服务端事件，结果到了才有；
+   * 还是空的时候就是在等模型，页面只显示「正在起草候选」，不演进度
+   */
   const [frames, setFrames] = useState<string[]>([]);
-  const [progress, setProgress] = useState(0);
   const [show, setShow] = useState<ShowData | null>(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,6 +44,7 @@ export function LiveClient() {
   const [analyzeOpen, setAnalyzeOpen] = useState(false);
 
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const stageRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const busy = useRef(false);
   /** 第几轮：补写的稿子回来时用它认是不是还是这一轮 */
@@ -71,6 +77,25 @@ export function LiveClient() {
   }, []);
 
   /**
+   * 揭晓页最后一行（落款）的下沿过了画面 65% 高度（下面会被抖音评论盖住），就给舞台打上 data-tight，
+   * CSS 把各段间距收一档。每换一张卡、换一次皮肤都先按正常间距重量。
+   * offsetTop 不受整体缩放和入场动画的 transform 影响，量到的就是 1080×1920 画布上的位置；
+   * data-tight 直接写在 DOM 上、不走 React 的 props，重渲染不会把它冲掉。
+   */
+  useLayoutEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    delete stage.dataset.tight;
+    const last = stage.querySelector<HTMLElement>(".pane.on .credit");
+    if (!last) return;
+    let bottom = last.offsetHeight;
+    for (let el: HTMLElement | null = last; el && el !== stage; el = el.offsetParent as HTMLElement | null) {
+      bottom += el.offsetTop;
+    }
+    if (bottom > 1920 * 0.65) stage.dataset.tight = "";
+  }, [show, skin, phase]);
+
+  /**
    * hydrate 之前打进输入框的字符只存在于 DOM，React 收不到 onChange（指针/点击事件要等 hydrate 才绑上）。
    * 这类字符会让「开始取名」一直 disabled，之后继续打字还会和它拼在一起（「苏」+「李」=「李苏」）。
    * 挂载后把 DOM 里的现值同步回状态，双方就一致了。
@@ -89,23 +114,23 @@ export function LiveClient() {
       inputRef.current?.focus();
       return;
     }
+    const picked = override?.gender ?? gender;
+    if (picked === "unknown") {
+      // 没选性别就留在输入页提示，不先闪一下加载页再跳回来
+      setError("先选性别：按 1 男 / 2 女，再点开始取名");
+      return;
+    }
     busy.current = true;
     const token = ++roundToken.current;
     setPhase("generating");
-    setFrames(["正在征名"]);
-    setProgress(12);
+    setFrames([]);
     setError(null);
 
-    const pushFrame = (text: string, p: number) => {
+    const pushFrame = (text: string) => {
       setFrames((f) => (f[f.length - 1] === text ? f : [...f.slice(-3), text]));
-      setProgress((q) => Math.max(q, p));
     };
 
     try {
-      const picked = override?.gender ?? gender;
-      if (picked === "unknown") {
-        throw new Error("先选性别：按 1 男 / 2 女，再点开始取名");
-      }
       // 打分榜「重新起名」会传空串：那位观众没报生日，不能带上直播台上一位的
       const bday = override?.birthday ?? birthday;
       const body: FastFormInput = {
@@ -125,11 +150,11 @@ export function LiveClient() {
       if (!payload) throw new Error("生成失败");
       if (!payload.ok) throw new Error(payload.message || "生成失败");
 
-      // 逐帧放出来，每帧 260ms；没有帧就直接揭晓
+      // 逐帧放出来，每帧 FRAME_MS；没有帧就直接揭晓
       const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-      for (let i = 0; i < staged.length; i++) {
-        pushFrame(staged[i]!, 35 + Math.round(((i + 1) / (staged.length + 1)) * 55));
-        await sleep(260);
+      for (const frame of staged) {
+        pushFrame(frame);
+        await sleep(FRAME_MS);
       }
 
       setShow(fastToShow(payload, cardNo, recentRef.current.length));
@@ -148,7 +173,6 @@ export function LiveClient() {
       const keepOld = recentRef.current.filter((n) => !justGiven.includes(n));
       recentRef.current = [...keepOld, ...justGiven].slice(-FAST_RECENT_MAX);
       setCardNo((n) => n + 1);
-      setProgress(100);
       setReady(false);
       setPhase("reveal");
       requestAnimationFrame(() => requestAnimationFrame(() => setReady(true)));
@@ -181,7 +205,6 @@ export function LiveClient() {
     pushPrompter({ state: "idle" });
     setShow(null);
     setReady(false);
-    setProgress(0);
     setDraft("");
     // 直播是连续换观众：性别与生日一起清零，
     // 否则上一位的条件会静默带到下一位身上，画面里只显示成一行小字
@@ -204,11 +227,12 @@ export function LiveClient() {
   }, [show, skin]);
 
   const curSurname = draft.trim();
+  const canGo = Boolean(curSurname) && gender !== "unknown";
 
   return (
     <div className="live-root" ref={rootRef} data-skin={skin}>
       <div className="live-viewport">
-        <div className={`live-stage ${ready ? "ready" : ""} ${show?.bazi ? "has-bazi" : ""}`}>
+        <div ref={stageRef} className={`live-stage ${ready ? "ready" : ""} ${show?.cite ? "has-cite" : ""}`}>
           <div className="sheen" />
           <div className="toplight" />
           <div className="fiber" />
@@ -250,10 +274,6 @@ export function LiveClient() {
                       e.preventDefault();
                       setGender("female");
                     }
-                    if (e.key === "3") {
-                      e.preventDefault();
-                      setGender("unknown");
-                    }
                   }}
                   placeholder="姓氏"
                   maxLength={3}
@@ -262,7 +282,7 @@ export function LiveClient() {
                 />
               </div>
               <div className="genders">
-                {(["male", "female", "unknown"] as Gender[]).map((g, i) => (
+                {(["male", "female"] as const).map((g, i) => (
                   <button
                     key={g}
                     type="button"
@@ -275,59 +295,76 @@ export function LiveClient() {
                 ))}
               </div>
 
-              <button
-                type="button"
-                className={`go ${curSurname ? "" : "is-empty"}`}
-                onClick={() => void generate()}
-                disabled={!curSurname}
-              >
-                <span className="go-main">开始取名</span>
-              </button>
-
-              <label className="extra-bar">
-                <span>生日（可选）</span>
+              <label className="birth-row">
+                <span className="birth-label">
+                  生日<small>可选</small>
+                </span>
                 <input
                   type="date"
-                  className="extra-sum"
+                  className={`birth-input ${birthday ? "" : "empty"}`}
                   value={birthday}
                   onChange={(e) => setBirthday(e.target.value)}
                   aria-label="宝宝生日，可不填"
                 />
               </label>
 
+              <button
+                type="button"
+                className={`go ${canGo ? "" : "is-empty"}`}
+                onClick={() => void generate()}
+                disabled={!canGo}
+              >
+                <span className="go-main">开始取名</span>
+              </button>
+
               <button type="button" className="entry-bar" onClick={() => setAnalyzeOpen(true)}>
-                <span>名字分析</span>
-                <span>已经有名字？看看读音、字义和使用体验 · A</span>
+                已经有名字？<b>名字分析</b>
+                <em>A</em>
               </button>
 
               {error && <p className="gen-error">{error}</p>}
             </section>
 
-            {/* 生成态 */}
+            {/* 生成态：等模型时只转圈，不演进度；结果到了再逐帧放真实阶段 */}
             <section className={`pane pane-gen ${phase === "generating" ? "on" : ""}`}>
+              <div className="gen-seal" aria-hidden="true">
+                <svg className="gen-ring" viewBox="0 0 200 200">
+                  <circle className="gen-ring-track" cx="100" cy="100" r="92" />
+                  <circle className="gen-ring-dots" cx="100" cy="100" r="80" />
+                  <circle className="gen-ring-arc" cx="100" cy="100" r="92" />
+                </svg>
+                <span className="gen-char">{curSurname}</span>
+              </div>
               <p className="gen-title">
-                正在为 <em>{curSurname}</em> 取名
+                正在为{curSurname}姓{gender === "male" ? "男孩" : "女孩"}起名
               </p>
               <p className="gen-extra">
-                {birthday ? `双字名 · 避开网红名 · 生辰 ${birthday}` : "双字名 · 避开网红名"}
+                双字名 · 避开网红名 · 查谐音和生僻字{birthday ? " · 参考出生时节" : ""}
               </p>
               <ul className="gen-log">
-                {frames.map((f, i) => (
-                  <li key={`${f}-${i}`} className={i === frames.length - 1 ? "on" : ""}>
-                    {f}
+                {frames.length === 0 ? (
+                  <li className="on wait">
+                    正在起草候选
+                    <i />
+                    <i />
+                    <i />
                   </li>
-                ))}
+                ) : (
+                  frames.map((f, i) => (
+                    <li key={`${f}-${i}`} className={i === frames.length - 1 ? "on" : ""}>
+                      {f}
+                    </li>
+                  ))
+                )}
               </ul>
-              <div className="bar">
-                <i style={{ width: `${progress}%` }} />
-              </div>
             </section>
 
             {/* 揭晓态 */}
             <section className={`pane ${phase === "reveal" ? "on" : ""}`}>
               <div className="kicker">
                 <i />
-                REVEAL / No.{String(cardNo).padStart(3, "0")}
+                {/* 用这张卡自己的编号：cardNo 揭晓时已经加 1，会比落款「本场第 N 个」多一 */}
+                REVEAL / No.{String(show?.no ?? cardNo).padStart(3, "0")}
               </div>
               {show && <RevealView show={show} />}
             </section>
