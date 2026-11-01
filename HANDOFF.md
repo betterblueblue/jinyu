@@ -103,6 +103,8 @@ scripts/
   probe-fast.ts           直播起名真模型探针
   probe-fix.ts            改字真模型探针：一批名字打分、改一个字，表写到 data/eval/fix-*.md；不走接口、不推提词页
   live-stats.ts           一场直播的统计：读 data/live-log/<日期>.jsonl，写成几行白话
+  blind-naming-probe.ts   盲测探针：同样的姓和性别，直播台起一轮、随手问同一个模型一次，再跑一批难姓；结果写到系统临时目录，拼页时存进 data/eval/blind-2026-11-01/probe.json（总体方案 A13）
+  blind-naming-build.ts   把探针结果拼成盲选页 data/eval/blind-2026-11-01/naming-blind.html，模板 blind-naming-template.html
   eval-fast.ts            调提示词用的评测（版本表在 eval-fast-variants.ts）
   build-seed-chars.ts     生成起手字表
   name-library/           10-30 那版自动建库，已不用
