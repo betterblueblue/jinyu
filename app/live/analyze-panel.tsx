@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { splitFullName } from "@/domain/analysis/split-name";
 import type { FixOption, GenderRisk, NameScore, NextStep } from "@/domain/score/types";
 import { readFixStream } from "./fix-stream";
+import { logLive } from "./live-log-client";
 import { fetchMerit, prompterFromScore, pushPrompter, type ScoreForPrompter } from "./prompter-sync";
 import "./analyze.css";
 
@@ -36,6 +37,10 @@ interface FixState {
   shown: boolean;
   /** 第几次改：再改一次时，上一次晚到的结果认得出来、丢掉 */
   run: number;
+  /** 主播点「改一个字」的时刻（日志算等了多久）；后台先改、还没点的没有 */
+  clickedAt?: number;
+  /** 点的时候后台已经改完了（日志用） */
+  prefetched?: boolean;
   phase: "idle" | "running" | "done" | "error";
   /** 模型写好、核过的改法，边收边加 */
   options: FixOption[];
@@ -143,9 +148,12 @@ export function AnalyzePanel({ open, onClose, onRename }: Props) {
    * 每一行各改各的，不再一次只许一个：后台先改的那一行不能挡住主播在别的行上点改字。
    */
   const runFix = useCallback(
-    async (id: number, input: Row["input"], shown: boolean) => {
+    async (id: number, input: Row["input"], shown: boolean, clickedAt?: number) => {
       const run = ++fixRun.current;
-      patch(id, (r) => ({ ...r, fix: { ...IDLE_FIX, shown, run, phase: "running", misses: r.fix.misses } }));
+      patch(id, (r) => ({
+        ...r,
+        fix: { ...IDLE_FIX, shown, run, phase: "running", misses: r.fix.misses, ...(clickedAt ? { clickedAt } : {}) },
+      }));
       const mine = (r: Row) => r.fix.run === run;
       // 模型每核过一个改法，服务端推一帧：马上收下，亮着的话观众屏幕和提词页也跟着更新
       const addOption = (option: FixOption) =>
@@ -195,16 +203,45 @@ export function AnalyzePanel({ open, onClose, onRename }: Props) {
   const onFixClick = useCallback(
     (row: Row) => {
       const f = row.fix;
+      const clickedAt = Date.now();
       if (!f.shown && (f.phase === "running" || f.phase === "done")) {
         const missed = f.phase === "done" && f.options.length === 0;
-        patch(row.id, (r) => ({ ...r, fix: { ...r.fix, shown: true, misses: missed ? r.fix.misses + 1 : r.fix.misses } }));
+        patch(row.id, (r) => ({
+          ...r,
+          fix: { ...r.fix, shown: true, clickedAt, prefetched: f.phase === "done", misses: missed ? r.fix.misses + 1 : r.fix.misses },
+        }));
         return;
       }
       if (f.shown && f.phase === "running") return;
-      void runFix(row.id, row.input, true);
+      void runFix(row.id, row.input, true, clickedAt);
     },
     [patch, runFix],
   );
+
+  // 直播日志：主播点了「改一个字」的那次改，改完（或出错）时记一条，每次改只记一次。
+  // 等了多久算到第一条改法出来（观众真等的是这一段）；改法记全部，不只第一条
+  const fixLogged = useRef(new Set<number>());
+  const fixFirstAt = useRef(new Map<number, number>());
+  useEffect(() => {
+    for (const r of rows) {
+      const f = r.fix;
+      if (!r.score || !f.shown || !f.clickedAt || fixLogged.current.has(f.run)) continue;
+      if (f.options.length > 0 && !fixFirstAt.current.has(f.run)) fixFirstAt.current.set(f.run, Date.now());
+      if (f.phase === "running") continue;
+      fixLogged.current.add(f.run);
+      const firstAt = fixFirstAt.current.get(f.run) ?? Date.now();
+      fixFirstAt.current.delete(f.run);
+      logLive({
+        kind: "fix",
+        fullName: r.score.fullName,
+        waitMs: firstAt - f.clickedAt,
+        prefetched: f.prefetched === true,
+        options: f.options.slice(0, 3).map((o) => ({ fullName: o.fullName, score: o.score })),
+        ...(f.unfixable ? { unfixable: f.unfixable.slice(0, 120) } : {}),
+        ...(f.phase === "error" ? { error: (f.message ?? "改字没成功").slice(0, 120) } : {}),
+      });
+    }
+  }, [rows]);
 
   useEffect(() => {
     if (open) requestAnimationFrame(() => inputRef.current?.focus());
@@ -258,11 +295,23 @@ export function AnalyzePanel({ open, onClose, onRename }: Props) {
         ...(genderRisk?.length ? { genderRisk } : {}),
         ...(infamous ? {} : { merit: { phase: "writing" as const } }),
       }));
+      logLive({
+        kind: "score",
+        fullName: result.fullName,
+        gender: input.gender,
+        score: result.score,
+        bandLabel: result.bandLabel,
+        rules: [...new Set(result.deductions.map((d) => d.rule))],
+        next: next?.kind ?? (result.band === "great" ? "none" : "fix"),
+        genderAsk: Boolean(genderRisk?.length),
+      });
       // 「这个名字好在哪」要调模型，几秒后才到：不等它，也不占改字那把锁，主播先念分数和查了哪几项
       if (!infamous) {
-        void fetchMerit(input).then((merit) =>
-          patch(id, (r) => ({ ...r, merit: merit ? { phase: "done", ...merit } : { phase: "error" } })),
-        );
+        const meritAt = Date.now();
+        void fetchMerit(input).then((merit) => {
+          logLive({ kind: "merit", fullName: result.fullName, ok: Boolean(merit), tip: Boolean(merit?.tip), ms: Date.now() - meritAt });
+          patch(id, (r) => ({ ...r, merit: merit ? { phase: "done", ...merit } : { phase: "error" } }));
+        });
       }
       // 90 分以下的，改字也马上在后台开始写（不亮出来）：主播讲分数、扣分理由那几秒，模型已经在写了
       if (result.band !== "great") void runFix(id, input, false);
@@ -438,7 +487,11 @@ export function AnalyzePanel({ open, onClose, onRename }: Props) {
               score={selected.score}
               running={selected.fix.shown && selected.fix.phase === "running"}
               onFix={() => onFixClick(selected)}
-              onChoose={(i) => patch(selected.id, (r) => ({ ...r, fix: { ...r.fix, chosen: i } }))}
+              onChoose={(i) => {
+                patch(selected.id, (r) => ({ ...r, fix: { ...r.fix, chosen: i } }));
+                const chosen = selected.fix.options[i];
+                if (chosen && selected.score) logLive({ kind: "choose", fullName: selected.score.fullName, chosen: chosen.fullName });
+              }}
               onRename={onRename}
             />
           )}

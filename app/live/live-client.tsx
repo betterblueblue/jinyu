@@ -6,7 +6,8 @@ import { AnalyzePanel } from "./analyze-panel";
 import { downloadCard } from "./card-export";
 import { readFastResponse } from "./fast-stream";
 import type { PrompterRound } from "@/live/prompter";
-import { GENDER_WORD, fetchTalks, prompterFromFast, pushPrompter } from "./prompter-sync";
+import { logLive } from "./live-log-client";
+import { GENDER_WORD, fetchTalks, namesNeedingTalk, prompterFromFast, pushPrompter } from "./prompter-sync";
 import { RevealView } from "./reveal-view";
 import { fastToShow, type Gender, type Phase, type ShowData, type Skin } from "./show-data";
 import { useLiveKeys } from "./use-live-keys";
@@ -124,7 +125,15 @@ export function LiveClient() {
 
   /** 从名字分析带过来的约束：姓氏已定、要避开的字、定向要求 */
   const generate = useCallback(
-    async (override?: { surname?: string; gender?: Gender; birthday?: string; taboo?: string; requirements?: string }) => {
+    async (override?: {
+      surname?: string;
+      gender?: Gender;
+      birthday?: string;
+      taboo?: string;
+      requirements?: string;
+      /** 从打分榜「重新起名」过来的：日志里分开数 */
+      from?: "score";
+    }) => {
     if (busy.current) return;
     const surname = (override?.surname ?? draft).trim();
     if (!surname) {
@@ -139,6 +148,8 @@ export function LiveClient() {
     }
     busy.current = true;
     const token = ++roundToken.current;
+    /** 从按下开始到揭晓：观众真等的时间，日志里记这个 */
+    const startedAt = Date.now();
     setPhase("generating");
     setFrames([]);
     setError(null);
@@ -178,7 +189,9 @@ export function LiveClient() {
       pushLive(prompterFromFast(payload, cardNo));
       // 模型起的名字没有现成稿子：再请模型写拆字、合起来，写好了补推一次提词页。
       // 观众屏幕不等它；主播已经点了「下一个」的话（token 变了）就不推，免得盖掉下一位
+      const needed = namesNeedingTalk(payload).length;
       void fetchTalks(payload, bday || undefined).then((talks) => {
+        if (needed) logLive({ kind: "talk", primary: payload.primary.fullName, needed, written: Object.keys(talks).length });
         if (roundToken.current === token) pushLive(prompterFromFast(payload, cardNo, talks));
       });
       // 记下这一场已经给过哪些名字：下一轮带着去重，观众不会连着看到同一个名。
@@ -189,12 +202,25 @@ export function LiveClient() {
       );
       const keepOld = recentRef.current.filter((n) => !justGiven.includes(n));
       recentRef.current = [...keepOld, ...justGiven].slice(-FAST_RECENT_MAX);
+      logLive({
+        kind: "naming",
+        surname,
+        gender: picked,
+        birthday: Boolean(bday),
+        primary: payload.primary.fullName,
+        alternatives: payload.alternatives.map((a) => a.fullName),
+        library: Boolean(payload.primary.library),
+        waitMs: Date.now() - startedAt,
+        ...(override?.from ? { from: override.from } : {}),
+      });
       setCardNo((n) => n + 1);
       setReady(false);
       setPhase("reveal");
       requestAnimationFrame(() => requestAnimationFrame(() => setReady(true)));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "生成失败");
+      const message = e instanceof Error ? e.message : "生成失败";
+      logLive({ kind: "nameError", surname, message: message.slice(0, 120) });
+      setError(message);
       setPhase("input");
       setShow(null);
       pushLive({ state: "idle" });
@@ -212,7 +238,7 @@ export function LiveClient() {
       setDraft(input.surname);
       setGender(input.gender);
       setBirthday("");
-      void generate({ surname: input.surname, gender: input.gender, birthday: "" });
+      void generate({ surname: input.surname, gender: input.gender, birthday: "", from: "score" });
     },
     [generate],
   );
@@ -240,6 +266,7 @@ export function LiveClient() {
   /* ---------- 存图 ---------- */
   const exportCard = useCallback(() => {
     if (!show) return;
+    logLive({ kind: "card", fullName: show.full });
     void downloadCard(show, skin, bgImage.current);
   }, [show, skin]);
 
