@@ -10,7 +10,7 @@
 
 | 用法 | 页面 | 接口 | 耗时 | 说明 |
 |---|---|---|---|---|
-| 直播起名 | `/live` | `POST /api/fast?stream=1`（NDJSON） | 3–5 秒 | 姓 + 性别（生日可选）→ 首推 1 个 + 备选 3 个，能存图 |
+| 直播起名 | `/live` | `POST /api/fast?stream=1`（NDJSON） | 3–5 秒 | 姓 + 性别（生日可选）→ 首推 1 个 + 备选 3 个，都是模型现起，能存图；出结果后 `POST /api/fast/talk` 给提词页补写稿子 |
 | 名字打分、改字 | `/live` 里按 A | `POST /api/analyze/score`、`/api/analyze/fix` | 打分几毫秒；改字调一次模型 | 观众报全名，按规则打分，告诉主播下一步 |
 | 主播提词 | `/live/prompter` | `GET` / `POST /api/live/prompter` | 每秒取一次 | 只给主播看的口播稿 |
 | 名字评审 | `/review` | `POST /api/review` | — | 用户给起草的名字评五档 |
@@ -28,7 +28,7 @@ pnpm install
 cp .env.example .env.local   # 填 LLM_API_KEY，改掉默认密码和 JINYU_SESSION_SECRET
 pnpm dev                     # next dev -p 9000；也可以 .\start-dev.ps1（先查依赖和端口）
 pnpm typecheck               # tsc --noEmit
-pnpm test                    # vitest：14 个文件、217 个用例，全走假模型
+pnpm test                    # vitest：15 个文件、234 个用例，全走假模型
 ```
 
 - **直播**：双击 `启动直播台.bat`，用 Edge 或 Chrome 的 `--app` 模式开纯净窗口，再调 `tools/fit-window.ps1` 把窗口内容区压成 9:16（1080p 屏上是 576×1024）。直播伴侣里用「窗口」捕获这个窗口，不要用显示器捕获。`启动提词页.bat` 在直播窗口右边开提词页；手机打开同一地址，登录后自动回到提词页。两个 bat 里写死了局域网 IP `192.168.31.211`，IP 变了要改。
@@ -36,6 +36,7 @@ pnpm test                    # vitest：14 个文件、217 个用例，全走假
 - **备份名字库**：双击 `备份名字库.bat`，打包到 `backups/`（不进 git），再拷到 U 盘或网盘。库有改动就跑一次。
 - **e2e**：`pnpm e2e`，只覆盖完整版（`e2e/golden-path`、`e2e/unknown-gender`）。9000 上开着开发服务时直接复用它，走真模型，要几分钟；没开时自己起一个、强制假模型。账号从 `.env.local` 读，跑完把新增的报告挪进 `data/_trash/`。
 - **真模型探针**：`$env:ROUNDS=4; $env:SURNAME="沈"; $env:GENDER="female"; pnpm tsx scripts/probe-fast.ts`；再设 `SESSION=1` 模拟同一场连续出名，`BIRTHDAY=2026-03-15` 带生日。
+- **调提示词用的评测**：`$env:ROUNDS=40; pnpm tsx scripts/eval-fast.ts base v2`。按一场直播的样子连着起名（几十个姓、男女、一半带生日、同一场去重），几个版本交替跑，结果在 `data/eval/<时间>/summary.md`：耗时、重复、相邻几轮共用字、生日呼应，加每轮名单给人逐个看。新版本先写在 `scripts/eval-fast-variants.ts`，比线上好了再搬进 `src/fast`。
 - **不要跑 `pnpm lint`**：项目没有 ESLint 配置，`next lint` 会停在交互提问上。
 - **语料**第一次要下载：`pnpm corpus:build`（Unihan 字表 + 23 部书，约 31MB）。没装也能跑，出处一律不显示，不会编。
 
@@ -48,6 +49,8 @@ pnpm test                    # vitest：14 个文件、217 个用例，全走假
 | `LLM_MODEL` | `opendesign/deepseek-v4.1-flash` | 只用这个模型（用户定的，别换） |
 | `LLM_USE_FAKE` | 关 | `true` 时完整版、八字、改字走假模型；直播起名不看它 |
 | `FAST_HEDGE_MS` | 5000 | 直播起名第一路多少毫秒没回就补发第二路。本机设的是 0：一开始就两路一起发，调用量翻倍 |
+| `FAST_PRIMARY` | `model` | 直播首推从哪来；设成 `library` 就回到「首推从名字库挑」 |
+| `FAST_LANES` | 2 | 直播起名一轮发几路（每路一组不同的起手字，谁先回用谁）。设 3 慢轮次更少，调用量多一半 |
 | `JINYU_AUTH_USERNAME` / `JINYU_AUTH_PASSWORD` | `jinyu` / `change-me` | 唯一账号 |
 | `JINYU_SESSION_SECRET` | 代码里的开发用串 | 登录 cookie 的签名密钥 |
 | `JINYU_DATA_DIR` | `./data` | 报告、名字库、评审结果的根目录；测试指到临时目录 |
@@ -74,7 +77,8 @@ app/
   bazi/                   八字页
   api/                    接口，见第一节
 src/
-  fast/                   直播起名：normalize、seeds（起手字）、provider（模型、补发）、gate（闸门）、cite（核出处）、run（编排）
+  fast/                   直播起名：normalize、seeds（起手字）、birth（出生时节）、prompt、provider（模型、补发）、gate（闸门）、
+                          taste（口味过滤）、cite（核出处）、run（编排）、talk（给提词页补写稿子）
   library/                名字库：live-pick（挑首推）、talk（口播稿）、review-store（评审读写）、review-types
   live/                   提词页：prompter（格式校验）、prompter-store（只在内存）
   domain/score/           打分规则 score.ts、推荐线 recommend.ts、改字 fix.ts、下一步 next-step.ts
@@ -84,12 +88,14 @@ src/
   providers/              模型客户端。chat.ts 是共用的流式 Chat Completions；stepfun-provider 名字是旧的，现在是通用 OpenAI 兼容客户端
   render/                 摘要图：satori 画 SVG，resvg 转 PNG
   store/                  完整版报告：data/reports/<id>.json + data/index.json
-  config/                 字表：忌字、谐音、热门名、起手字、出生地（places-cn.json）等
+  config/                 字表：忌字、谐音、热门名、起手字、用户评过不要的名字（rejected-names.json）、出生地（places-cn.json）等
 scripts/
   library/                建库：build-review、publish、corpus、find-pairs、mine-pairs、locate
   corpus/                 下载语料、建字表
   fortune/build-places.mjs  从 Wikidata 重建出生地表
   probe-fast.ts           直播起名真模型探针
+  eval-fast.ts            调提示词用的评测（版本表在 eval-fast-variants.ts）
+  build-seed-chars.ts     生成起手字表
   name-library/           10-30 那版自动建库，已不用
   其余 bench-*、probe-*、e2e-real-llm.mjs  早期比模型、测完整版用的
 tests/                    单元测试；e2e/ 只有完整版
@@ -102,17 +108,18 @@ data/                     不进 git：reports/、index.json、corpus/、name-li
 
 1. 主播输姓，按 1 或 2 选性别（不选会提示），按空格或点按钮。页面先告诉提词页这一轮开始了，再请求 `POST /api/fast?stream=1`，带上这一场给过的名字（`recent`，整场都记，最多 500 个）。
 2. `src/fast/run.ts` 依次做：
-   - 校验；填了生日就排盘，屏幕上只用属相和季节，四柱只给模型参考；
-   - `seeds.ts` 抽 5 个起手字（本场没用过的优先），主路、补发各一组；
+   - 校验；填了生日，屏幕上那行只给属相和季节，提示词里不提生日（不给四柱）；
+   - `seeds.ts` 抽 5 个起手字（本场没用过的优先），主路、补发各一组；填了生日，第一个起手字按出生季节抽（`birth.ts`）；
    - `provider.ts` 调一次模型要 5 个候选，`reasoning_effort=low`，补发按 `FAST_HEDGE_MS`；
    - `gate.ts` 过闸门，里面调 `recommend.ts`：没有硬伤、打分不低于 90 才留；
+   - 起出名字库里的名字，换成库里那一条（带核过的出处和整段口播稿）；其余过 `taste.ts`：用户评过不要的、叠字、否定字、迟暮冷清的字、两个字都带三点水的不出；
    - 模型给了出处才用 `cite.ts` 回语料逐字核，核不过当没有；
-   - 去掉本场给过的，排序；
-   - `live-pick.ts` 从名字库挑首推：性别对得上、本场没给过、配这个姓能过同一道闸门；有出处的、分高的在前，同档随机。挑不到才用模型的；
-   - 备选取模型的 3 个。模型出错或能用的不到 3 个，从库里补；库里也不够才报错。
+   - 去掉本场给过的，排序：有出处 → 不带热门字 → 两个字都在起手字表里 → 最近三轮没用过的字 → 带按季节抽的那个字 → 最近十轮没用过的字；
+   - 首推取排第一的，备选取后面 3 个（`FAST_PRIMARY=library` 时首推先从名字库挑）。模型出错或能用的不到 3 个，从库里补；库里也不够才报错。
 3. 接口先推阶段帧（模型给了几个、闸门拦了谁），最后一帧是结果。
-4. 页面用 `fastToShow` 把结果转成 `ShowData`，屏幕和存图都只读它；同时推提词页：库里的名字推整段口播稿（`src/library/talk.ts`），模型起的只有一句话和体检句。
-5. 按空格「下一个」：姓、性别、生日一起清空，提词页回到等待。
+4. 页面用 `fastToShow` 把结果转成 `ShowData`，屏幕和存图都只读它；同时推提词页：库里的名字推整段口播稿（`src/library/talk.ts`），模型起的先推一句话和体检句，标「还在写」。
+5. 页面接着请 `POST /api/fast/talk`（`src/fast/talk.ts`）给模型起的名字写拆字、合起来、读音提醒（名字里有按季节抽的字，合起来那句先讲一句时节），写好了补推一次提词页；主播已经点了「下一个」就不推。
+6. 按空格「下一个」：姓、性别、生日一起清空，提词页回到等待。
 
 ### 名字打分、改字
 
@@ -143,7 +150,7 @@ data/                     不进 git：reports/、index.json、corpus/、name-li
 | 10-31 | 起手字：每轮从 `src/config/seed-chars.json` 抽 5 个字给模型起手；同一场去重在本地做 | 不给起点时模型反复出知夏、知远；把给过的名字写进提示词，更慢，还照样重复 |
 | 10-31 | `reasoning_effort=low`，提示词写明「推理里只写候选名字」 | 不限死时约每 6 轮有 1 轮推理 4800 字、单轮 26 秒 |
 | 10-31 | `FAST_HEDGE_MS=0`，两路一起发 | 用户同意。能压住 15–30 秒的极端轮次，代价是调用量翻倍 |
-| 10-31 | 首推从人评过的名字库出，备选仍由模型起 | 用户看了诊断后交给 agent 定，取代同一天早些时候的「直播只靠模型、不要名字池」。规则判不了品味，只能查硬伤 |
+| 10-31 | 首推从人评过的名字库出，备选仍由模型起 | 用户看了诊断后交给 agent 定，取代同一天早些时候的「直播只靠模型、不要名字池」。规则判不了品味，只能查硬伤。11-01 又改回模型起，见下 |
 | 10-31 | 只留一套推荐规则：没有硬伤、自评不低于 90（`recommend.ts`），直播、完整版、名字库都调它 | 以前三套各写各的，直播放行的名字到打分榜被扣到 80 多 |
 | 10-31 | 出处不强求：有就讲（逐字核过），没有就不讲；去掉「字出」（「某」字见某篇） | 观众会把字出听成整个名字出自那首诗。重要程度：寓意 > 气质 > 好念 > 出处 |
 | 10-31 | 直播不讲八字、五行；填了生日只显示属相和季节 | 合规，依据见总体方案第三节第 5 点 |
@@ -152,6 +159,11 @@ data/                     不进 git：reports/、index.json、corpus/、name-li
 | 10-31 | 完整版（`/name`、`src/domain/*` 的生成逻辑）先不动；直播先不换正式模式 | 用户定：直播版全部搞定再说 |
 | 10-31 | 提词页只存内存、挂在 `globalThis` 上；推不上不影响直播台 | 开发模式热更新会重跑模块，放在模块变量里会被清掉 |
 | 11-01 | 名字库停在 79 个；备选也不从库里出 | 用户定先不扩库（每批起草再评太慢）。备选也从库里出的话，一轮用掉两个，库会更早用完 |
+| 11-01 | 直播首推改回模型起；名字库用来定口味（起手字表、不要的名字）、撞上时换成库里那条、模型出错时补位 | 用户定：名字库算一次探索，起名靠调模型，兼顾速度、质量、不重复。`FAST_PRIMARY=library` 能切回 |
+| 11-01 | 口味交给起手字表和本地过滤，提示词基本不加条目 | 交替评测：提示词里每加一条口味，模型都要想一遍，推理中位 169 → 509 字，超 5 秒的轮次翻倍；只换起手字表，耗时不变，不要的名字少一大半 |
+| 11-01 | 生日不进提示词，不给四柱：第一个起手字按出生季节抽，首推优先用带这个字的名字，提词页稿子讲一句时节 | 直播只讲属相和季节，按四柱挑的字主播讲不出来。在提示词里加一句「第 1 个名字呼应时节」，有生日的轮次中位 3.4 → 5.6 秒 |
+| 11-01 | 一场里出过的名字不再出：过滤后不够 3 个，先从名字库补、再少出几个备选，一个新名字都没有才放行；最近四轮用过的字排序时最先避开 | 用户定：一场里不能重复，挨得近的更不行。旧做法「不够 3 个就不过滤」在评测里让徽音、昭宁第二次上了屏 |
+| 11-01 | 模型起的名字另调一次模型补写口播稿，观众屏幕不等 | 3–4 个名字一次中位 5 秒，主播讲首推的工夫就补上了；没人审过，所以不许引诗句、不许命理词 |
 | 11-01 | 农历在服务端换算 | `lunar-javascript` 约 400KB，不进浏览器 |
 | 11-01 | 解读和排盘对不上的句子整句删，不让模型重写；只查能机械判断的 | 重写要再等一次模型；宁可漏，不可错删 |
 | 未定 | 两套八字排盘没合并：完整版 `src/domain/bazi.ts` 按钟表时间，八字页 `src/fortune` 按真太阳时，同一生辰时柱可能不同 | 等用户定（总体方案 F2） |
@@ -169,6 +181,8 @@ data/                     不进 git：reports/、index.json、corpus/、name-li
 - 删掉接口路由以后，`.next/types/` 里会留着旧的类型文件，`pnpm typecheck` 报错，删掉那个旧文件即可。
 - 等模型的长命令（探针、真模型测试）要用后台进程跑，输出写进日志再读；执行工具会提前返回、丢掉后面的输出。
 - Next 的路由播报元素也是 `role="alert"`，Playwright 找表单报错要写 `form p[role='alert']`。
+- 比两版提示词的快慢，要放在同一时段交替跑（`scripts/eval-fast.ts` 就是这么跑的）：网关忙闲能让同一版的中位差一倍。
+- `reasoning_effort` 设成 `minimal`、`none`，这个网关照样推理，压不下来；只有 `low` 和「推理里只写候选名字」有用。
 
 ## 7. 文档
 
