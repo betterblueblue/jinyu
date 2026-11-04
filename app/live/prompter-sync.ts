@@ -1,4 +1,5 @@
 import type { Deduction, FixOption, GenderRisk, NameScore, NextStep, ScoreRuleId } from "@/domain/score/types";
+import type { EvalCandidate, EvalStatus, NameFacts, OriginalEvaluation } from "@/domain/evaluate/types";
 import type { FastCandidate, FastSuccess } from "@/fast/types";
 import { checkLine, talkLines } from "@/library/talk";
 import type { PrompterName, PrompterRound } from "@/live/prompter";
@@ -224,9 +225,110 @@ export function prompterFromScore(s: ScoreForPrompter): PrompterRound {
   };
 }
 
+/**
+ * 综合评价（/api/analyze/evaluate）→ 提词页。
+ * 顺序照方案：原名优点 → 主要问题 → 建议保留还是调整 → 改了什么 → 为什么更合适 → 寓意与取舍。
+ * 改法没亮出来之前不推，主播点了才推。
+ */
+export interface EvaluationForPrompter {
+  no: number;
+  facts: NameFacts;
+  original: OriginalEvaluation | null;
+  candidates: EvalCandidate[];
+  status?: EvalStatus;
+  note?: string;
+  /** 主播点过「改一个字」没有；没点时候选不推 */
+  fixShown: boolean;
+  /** 模型推理里正在看的判断，一句一条 */
+  thoughts?: string[];
+}
+
+const STATUS_WORD: Record<EvalStatus, string> = {
+  options: "可以用",
+  no_better: "可以用",
+  all_rejected: "改法没通过核验",
+  one_char_insufficient: "一个字难改",
+  needs_gender: "先确认性别",
+  error: "没评完",
+  timeout: "超时",
+};
+
+export function prompterFromEvaluation(s: EvaluationForPrompter): PrompterRound {
+  const o = s.original;
+  const status = s.status;
+  const dimensions = o
+    ? [
+        { label: "读音", score: o.scores.dimensions.pronunciation, max: 20 },
+        { label: "字义", score: o.scores.dimensions.meaning, max: 20 },
+        { label: "气质", score: o.scores.dimensions.temperament, max: 20 },
+        { label: "识读", score: o.scores.dimensions.literacy, max: 15 },
+        { label: "流行", score: o.scores.dimensions.popularity, max: 10 },
+        { label: "谐音", score: o.scores.dimensions.homophone, max: 15 },
+      ]
+    : [];
+  // 解决项只留第一句，太长主播念不动；R1 这种编号对主播没意义
+  const shortIssue = (text: string) => (text.split(/[，。；！？]/)[0] ?? text).slice(0, 20);
+  const issueById = new Map((o?.issues ?? []).map((it) => [it.id, shortIssue(it.text)]));
+  const options = s.fixShown
+    ? s.candidates.map((c) => ({
+        full: c.fullName,
+        pinyin: c.pinyin,
+        change: `${c.from} → ${c.to} · ${c.soundLine} · ${c.why}`,
+        score: c.scores.total,
+        meaning: c.spoken,
+        ...(c.solves.length ? { solves: c.solves.map((id) => issueById.get(id) ?? id) } : {}),
+        ...(c.keeps.length ? { keeps: c.keeps } : {}),
+        ...(c.loss ? { loss: c.loss } : {}),
+      }))
+    : [];
+  const issues = o
+    ? o.issues.map((it) => ({ text: it.text, importance: it.importance }))
+    : // 模型还没返回时，先把规则确认的问题给主播念（facts 几百毫秒就到）
+      s.facts.issues.map((it) => ({ text: it.line, importance: it.severity === "plain" ? ("minor" as const) : ("major" as const) }));
+  const capNote =
+    o && o.scores.cap !== null
+      ? `基础 ${o.scores.base} 分，被「${o.scores.capReason ?? "已确认的问题"}」压到 ${o.scores.total} 分`
+      : undefined;
+  const checks = undefined;
+  const meritLines = [o?.comment, o?.charMeaning, o?.whole].filter((x): x is string => Boolean(x));
+  const merit = meritLines.length ? { writing: false, lines: meritLines } : undefined;
+  let say: string | undefined;
+  if (status === "needs_gender") say = "先问一句：是男宝还是女宝？选好性别再打一次分。";
+  else if (status === "options") say = o && o.issues.length ? "毛病在哪说清楚了，往下看改法。" : "这个名字整体不错。";
+  else if (status === "no_better") say = "这个名没有更好的改法，可以用。";
+  else if (status === "all_rejected") say = "模型给的改法没通过核验，可以再试一次。";
+  else if (status === "one_char_insufficient") say = `只改一个字解决不了${s.note ? `：${s.note}` : ""}。`;
+  else if (status === "timeout") say = "评价没跑完，先念上面已经核过的部分。";
+  else if (status === "error") say = "评价没完成，先念上面已经核过的部分。";
+  const note =
+    status === "all_rejected" || status === "one_char_insufficient" || status === "error" || status === "timeout"
+      ? s.note
+      : undefined;
+
+  return {
+    state: "score",
+    no: s.no,
+    full: s.facts.fullName,
+    pinyin: s.facts.pinyin,
+    score: o?.scores.total ?? 0,
+    bandLabel: o?.scores.bandLabel ?? (status ? STATUS_WORD[status] : "评价中"),
+    ...(checks ? { checks } : {}),
+    ...(dimensions.length ? { dimensions } : {}),
+    ...(merit ? { merit } : {}),
+    ...(s.thoughts?.length ? { thinking: s.thoughts.slice(0, 6) } : {}),
+    ...(o?.strengths.length ? { strengths: o.strengths } : {}),
+    ...(issues?.length ? { issues } : {}),
+    ...(capNote ? { capNote } : {}),
+    ...(status === "needs_gender" ? { genderAsk: "没填性别，先问是男宝还是女宝，再打一次分。" } : {}),
+    deductions: [],
+    folk: s.facts.reminders.slice(0, 4),
+    ...(say ? { say } : {}),
+    ...(s.fixShown ? { fix: { running: status === undefined, options, ...(note ? { note } : {}) } } : {}),
+  };
+}
+
 /** 这一轮里要模型补写稿子的名字：首推和备选里没有库里稿子的 */
-export function namesNeedingTalk(data: FastSuccess): { givenName: string; why: string }[] {
-  return [data.primary, ...data.alternatives]
+export function namesNeedingTalk(data: FastSuccess): { givenName: string; why: string }[] {  return [data.primary, ...data.alternatives]
     .filter((c) => !c.library?.talk)
     .map((c) => ({ givenName: c.givenName, why: c.why }));
 }

@@ -48,6 +48,12 @@
   background: var(--stage-bg);
   animation: ap-in 0.22s ease-out;
 }
+/* 竹兰皮肤的背景是竹叶图片，面板只继承渐变会差一层，补上同一张图 */
+[data-skin="bamboo"] .live-stage .ap {
+  background-image: url("/skins/bamboo-paper.webp"), var(--stage-bg);
+  background-size: cover, auto;
+  background-position: center, center;
+}
 @keyframes ap-in {
   from {
     opacity: 0;
@@ -83,18 +89,6 @@
   align-items: center;
   gap: 22px;
   min-width: 0;
-}
-.live-stage .ap-seal {
-  flex: none;
-  width: 64px;
-  height: 64px;
-  display: grid;
-  place-items: center;
-  background: var(--accent);
-  color: #f7f0df;
-  font-size: 34px;
-  font-weight: 600;
-  line-height: 1;
 }
 .live-stage .ap-name {
   flex: none;

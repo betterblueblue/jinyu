@@ -103,7 +103,7 @@ describe("提词页：打分稿", () => {
     expect(done.merit).toEqual({ writing: false, lines: ["红是红火。", "合起来是日子红火。"] });
     expect((prompterFromScore({ ...base, merit: { phase: "error" } }) as PrompterScoreRound).merit).toBeUndefined();
     for (const r of [writing, done]) expect(parsePrompterRound(JSON.parse(JSON.stringify(r)))).toEqual(r);
-    expect(parsePrompterRound({ ...done, merit: { writing: false, lines: ["一", "二", "三"] } })).toBeNull();
+    expect(parsePrompterRound({ ...done, merit: { writing: false, lines: ["一", "二", "三", "四"] } })).toBeNull();
   });
 
   it("后台先改、主播还没点的：提词页当没改过，不出过渡的话也不出改法", () => {

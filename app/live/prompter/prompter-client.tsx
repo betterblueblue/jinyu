@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import type { PrompterPrimary, PrompterRound, PrompterScoreRound, PrompterSnapshot } from "@/live/prompter";
 
-/** 一秒问一次：直播页出结果到这里换稿，最多晚一秒 */
-const POLL_MS = 1000;
+/** 0.4 秒问一次：分数、理由、候选是分三段推的，刷新太快了主播看不到「先出分、后出理由」 */
+const POLL_MS = 400;
 
 const SOURCE_NOTE: Record<PrompterPrimary["source"], string> = {
   library: "名字库 · 照着念",
@@ -95,7 +95,7 @@ function Ready({ round }: { round: Extract<PrompterRound, { state: "ready" }> })
   );
 }
 
-/** 打分榜选中的那位观众：分数和扣分理由先念，改法写好一条出一条 */
+/** 打分榜选中的那位观众：分数、优点、问题先念，改法写好一条出一条 */
 function ScoreView({ round }: { round: PrompterScoreRound }) {
   const { fix } = round;
   return (
@@ -104,9 +104,68 @@ function ScoreView({ round }: { round: PrompterScoreRound }) {
       <p className="mt-4 text-6xl font-semibold tracking-[0.2em] text-white sm:text-7xl">{round.full}</p>
       <p className="mt-3 text-2xl tracking-widest text-neutral-300 sm:text-3xl">{round.pinyin}</p>
       <p className="mt-4 text-4xl font-semibold text-amber-300">
-        {round.score} 分 · {round.bandLabel}
+        {round.score > 0 ? `${round.score} 分 · ${round.bandLabel}` : round.bandLabel}
         {round.math ? <span className="ml-4 text-2xl font-normal text-neutral-400">{round.math}</span> : null}
       </p>
+      {round.capNote ? (
+        <p className="mt-2 text-[clamp(18px,2.4vw,26px)] text-amber-200" data-testid="prompter-cap">
+          {round.capNote}
+        </p>
+      ) : null}
+      {round.thinking?.length ? (
+        <section
+          className="mt-4 rounded border border-neutral-700 bg-neutral-900/70 px-4 py-3"
+          data-testid="prompter-thinking"
+        >
+          <p className="text-lg tracking-widest text-neutral-400">模型正在看（还没定，可以先顺着说）</p>
+          <ul className="mt-2 space-y-1 text-[clamp(18px,2.4vw,26px)] leading-relaxed text-neutral-300">
+            {round.thinking.map((t) => (
+              <li key={t}>· {t}</li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+      {round.dimensions?.length ? (
+        <div
+          className="mt-4 flex flex-wrap gap-x-5 gap-y-1 text-[clamp(18px,2.4vw,26px)] text-neutral-300"
+          data-testid="prompter-dimensions"
+        >
+          {round.dimensions.map((d) => (
+            <span key={d.label}>
+              {d.label} <b className="text-neutral-100">{d.score}</b>/{d.max}
+            </span>
+          ))}
+        </div>
+      ) : null}
+      {round.strengths?.length ? (
+        <section className="mt-6" data-testid="prompter-strengths">
+          <p className="text-lg tracking-widest text-neutral-400">原名好在哪</p>
+          <ul className="mt-2 space-y-2 text-[clamp(22px,3.3vw,36px)] leading-relaxed text-neutral-50">
+            {round.strengths.map((s) => (
+              <li key={s}>{s}</li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+      {round.issues?.length ? (
+        <section className="mt-6" data-testid="prompter-issues">
+          <p className="text-lg tracking-widest text-neutral-400">主要问题</p>
+          <ol className="mt-2 space-y-3">
+            {round.issues.map((it, i) => (
+              <li
+                key={`${i}-${it.text}`}
+                className={
+                  it.importance === "major"
+                    ? "text-[clamp(22px,3.3vw,36px)] leading-relaxed text-amber-100"
+                    : "text-[clamp(20px,2.8vw,30px)] leading-relaxed text-neutral-300"
+                }
+              >
+                {it.text}
+              </li>
+            ))}
+          </ol>
+        </section>
+      ) : null}
       {round.merit ? (
         <section className="mt-6" data-testid="prompter-merit">
           <p className="text-lg tracking-widest text-neutral-400">先说好在哪 · 模型写的，念之前扫一眼</p>
@@ -166,15 +225,27 @@ function ScoreView({ round }: { round: PrompterScoreRound }) {
         <section className="mt-8 border-t border-neutral-700 pt-5" data-testid="prompter-fixes">
           <p className="text-lg tracking-widest text-neutral-400">改一个字 · 寓意是模型写的，没人审过，念之前扫一眼</p>
           <ul className="mt-3 space-y-6">
-            {fix.options.map((o) => (
+            {fix.options.map((o, i) => (
               <li key={o.full} className="text-[clamp(20px,2.8vw,30px)] leading-relaxed" data-testid="prompter-fix">
                 <p>
+                  <span className="mr-2 rounded border border-amber-400/60 px-2 py-0.5 text-[clamp(14px,1.8vw,18px)] text-amber-300">
+                    {i === 0 ? "首选" : "备选"}
+                  </span>
                   <span className="font-semibold text-white">{o.full}</span>
                   <span className="ml-3 text-neutral-400">{o.pinyin}</span>
                   <span className="ml-3 text-amber-300">{o.score} 分</span>
                 </p>
                 <p className="text-[clamp(16px,2.2vw,22px)] text-neutral-400">{o.change}</p>
+                {o.solves?.length ? (
+                  <p className="mt-1 text-[clamp(16px,2.2vw,22px)] text-emerald-300">解决：{o.solves.join("、")}</p>
+                ) : null}
+                {o.keeps?.length ? (
+                  <p className="text-[clamp(16px,2.2vw,22px)] text-sky-300">保留：{o.keeps.join("、")}</p>
+                ) : null}
                 <p className="mt-1 text-[clamp(22px,3.3vw,36px)] leading-relaxed text-neutral-50">{o.meaning}</p>
+                {o.loss ? (
+                  <p className="mt-1 text-[clamp(16px,2.2vw,22px)] text-neutral-400">取舍：{o.loss}</p>
+                ) : null}
               </li>
             ))}
           </ul>

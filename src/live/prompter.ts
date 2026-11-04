@@ -40,6 +40,12 @@ export interface PrompterFix {
   change: string;
   score: number;
   meaning: string;
+  /** 解决了原名哪几个问题 */
+  solves?: string[];
+  /** 保住了原名哪几个优点 */
+  keeps?: string[];
+  /** 损失与取舍 */
+  loss?: string;
 }
 
 /**
@@ -58,6 +64,16 @@ export interface PrompterScoreRound {
   math?: string;
   /** 按规则查了哪几项、哪几项有毛病 */
   checks?: string;
+  /** 六维：读音、字义、性别辨识、风格、识读、流行、谐音 */
+  dimensions?: { label: string; score: number; max: number; reason?: string }[];
+  /** 模型推理里正在看的判断，还没定；推理过程中给主播照着念，别冷场 */
+  thinking?: string[];
+  /** 主要优点，主播先念 */
+  strengths?: string[];
+  /** 问题，带重要程度 */
+  issues?: { text: string; importance: "major" | "minor" }[];
+  /** 上限说明：基础多少分、被什么压到多少 */
+  capNote?: string;
   /** 这个名字好在哪：拆字、合起来（模型写的，打完分几秒后补上；writing 时还没到）。tip 只给主播看：谐音、撞名人 */
   merit?: { writing: boolean; lines: string[]; tip?: string };
   /** 没填性别、名字又偏一边：提醒主播先问男宝女宝 */
@@ -157,6 +173,18 @@ function isScore(v: unknown): v is number {
   return typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= 100;
 }
 
+function shortList(v: unknown, max: number, itemMax: number): string[] | undefined | null {
+  if (v === undefined) return undefined;
+  if (!Array.isArray(v) || v.length > max) return null;
+  const out: string[] = [];
+  for (const x of v) {
+    const t = text(x, itemMax);
+    if (!t) return null;
+    out.push(t);
+  }
+  return out;
+}
+
 function parseFix(v: unknown): PrompterFix | null {
   const x = v as Record<string, unknown> | null;
   if (!x || typeof x !== "object") return null;
@@ -165,7 +193,20 @@ function parseFix(v: unknown): PrompterFix | null {
   const change = text(x.change, 60);
   const meaning = text(x.meaning);
   if (!full || pinyin === null || !change || !meaning || !isScore(x.score)) return null;
-  return { full, pinyin, change, score: x.score, meaning };
+  const solves = shortList(x.solves, 3, 30);
+  const keeps = shortList(x.keeps, 3, 60);
+  const loss = x.loss === undefined ? undefined : text(x.loss, 60);
+  if (solves === null || keeps === null || loss === null) return null;
+  return {
+    full,
+    pinyin,
+    change,
+    score: x.score,
+    meaning,
+    ...(solves?.length ? { solves } : {}),
+    ...(keeps?.length ? { keeps } : {}),
+    ...(typeof loss === "string" && loss ? { loss } : {}),
+  };
 }
 
 function parseScoreRound(x: Record<string, unknown>): PrompterScoreRound | null {
@@ -197,7 +238,7 @@ function parseScoreRound(x: Record<string, unknown>): PrompterScoreRound | null 
   let merit: PrompterScoreRound["merit"];
   if (x.merit !== undefined) {
     const m = x.merit as Record<string, unknown> | null;
-    if (!m || typeof m !== "object" || !Array.isArray(m.lines) || m.lines.length > 2) return null;
+    if (!m || typeof m !== "object" || !Array.isArray(m.lines) || m.lines.length > 3) return null;
     const lines = parseLines(m.lines);
     const tip = optText(m.tip);
     if (lines === null || tip === null) return null;
@@ -205,6 +246,36 @@ function parseScoreRound(x: Record<string, unknown>): PrompterScoreRound | null 
   }
   const genderAsk = optText(x.genderAsk);
   if (genderAsk === null) return null;
+  let dimensions: PrompterScoreRound["dimensions"];
+  if (x.dimensions !== undefined) {
+    if (!Array.isArray(x.dimensions) || x.dimensions.length > 8) return null;
+    dimensions = [];
+    for (const d of x.dimensions) {
+      const r = d as Record<string, unknown> | null;
+      const label = text(r?.label, 8);
+      if (!r || !label || !isScore(r.score) || !isScore(r.max) || r.max <= 0) return null;
+      const reason = optText(r.reason);
+      if (reason === null) return null;
+      dimensions.push({ label, score: r.score, max: r.max, ...(reason ? { reason } : {}) });
+    }
+  }
+  const strengths = shortList(x.strengths, 4, 80);
+  if (strengths === null) return null;
+  let issues: PrompterScoreRound["issues"];
+  if (x.issues !== undefined) {
+    if (!Array.isArray(x.issues) || x.issues.length > 8) return null;
+    issues = [];
+    for (const it of x.issues) {
+      const r = it as Record<string, unknown> | null;
+      const line = text(r?.text, 100);
+      if (!r || !line) return null;
+      issues.push({ text: line, importance: r.importance === "major" ? "major" : "minor" });
+    }
+  }
+  const capNote = optText(x.capNote);
+  if (capNote === null) return null;
+  const thinking = shortList(x.thinking, 6, 60);
+  if (thinking === null) return null;
   let fix: PrompterScoreRound["fix"];
   if (x.fix !== undefined) {
     const f = x.fix as Record<string, unknown> | null;
@@ -228,6 +299,11 @@ function parseScoreRound(x: Record<string, unknown>): PrompterScoreRound | null 
     bandLabel,
     ...(math ? { math } : {}),
     ...(checks ? { checks } : {}),
+    ...(dimensions?.length ? { dimensions } : {}),
+    ...(thinking?.length ? { thinking } : {}),
+    ...(strengths?.length ? { strengths } : {}),
+    ...(issues?.length ? { issues } : {}),
+    ...(capNote ? { capNote } : {}),
     ...(merit ? { merit } : {}),
     ...(genderAsk ? { genderAsk } : {}),
     deductions,

@@ -6,6 +6,7 @@ import folkChars from "@/config/folk-chars.json";
 import badHomophones from "@/config/bad-homophones.json";
 import infamousNames from "@/config/infamous-names.json";
 import eraNames from "@/config/era-names.json";
+import eraWords from "@/config/era-words.json";
 import nameChars from "@/config/name-chars.json";
 
 /**
@@ -125,6 +126,15 @@ export const ERA_CHARS: ReadonlyMap<string, EraChar> = (() => {
 
 /** 双名两个字都是年代字，整名算一条；line 里的 {n} 换成名 */
 export const ERA_PAIR: Readonly<Record<EraGroup | "mixed", EraEntry>> = eraNames.pair;
+
+/**
+ * 整名是那个年代的口号、职业或军种词：海军、建军、卫国、援越。
+ * 不是「一个字老」，是整个词直接拿来当名字，听着像上一辈，也容易和职业混。
+ * 2026-11-04 加：文海军（男）原来 90 分，不能接受。
+ */
+export const ERA_WORDS: ReadonlyMap<string, string> = new Map(
+  (eraWords as { words: string[]; line: string }[]).flatMap((g) => g.words.map((w) => [w, g.line.replaceAll("{n}", w)])),
+);
 
 /** 公安部《2020 年全国姓名报告》人口最多的十个姓 */
 export const BIG_SURNAMES: ReadonlySet<string> = new Set([..."王李张刘陈杨黄赵吴周"]);
