@@ -388,7 +388,13 @@ export function AnalyzePanel({ open, onClose, onRename }: Props) {
       </div>
 
       <ol className="ap-board" ref={boardRef}>
-        {rows.length === 0 && <li className="ap-board-empty">评论区留下宝宝的名字，现场打分</li>}
+        {rows.length === 0 && (
+          <li className="ap-board-empty">
+            送「墨镜」分析名字
+            <br />
+            送「比心兔兔」起名
+          </li>
+        )}
         {rows.map((r, i) => {
           const marks = markedPositions(r);
           return (
@@ -519,7 +525,6 @@ function Detail({
                       {i === 0 ? "首选 · " : "备选 · "}
                       {c.fullName}
                     </span>
-                    <span className="ap-fix-score">{c.scores.total}</span>
                     <span className="ap-fix-change">
                       {c.from} → {c.to}
                       {c.soundLine === "读音不变" ? "" : " · 读音变了"}

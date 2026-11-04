@@ -286,7 +286,7 @@ export function prompterFromEvaluation(s: EvaluationForPrompter): PrompterRound 
     : // 模型还没返回时，先把规则确认的问题给主播念（facts 几百毫秒就到）
       s.facts.issues.map((it) => ({ text: it.line, importance: it.severity === "plain" ? ("minor" as const) : ("major" as const) }));
   const capNote =
-    o && o.scores.cap !== null
+    o && o.scores.cap !== null && o.scores.cap < o.scores.base
       ? `基础 ${o.scores.base} 分，被「${o.scores.capReason ?? "已确认的问题"}」压到 ${o.scores.total} 分`
       : undefined;
   const checks = undefined;

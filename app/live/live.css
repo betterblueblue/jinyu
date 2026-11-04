@@ -422,8 +422,9 @@
   margin: 0;
   text-align: center;
   font-size: 38px;
-  letter-spacing: 0.16em;
-  color: var(--ink-2);
+  letter-spacing: 0.12em;
+  color: var(--ink);
+  font-weight: 700;
 }
 .live-stage .field {
   display: flex;
@@ -1070,6 +1071,10 @@
   margin-top: auto;
   padding-top: 18px;
 }
+/* 输入态的滚动条往上提，靠近「已经有名字」那一行，别孤零零挂在最底下 */
+.live-stage .pane-input.on ~ .bottom {
+  transform: translateY(-200px);
+}
 .live-stage .marquee {
   overflow: hidden;
   height: 44px;
@@ -1084,9 +1089,10 @@
 }
 .live-stage .marquee-track span {
   white-space: nowrap;
-  font-size: 29px;
-  letter-spacing: 0.2em;
-  color: var(--marquee-color);
+  font-size: 32px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  color: var(--ink);
   line-height: 44px;
 }
 .live-stage .marquee-track span em {

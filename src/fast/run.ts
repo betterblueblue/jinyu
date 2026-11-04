@@ -30,7 +30,7 @@ import {
  */
 
 const KEEP_MIN = 3;
-const ALTERNATIVES_MAX = 3;
+const ALTERNATIVES_MAX = 2;
 /**
  * 排序时回看最近多少个名字的用字。名字不重样以后，配字仍爱落在禾、宁、棠、晴上
  * （同一姓 20 轮实测，100 个候选里这四个字占 41 个），最近没用过的字排前面。

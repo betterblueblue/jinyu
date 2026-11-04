@@ -468,7 +468,7 @@
 .live-stage .ap-fixes button {
   width: 100%;
   display: grid;
-  grid-template-columns: auto 80px auto minmax(0, 1fr);
+  grid-template-columns: auto auto minmax(0, 1fr);
   align-items: baseline;
   gap: 18px;
   padding: 18px 22px;
@@ -489,12 +489,6 @@
   font-weight: 600;
   letter-spacing: 0.08em;
   white-space: nowrap;
-}
-.live-stage .ap-fix-score {
-  font-size: 40px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  color: var(--accent);
 }
 .live-stage .ap-fix-change {
   font-family: "Noto Sans SC", system-ui, sans-serif;

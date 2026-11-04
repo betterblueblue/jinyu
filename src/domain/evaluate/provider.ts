@@ -29,6 +29,7 @@ export interface EvaluateProvider {
     onOriginal?: (raw: RawOriginal) => void,
     onOption?: (raw: RawCandidate) => void,
     onThought?: (text: string) => void,
+    banned?: string[],
   ): Promise<RawEvaluation | null>;
 }
 
@@ -52,6 +53,7 @@ export class LlmEvaluateProvider implements EvaluateProvider {
     onOriginal?: (raw: RawOriginal) => void,
     onOption?: (raw: RawCandidate) => void,
     onThought?: (text: string) => void,
+    banned: string[] = [],
   ): Promise<RawEvaluation | null> {
     let text = "";
     let scoresDone = false;
@@ -87,7 +89,7 @@ export class LlmEvaluateProvider implements EvaluateProvider {
     const r = await streamChat(
       { ...this.opts, temperature: 0.4, reasoningEffort: this.opts.reasoningEffort ?? "low" },
       {
-        messages: buildEvaluateMessages(facts, this.compact),
+        messages: buildEvaluateMessages(facts, this.compact, banned),
         // 6144 在推理写 8000 字时可能不够；用户说可以慢，给到 8192 保证不截断
         maxTokens: 8192,
         timeoutMs: this.timeoutMs,

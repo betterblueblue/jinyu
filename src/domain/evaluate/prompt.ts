@@ -53,10 +53,9 @@ const ONE_SYSTEM = [
   "- 同音雅化：保留读音，换一个更雅、更具体的字。例：文海军 → 文海钧（jūn 不变，军换钧，避开军种词，保留千钧担当），文海峻（海之开阔配山之高峻）。同音雅化必须字义确实更好、避开原来那个词的直白；读音不变、毛病还在的（文红艳 → 文红雁）不算。",
   "- 姓不动，名的字数不变，只换一个字。简繁变化不算改字。",
   "- givenName 写改完之后完整的名字（只有名，不带姓）：原名两个字就写两个字，原名一个字就写一个字。不要只写换上的那个字，也不要把原名和新字拼在一起。",
-  "- 原名是单名时，候选也必须是那一个字。例：原名文清，候选写「妍」，不要写「清妍」。",
+  "- 原名是单名时，候选也必须是那一个字。例：原名文清，候选写「昀」，不要写「清昀」。",
   "- 先看原名的优点和问题，再决定换哪个字。只换一个字解决不了、或者原名已经很好，options 给空数组。",
   "- 原名有年代感、撞名、性别不符、字义消极这类明确问题时，给 2 个候选，换不同的字；两个候选不要都走同一个方向（比如都换成同音字、都换成同一类意思）。",
-  "- 可以同音雅化：保留读音，换一个更雅、更具体的字。例：文海军 → 文海钧（jūn 不变，军换钧，避开军种词，保留千钧担当），文海峻（海之开阔配山之高峻）。同音雅化必须字义确实更好、避开原来那个词的直白；读音不变、毛病还在的（文红艳 → 文红雁）不算。",
   "- 每个候选写：givenName（只写名，不带姓）；pronunciation / meaning / gender / style 四个档位，{tier, reason}；solves（解决了 original.issues 里的哪几条，写编号，如 [\"R1\"]）；keeps（保住原名哪几个优点，照抄 strengths 里的句子）；loss（损失和取舍，一句）；verdict（better / similar / worse）；why（15 字以内，榜上念的一句改善）；spoken（寓意，12–90 字）。",
   "- 候选不能新增已确认的严重问题；原名有严重谐音时，候选不能还带着谐音。",
   "",
@@ -66,11 +65,10 @@ const ONE_SYSTEM = [
   "- one_char_insufficient：只改一个字解决不了已经指出的问题。",
   "note：只写一句具体原因，不指示保留还是重新起名。",
   "",
-  "不要写：分数、扣几分、五行、八字、命理、运势、旺；「寓意深远」「气质不凡」「大气」这类空话；诗句原文和出处。",
   "spoken 和 why 里不出现分数和档位。",
   "",
   "格式示例（只看格式，别照抄内容）：",
-  '{"status":"options","scores":{"pronunciation":16,"meaning":16,"gender":12,"style":6},"original":{"pronunciation":"连姓念节奏平稳，收尾略轻","meaning":"两个字意思正面，合起来有画面","gender":"娟字女性倾向明确","style":"整体温和，少一点亮色","strengths":["字义干净，不张扬"],"charMeaning":"娟是秀美，文是文雅。","whole":"合起来是文文静静、眉目秀气的样子，爸妈盼孩子温和又有自己的主意。","comment":"文雅秀美，读着顺；但娟字偏上一辈，像爸妈那代的名字。","issues":[{"text":"娟字在女孩名里偏上一辈","importance":"major"}],"reminders":[]},"options":[{"givenName":"妍","pronunciation":{"tier":16,"reason":"读音更亮"},"meaning":{"tier":16,"reason":"妍是美好"},"gender":{"tier":12,"reason":"女性辨识度保住了"},"style":{"tier":8,"reason":"明亮大方"},"solves":["R1"],"keeps":["字义干净，不张扬"],"loss":"少了一点安静的气质","verdict":"better","why":"换掉老气的娟，名字更亮","spoken":"妍是美好、秀美。合起来是清清亮亮的样子，愿孩子明亮大方、自在成长。"},{"givenName":"晴","pronunciation":{"tier":16,"reason":"晴朗轻快"},"meaning":{"tier":16,"reason":"晴是晴天"},"gender":{"tier":8,"reason":"晴偏中性"},"style":{"tier":8,"reason":"明快"},"solves":["R1"],"keeps":["字义干净"],"loss":"少了柔婉","verdict":"better","why":"更明快","spoken":"晴是晴朗、天光透亮，愿孩子心里亮堂。"}],"note":""}',
+  '{"status":"options","scores":{"pronunciation":16,"meaning":16,"gender":12,"style":6},"original":{"pronunciation":"连姓念节奏平稳，收尾略轻","meaning":"两个字意思正面，合起来有画面","gender":"娟字女性倾向明确","style":"整体温和，少一点亮色","strengths":["字义干净，不张扬"],"charMeaning":"娟是秀美，文是文雅。","whole":"合起来是文文静静、眉目秀气的样子，爸妈盼孩子温和又有自己的主意。","comment":"文雅秀美，读着顺；但娟字偏上一辈，像爸妈那代的名字。","issues":[{"text":"娟字在女孩名里偏上一辈","importance":"major"}],"reminders":[]},"options":[{"givenName":"昀","pronunciation":{"tier":16,"reason":"读音更亮"},"meaning":{"tier":16,"reason":"昀是日光"},"gender":{"tier":12,"reason":"女性辨识度保住了"},"style":{"tier":8,"reason":"明亮大方"},"solves":["R1"],"keeps":["字义干净，不张扬"],"loss":"少了一点安静的气质","verdict":"better","why":"换掉老气的娟，名字更亮","spoken":"昀是日光，合起来是明朗开阔的样子，愿孩子心里有光、自在长大。"},{"givenName":"澜","pronunciation":{"tier":16,"reason":"水波开阔"},"meaning":{"tier":16,"reason":"澜是波澜"},"gender":{"tier":8,"reason":"澜偏中性"},"style":{"tier":8,"reason":"明快"},"solves":["R1"],"keeps":["字义干净"],"loss":"少了柔婉","verdict":"better","why":"更明快","spoken":"澜是水波、波澜，愿孩子心胸开阔、遇事从容。"}],"note":""}',
 ].join("\n");
 
 const ONE_COMPACT = [
@@ -112,13 +110,13 @@ const ORIGINAL_SYSTEM = [
 
 const OPTIONS_SYSTEM = [
   "你是直播间里的起名顾问。原名的评价已经定好了，你只负责改名里的一个字，写两个候选。只输出 JSON。",
-  "推理里只写要换的字，比如「娟→妍、晴」，一行一个，不要展开分析。",
+  "推理里只写要换的字，比如「娟→昀、澜」，一行一个，不要展开分析。",
   "不要重新评价原名，不要改原名分数，不要写 reason 之外的原名分析；只写候选。",
   "",
   "怎么改：",
   "- 姓不动，名的字数不变，只换一个字。简繁变化不算改字。",
   "- givenName 写改完之后完整的名字（只有名，不带姓）：原名两个字就写两个字，原名一个字就写一个字。不要只写换上的那个字，也不要把原名和新字拼在一起。",
-  "- 原名是单名时，候选也必须是那一个字。例：原名文清，候选写「妍」，不要写「清妍」。",
+  "- 原名是单名时，候选也必须是那一个字。例：原名文清，候选写「昀」，不要写「清昀」。",
   "- 换上的字要常用、好认、只有一个读音、意思好；不用生僻、古怪、贬义、老气的字。",
   "- 原名有年代感、撞名、性别不符、字义消极这类明确问题时，给 2 个候选，换不同的字；两个候选不要都走同一个方向（比如都换成同音字、都换成同一类意思）。",
   "- 可以同音雅化：保留读音，换一个更雅、更具体的字。例：文海军 → 文海钧（jūn 不变，军换钧，避开军种词，保留千钧担当），文海峻（海之开阔配山之高峻）。同音雅化必须字义确实更好、避开原来那个词的直白；读音不变、毛病还在的（文红艳 → 文红雁）不算。",
@@ -138,7 +136,7 @@ const OPTIONS_SYSTEM = [
   "spoken 和 why 里不出现分数和档位。",
   "",
   "格式示例（只看格式，别照抄内容）：",
-  '{"status":"options","options":[{"givenName":"妍","pronunciation":{"tier":16,"reason":"读音更亮"},"meaning":{"tier":16,"reason":"妍是美好"},"gender":{"tier":12,"reason":"女性辨识度保住了"},"style":{"tier":8,"reason":"明亮大方"},"solves":["R1"],"keeps":["字义干净，不张扬"],"loss":"少了一点安静的气质","verdict":"better","why":"换掉老气的娟，名字更亮","spoken":"妍是美好、秀美。合起来是清清亮亮的样子，愿孩子明亮大方、自在成长。"},{"givenName":"晴","pronunciation":{"tier":16,"reason":"晴朗轻快"},"meaning":{"tier":16,"reason":"晴是晴天"},"gender":{"tier":8,"reason":"晴偏中性"},"style":{"tier":8,"reason":"明快"},"solves":["R1"],"keeps":["字义干净"],"loss":"少了柔婉","verdict":"better","why":"更明快","spoken":"晴是晴朗、天光透亮，愿孩子心里亮堂。"}],"note":""}',
+  '{"status":"options","options":[{"givenName":"昀","pronunciation":{"tier":16,"reason":"读音更亮"},"meaning":{"tier":16,"reason":"昀是日光"},"gender":{"tier":12,"reason":"女性辨识度保住了"},"style":{"tier":8,"reason":"明亮大方"},"solves":["R1"],"keeps":["字义干净，不张扬"],"loss":"少了一点安静的气质","verdict":"better","why":"换掉老气的娟，名字更亮","spoken":"昀是日光，合起来是明朗开阔的样子，愿孩子心里有光、自在长大。"},{"givenName":"澜","pronunciation":{"tier":16,"reason":"水波开阔"},"meaning":{"tier":16,"reason":"澜是波澜"},"gender":{"tier":8,"reason":"澜偏中性"},"style":{"tier":8,"reason":"明快"},"solves":["R1"],"keeps":["字义干净"],"loss":"少了柔婉","verdict":"better","why":"更明快","spoken":"澜是水波、波澜，愿孩子心胸开阔、遇事从容。"}],"note":""}',
 ].join("\n");
 
 const ORIGINAL_COMPACT = [
@@ -214,9 +212,11 @@ export function buildOptionsMessages(facts: NameFacts, original: OriginalEvaluat
   ];
 }
 
-/** 一次调用：scores → original → options */
-export function buildEvaluateMessages(facts: NameFacts, compact = false): ChatMessage[] {
-  const lines = [...factsBlock(facts), "", "按要求输出 JSON。"];
+/** 一次调用：scores → original → options。banned 是最近给过的候选字，让模型这轮避开 */
+export function buildEvaluateMessages(facts: NameFacts, compact = false, banned: string[] = []): ChatMessage[] {
+  const lines = [...factsBlock(facts)];
+  if (banned.length) lines.push("", `这轮不要用这些字（主播刚给过）：${banned.join("、")}。`);
+  lines.push("", "按要求输出 JSON。");
   return [
     { role: "system", content: compact ? `${ONE_SYSTEM}\n${ONE_COMPACT}` : ONE_SYSTEM },
     { role: "user", content: lines.join("\n") },

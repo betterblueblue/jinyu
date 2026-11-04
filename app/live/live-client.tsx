@@ -297,7 +297,11 @@ export function LiveClient() {
 
             {/* 输入态 */}
             <section className={`pane pane-input ${phase === "input" ? "on" : ""}`}>
-              <p className="hint">想分析名字，留姓名；想取名，留姓氏和性别</p>
+              <p className="hint">
+                想分析名字：送「墨镜」，留姓名和性别
+                <br />
+                想取名：送「比心兔兔」，留姓氏和性别
+              </p>
               <div className="field">
                 <input
                   ref={inputRef}
@@ -418,7 +422,7 @@ export function LiveClient() {
                 <div className="marquee-track">
                   {[0, 1, 2].map((i) => (
                     <span key={i}>
-                      评论区留姓名可分析，留姓氏可取名，主播挑选讲解<em>◆</em>
+                      送「墨镜」分析名字<em>◆</em>送「比心兔兔」起名<em>◆</em>主播挑选讲解<em>◆</em>
                     </span>
                   ))}
                 </div>

@@ -29,6 +29,13 @@ import type {
  * 模型不输出分数，总分和上限都在这里算。
  */
 
+/**
+ * 最近给过的候选替换字，传给模型让它这轮避开，解决「晴、妍、悦」反复出现。
+ * 进程级，重启清空；直播一次一个名字，够用。
+ */
+const recentCandidateChars: string[] = [];
+const BANNED_MAX = 18;
+
 export interface EvaluateInput {
   fullName: string;
   gender: "male" | "female" | "unknown";
@@ -206,6 +213,13 @@ export async function evaluateName(
     if (out.candidate) {
       if (!candidates.some((c) => c.givenName === out.candidate!.givenName)) {
         candidates.push(out.candidate);
+        // 记下换上的字，接下来几轮让模型避开
+        for (const ch of out.candidate.givenName) {
+          if (!facts.givenName.includes(ch)) {
+            recentCandidateChars.push(ch);
+            if (recentCandidateChars.length > BANNED_MAX) recentCandidateChars.shift();
+          }
+        }
         callbacks.onOption?.(out.candidate);
       }
     } else {
@@ -258,7 +272,9 @@ export async function evaluateName(
 
   let raw: RawEvaluation | null;
   try {
-    raw = await provider.evaluate(facts, handleScores, handleRawOriginal, takeOption, callbacks.onThought);
+    raw = await provider.evaluate(facts, handleScores, handleRawOriginal, takeOption, callbacks.onThought, [
+      ...recentCandidateChars,
+    ]);
   } catch (err) {
     const message = err instanceof Error ? err.message : "评价没成功";
     if (early) {
@@ -317,9 +333,11 @@ export async function evaluateName(
   const status: EvaluateResult["status"] =
     candidates.length > 0
       ? "options"
-      : // 原名已经很好（85+），候选比不过很正常，不该显示成「改法没通过核验」
-        original.scores.total >= 85
-        ? "no_better"
+      : // 大姓配单名，换一个字解决不了重名，不能说成「没有更好的改法」
+        facts.popularityFacts.singleNameBigSurname
+        ? "one_char_insufficient"
+        : original.scores.total >= 85
+          ? "no_better"
         : raw.status === "one_char_insufficient"
           ? "one_char_insufficient"
           : raw.status === "no_better"
@@ -329,8 +347,10 @@ export async function evaluateName(
               : "no_better";
 
   const note =
-    candidates.length === 0 && original.scores.total >= 85
-      ? "原名已经很好了，这轮没有比它更值得换的。"
+    candidates.length === 0 && facts.popularityFacts.singleNameBigSurname
+      ? "大姓配单名，换一个字解决不了重名，按姓重新起名更合适。"
+      : candidates.length === 0 && original.scores.total >= 85
+        ? "原名已经很好了，这轮没有比它更值得换的。"
       : typeof raw.note === "string" && raw.note.trim()
         ? raw.note.replace(/\s+/g, "").trim().slice(0, 120)
         : STATUS_NOTE[status];
