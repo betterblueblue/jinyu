@@ -71,10 +71,39 @@ function dedupeKey(text: string): string {
   return text.replace(/[「」『』“”"，。；：、！？,.;:]/g, "").slice(0, 10);
 }
 
+/** 去掉标点和引号，只留能比对的字，用来判断两句话是不是说的同一件事 */
+function normalizeIssue(text: string): string {
+  return text.replace(/[「」『』“”"'‘’《》，。；：、！？,.;:!?\s]/g, "");
+}
+
+/** 最长公共子串长度：模型换个说法时靠它兜底，避免同一件事报两条 */
+function longestCommonSubstring(a: string, b: string): number {
+  const aa = [...a];
+  const bb = [...b];
+  if (!aa.length || !bb.length) return 0;
+  let best = 0;
+  let prev = new Array<number>(bb.length + 1).fill(0);
+  for (let i = 1; i <= aa.length; i++) {
+    const cur = new Array<number>(bb.length + 1).fill(0);
+    for (let j = 1; j <= bb.length; j++) {
+      if (aa[i - 1] === bb[j - 1]) {
+        cur[j] = prev[j - 1]! + 1;
+        if (cur[j]! > best) best = cur[j]!;
+      }
+    }
+    prev = cur;
+  }
+  return best;
+}
+
 /** 模型新写的问题如果和规则已确认的是同一类（年代、谐音、性别……），就不重复列 */
 const RULE_HINTS: { pattern: RegExp; rules: string[] }[] = [
-  { pattern: /年代|老气|上一辈|爸妈那辈|七八十年代/, rules: ["era", "eraName"] },
-  { pattern: /谐音|念起来像|听着像/, rules: ["homophone", "trap"] },
+  // 模型不会照抄规则原文，常见同义说法都收进来；剩下的靠 mergeIssues 里的“近似重复”兜底
+  {
+    pattern: /年代|老气|上一辈|爸妈那辈|奶奶那辈|爷爷奶奶|七八十年代|军种|职业词|口号/,
+    rules: ["era", "eraName", "eraWord"],
+  },
+  { pattern: /谐音|念起来像|听着像|连读像|读着像/, rules: ["homophone", "trap"] },
   { pattern: /中性|女孩感|女性辨识|男孩感|男性辨识/, rules: ["gender"] },
   { pattern: /重名|撞名|烂大街/, rules: ["template", "hot", "singleName"] },
   { pattern: /生僻|不认识|打不出来/, rules: ["rare"] },
@@ -103,6 +132,7 @@ function mergeIssues(facts: NameFacts, modelIssues: { text: string; importance: 
     source: "rule",
   }));
   const ruleSet = new Set(facts.issues.map((it) => it.rule));
+  const ruleTexts = facts.issues.map((it) => normalizeIssue(it.line));
   let n = 0;
   for (const mi of modelIssues) {
     // 模型有时把编号当问题文本写回来（"R1" 或 "R1：原文"），这不是新问题
@@ -112,6 +142,9 @@ function mergeIssues(facts: NameFacts, modelIssues: { text: string; importance: 
     if (!k) continue;
     if (!isSpecific(text, facts.givenName)) continue;
     if (sameKindAsRule(text, ruleSet)) continue;
+    // 换个说法但说的是同一件事：和任何一条规则问题有 4 个连续字以上重合，就当重复
+    const normalized = normalizeIssue(text);
+    if (ruleTexts.some((r) => longestCommonSubstring(normalized, r) >= 4)) continue;
     if (out.some((it) => dedupeKey(it.text).includes(k) || k.includes(dedupeKey(it.text)))) continue;
     out.push({ id: `M${++n}`, text, importance: mi.importance, source: "model" });
   }
@@ -200,6 +233,8 @@ export async function evaluateName(
 
   const candidates: EvalCandidate[] = [];
   const rejected: RejectedCandidate[] = [];
+  /** 同一个候选会被流式和收尾各核一次，被拒的按「名字+理由」去重，别把统计翻倍 */
+  const rejectedKeys = new Set<string>();
   /** 候选比原名评价先到（顺序乱了）时先攒着，等评价到了再验 */
   const pending: RawCandidate[] = [];
 
@@ -223,7 +258,11 @@ export async function evaluateName(
         callbacks.onOption?.(out.candidate);
       }
     } else {
-      rejected.push(out.rejected);
+      const key = `${out.rejected.givenName}|${out.rejected.reasons.join("；")}`;
+      if (!rejectedKeys.has(key)) {
+        rejectedKeys.add(key);
+        rejected.push(out.rejected);
+      }
     }
   };
 

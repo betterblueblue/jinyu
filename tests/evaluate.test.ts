@@ -11,7 +11,7 @@ import { completedOriginal, parseEvaluation, parseTierChoice } from "@/domain/ev
 import { FakeEvaluateProvider } from "@/domain/evaluate/provider";
 import { BAND_CUTS, bandOf, capFor, clampTier } from "@/domain/evaluate/scoring";
 import type { EvaluateProvider } from "@/domain/evaluate/provider";
-import type { NameFacts, OriginalEvaluation, RawCandidate } from "@/domain/evaluate/types";
+import type { NameFacts, OriginalEvaluation, RawCandidate, RawEvaluation } from "@/domain/evaluate/types";
 import { verifyCandidate } from "@/domain/evaluate/verify";
 import { resolveSplit, scoreName } from "@/domain/score/score";
 import type { AnalysisGender } from "@/domain/analysis/types";
@@ -271,5 +271,74 @@ describe("接提词页和流", () => {
     });
     expect(seen).toEqual(["facts", "analysis", "option"]);
     expect(result?.status).toBe(out.status);
+  });
+});
+
+describe("三个已确认 bug 的回归", () => {
+  const baseRaw = (
+    options: RawCandidate[] = [],
+    issues: { text: string; importance: "major" | "minor" }[] = [],
+  ): RawEvaluation => ({
+    status: "options",
+    scores: { pronunciation: 20, meaning: 20, gender: 8, style: 6 },
+    original: {
+      pronunciation: "顺",
+      meaning: "正",
+      gender: "可",
+      style: "稳",
+      strengths: ["正"],
+      charMeaning: "x",
+      whole: "合起来 x",
+      comment: "x",
+      issues,
+      reminders: [],
+    },
+    options,
+    note: "",
+  });
+
+  it("同一个被拒候选只记一次（流式 + 收尾各核一遍不翻倍）", async () => {
+    const bad = rawCandidate({ givenName: "志" }); // 长度不对，必拒
+    const raw = baseRaw([bad]);
+    const provider: EvaluateProvider = {
+      name: "dup",
+      evaluate: async (_facts, onScores, onOriginal, onOption) => {
+        onScores?.({ pronunciation: 20, meaning: 20, gender: 8, style: 6 });
+        onOriginal?.(raw.original!);
+        onOption?.(bad); // 流式已经交过一次
+        return raw; // 收尾的 raw.options 里还有同一个
+      },
+    };
+    const out = await evaluateName({ fullName: "李志明", gender: "male" }, provider, { maxCandidates: 2 });
+    expect(out.rejected).toHaveLength(1);
+  });
+
+  it("solves 只保留原名真实存在的问题编号", () => {
+    const out = verifyCandidate(
+      rawCandidate({ givenName: "嘉明", solves: ["R1", "R9"] }),
+      factsOf("李志明", "male"), // 没有问题
+      ORIGINAL,
+    );
+    expect(out.candidate?.fullName).toBe("李嘉明");
+    expect(out.candidate?.solves).toEqual([]);
+  });
+
+  it.each([
+    ["文海军", "male", "海军是军种词，容易和职业混"],
+    ["王秀英", "female", "全国重名最多，像奶奶那辈"],
+    ["吴智宇", "male", "「吴智」连读像「无知」，易被起外号"],
+    ["马梓宸", "male", "马梓连读像「马子」，易被起外号"],
+  ] as const)("%s：模型换个说法重复规则问题时不重复列", async (fullName, gender, text) => {
+    const raw = baseRaw([], [{ text, importance: "major" }]);
+    const provider: EvaluateProvider = {
+      name: "dup-issue",
+      evaluate: async (_facts, onScores, onOriginal) => {
+        onScores?.({ pronunciation: 20, meaning: 20, gender: 8, style: 6 });
+        onOriginal?.(raw.original!);
+        return raw;
+      },
+    };
+    const out = await evaluateName({ fullName, gender }, provider, { maxCandidates: 2 });
+    expect(out.original?.issues.filter((it) => it.source === "model")).toHaveLength(0);
   });
 });

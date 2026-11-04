@@ -89,7 +89,13 @@ export function verifyCandidate(
 
   const gain = scores.total - original.scores.total;
   if (gain <= 0) reasons.push(`总分没有提高（${scores.total} 对 ${original.scores.total}）`);
-  const solves = Array.isArray(raw.solves) ? raw.solves.filter((x): x is string => typeof x === "string").slice(0, 4) : [];
+  // solves 只能引用原名真实存在的规则问题编号；模型常按示例习惯写 R1，这里必须过滤
+  const ruleIds = new Set(originalFacts.issues.map((it) => it.id));
+  const solves = Array.isArray(raw.solves)
+    ? raw.solves
+        .filter((x): x is string => typeof x === "string" && ruleIds.has(x))
+        .slice(0, 4)
+    : [];
   /*
    * 换上的字本身要更好，不能只是「换了个不老的写法」。
    * 文娟 → 文晴：风格变亮，过；文娟 → 文安：三维都没动，只是换了个中性字，拒。
