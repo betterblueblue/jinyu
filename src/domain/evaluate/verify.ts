@@ -86,6 +86,10 @@ export function verifyCandidate(
   if (raw.verdict !== "better") reasons.push("模型自己的比较结论不是更值得用");
   if (facts.risk.severe.length > 0) reasons.push(`新增了已确认的严重问题：${facts.risk.severe[0]!.line}`);
   if (originalFacts.risk.hasSevereHomophone && facts.risk.hasHomophone) reasons.push("原来的严重谐音没有解决");
+  // 独立于模型档位的检查：候选不能新增一般问题，也不能让流行或识读变差
+  if (facts.risk.minor.length > originalFacts.risk.minor.length) reasons.push("新增了一般问题");
+  if (facts.program.popularity.score < originalFacts.program.popularity.score) reasons.push("流行分比原名低");
+  if (facts.program.literacy.score < originalFacts.program.literacy.score) reasons.push("识读分比原名低");
 
   const gain = scores.total - original.scores.total;
   if (gain <= 0) reasons.push(`总分没有提高（${scores.total} 对 ${original.scores.total}）`);
@@ -96,6 +100,10 @@ export function verifyCandidate(
         .filter((x): x is string => typeof x === "string" && ruleIds.has(x))
         .slice(0, 4)
     : [];
+  // 原名有规则问题时，候选至少要对应一条真实编号；没有规则问题时不做这个门槛
+  if (originalFacts.issues.length > 0 && solves.length === 0) {
+    reasons.push("没有对应原名的问题编号");
+  }
   /*
    * 换上的字本身要更好，不能只是「换了个不老的写法」。
    * 文娟 → 文晴：风格变亮，过；文娟 → 文安：三维都没动，只是换了个中性字，拒。

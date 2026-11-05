@@ -323,6 +323,25 @@ describe("三个已确认 bug 的回归", () => {
     expect(out.candidate?.solves).toEqual([]);
   });
 
+  it("原名有规则问题时，候选至少要引用一条真实编号", () => {
+    const out = verifyCandidate(
+      rawCandidate({ givenName: "晴", solves: [] }),
+      factsOf("文娟", "female"),
+      ORIGINAL,
+    );
+    expect(out.candidate).toBeUndefined();
+    expect(out.rejected?.reasons.join("；")).toContain("没有对应原名的问题编号");
+  });
+
+  it("原名没有规则问题时，solves 为空也允许", () => {
+    const out = verifyCandidate(
+      rawCandidate({ givenName: "嘉明", solves: [] }),
+      factsOf("李志明", "male"),
+      ORIGINAL,
+    );
+    expect(out.candidate?.fullName).toBe("李嘉明");
+  });
+
   it.each([
     ["文海军", "male", "海军是军种词，容易和职业混"],
     ["王秀英", "female", "全国重名最多，像奶奶那辈"],
