@@ -292,6 +292,8 @@ export function prompterFromEvaluation(s: EvaluationForPrompter): PrompterRound 
   const checks = undefined;
   const meritLines = [o?.comment, o?.charMeaning, o?.whole].filter((x): x is string => Boolean(x));
   const merit = meritLines.length ? { writing: false, lines: meritLines } : undefined;
+  // 模型写的提醒（谐音、联想、撞名人）不扣分，但主播必须先知道；规则自己的 folk 另列
+  const modelReminders = o ? o.reminders.filter((r) => !s.facts.reminders.includes(r)).slice(0, 4) : [];
   let say: string | undefined;
   if (status === "needs_gender") say = "先问一句：是男宝还是女宝？选好性别再打一次分。";
   else if (status === "options") say = o && o.issues.length ? "毛病在哪说清楚了，往下看改法。" : "这个名字整体不错。";
@@ -318,6 +320,7 @@ export function prompterFromEvaluation(s: EvaluationForPrompter): PrompterRound 
     ...(s.thoughts?.length ? { thinking: s.thoughts.slice(0, 6) } : {}),
     ...(o?.strengths.length ? { strengths: o.strengths } : {}),
     ...(issues?.length ? { issues } : {}),
+    ...(modelReminders.length ? { reminders: modelReminders } : {}),
     ...(capNote ? { capNote } : {}),
     ...(status === "needs_gender" ? { genderAsk: "没填性别，先问是男宝还是女宝，再打一次分。" } : {}),
     deductions: [],

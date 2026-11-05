@@ -166,6 +166,16 @@ function ScoreView({ round }: { round: PrompterScoreRound }) {
           </ol>
         </section>
       ) : null}
+      {round.reminders?.length ? (
+        <section className="mt-6" data-testid="prompter-reminders">
+          <p className="text-lg tracking-widest text-amber-300">主播提醒 · 谐音、联想、撞名人</p>
+          <ul className="mt-2 space-y-2 text-[clamp(20px,2.8vw,30px)] leading-relaxed text-amber-100">
+            {round.reminders.map((r) => (
+              <li key={r}>{r}</li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
       {round.merit ? (
         <section className="mt-6" data-testid="prompter-merit">
           <p className="text-lg tracking-widest text-neutral-400">先说好在哪 · 模型写的，念之前扫一眼</p>

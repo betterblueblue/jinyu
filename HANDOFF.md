@@ -29,7 +29,7 @@ pnpm install
 cp .env.example .env.local   # 填 LLM_API_KEY，改掉默认密码和 JINYU_SESSION_SECRET
 pnpm dev                     # next dev -p 9000；也可以 .\start-dev.ps1（先查依赖和端口）
 pnpm typecheck               # tsc --noEmit
-pnpm test                    # vitest：19 个文件、298 个用例，全走假模型
+pnpm test                    # vitest：19 个文件、299 个用例，全走假模型
 ```
 
 - **直播**：双击 `启动直播台.bat`，用 Edge 或 Chrome 的 `--app` 模式开纯净窗口，再调 `tools/fit-window.ps1` 把窗口内容区压成 9:16（1080p 屏上是 576×1024）。直播伴侣里用「窗口」捕获这个窗口，不要用显示器捕获。`启动提词页.bat` 在直播窗口右边开提词页；手机打开同一地址，登录后自动回到提词页。两个 bat 里写死了局域网 IP `192.168.31.211`，IP 变了要改。

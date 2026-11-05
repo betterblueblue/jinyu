@@ -272,6 +272,50 @@ describe("接提词页和流", () => {
     expect(seen).toEqual(["facts", "analysis", "option"]);
     expect(result?.status).toBe(out.status);
   });
+
+  it("模型写的提醒会进提词页", async () => {
+    const raw: RawEvaluation = {
+      status: "no_better",
+      scores: { pronunciation: 16, meaning: 16, gender: 12, style: 6 },
+      original: {
+        pronunciation: "顺",
+        meaning: "正",
+        gender: "可",
+        style: "稳",
+        strengths: ["字义正"],
+        charMeaning: "华是光华，强是刚强。",
+        whole: "合起来是光华刚强的样子。",
+        comment: "字义正面，但读着平。",
+        issues: [],
+        reminders: ["和电视剧角色刘华强重名，带黑帮联想"],
+      },
+      options: [],
+      note: "",
+    };
+    const provider: EvaluateProvider = {
+      name: "reminder",
+      evaluate: async (_facts, onScores, onOriginal) => {
+        onScores?.({ pronunciation: 16, meaning: 16, gender: 12, style: 6 });
+        onOriginal?.(raw.original!);
+        return raw;
+      },
+    };
+    const out = await evaluateName({ fullName: "刘华强", gender: "male" }, provider);
+    const round = prompterFromEvaluation({
+      no: 1,
+      facts: out.facts,
+      original: out.original,
+      candidates: [],
+      status: out.status,
+      note: out.note,
+      fixShown: false,
+    });
+    if (round.state !== "score") throw new Error("应该是打分轮");
+    expect(round.reminders).toContain("和电视剧角色刘华强重名，带黑帮联想");
+    const parsed = parsePrompterRound(round);
+    if (!parsed || parsed.state !== "score") throw new Error("提词页格式校验失败");
+    expect(parsed.reminders).toContain("和电视剧角色刘华强重名，带黑帮联想");
+  });
 });
 
 describe("三个已确认 bug 的回归", () => {
