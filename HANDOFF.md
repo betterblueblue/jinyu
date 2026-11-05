@@ -47,8 +47,8 @@ pnpm test                    # vitest：19 个文件、298 个用例，全走假
 | 变量 | 不设时 | 说明 |
 |---|---|---|
 | `LLM_API_KEY` | 无 | 没有时完整版、八字、改字走假模型；直播起名全从名字库出，库里不够就报错 |
-| `LLM_BASE_URL` | `http://127.0.0.1:3425/v1` | 本机 OpenAI 兼容网关 |
-| `LLM_MODEL` | `opendesign/deepseek-v4.1-flash` | 只用这个模型（用户定的，别换） |
+| `LLM_BASE_URL` | `https://api.deepseek.com/v1` | DeepSeek 官方 API（2026-11-05 切换） |
+| `LLM_MODEL` | `deepseek-flash` | 官方 DeepSeek-V4.1-Flash（用户定的；不用 pro） |
 | `LLM_USE_FAKE` | 关 | `true` 时完整版、八字、改字走假模型；直播起名不看它 |
 | `FAST_HEDGE_MS` | 5000 | 直播起名第一路多少毫秒没回就补发其余几路。本机设的是 0：一开始就几路一起发 |
 | `FAST_PRIMARY` | `model` | 直播首推从哪来；设成 `library` 就回到「首推从名字库挑」 |
@@ -58,7 +58,7 @@ pnpm test                    # vitest：19 个文件、298 个用例，全走假
 | `JINYU_SESSION_SECRET` | 代码里的开发用串 | 登录 cookie 的签名密钥 |
 | `JINYU_DATA_DIR` | `./data` | 报告、名字库、评审结果的根目录；测试指到临时目录 |
 | `JINYU_CORPUS_DIR` | `./data/corpus` | 语料目录 |
-| `LLM_PROVIDER` | — | 只当标签写进结果，代码不按它分支 |
+| `LLM_PROVIDER` | `deepseek` | 只当标签写进结果，代码不按它分支 |
 
 ## 3. 目录和模块
 
@@ -179,7 +179,7 @@ data/                     不进 git：reports/、index.json、corpus/、name-li
 
 | 日期 | 决定 | 原因 |
 |---|---|---|
-| 10-29 / 10-31 | 模型换成本机网关的 `opendesign/deepseek-v4.1-flash`，之后只用它 | 用户定，别换模型 |
+| 10-29 / 10-31 | 模型换成本机网关的 `opendesign/deepseek-v4.1-flash`，当时只用它 | 用户定；2026-11-05 已切到 DeepSeek 官方 `deepseek-flash`，见下 |
 | 10-30 | `data/` 整个不进 git，名字库靠 `备份名字库.bat` | 用户定 |
 | 10-30 | 取消「风格」维度 | 用户定。`docs/UI.md` 的「风格」一节还没改，以这里为准 |
 | 10-31 | 直播起名和完整版分开：独立接口 `/api/fast`、独立目录 `src/fast`，结果不落盘 | 完整版一轮 20–40 秒，直播要 3–5 秒；直播存图即交付，写进历史会把历史页弄乱 |
@@ -221,6 +221,7 @@ data/                     不进 git：reports/、index.json、corpus/、name-li
 | 11-04 | 打分榜换成综合评分：六维档位相加、风险上限 69/79/89；模型只给档位，程序算分；一次调用同时写原名评价和候选；默认精简、候选 2 个、low、总超时 60 秒（空闲 30 秒）；性别没填不出分 | 用户定：只让取名效果更好。旧评分和推荐线 `recommend.ts` 保留不动，直播页只显示一种口径。样例校准见 `data/eval/evaluate-*` |
 | 11-04 | 候选验收从「性别辨识不能降」改成「读音、字义、风格至少一维比原名好」，去掉字表兜底 | 用户指出规则太死：文娟→文晴被误伤，文娟→文安又只是换了个不老的字。新条件放过「中性但更亮」，挡住「三维都没变」 |
 | 11-05 | 直播起名闸门改用六维分（方案 A：风格不参与总分） | 用户定：起名和打分榜同一套分。模型每个候选多给读音/字义/性别三个档位，`gate.ts` 调 `scoreBreakdown`，默认 ≥85 才留（`FAST_SIX_MIN` 可调到 90）；没给档位回退 `recommend.ts` 旧规则。风格按基准 6 分，只在候选比较和排序里用 |
+| 11-05 | 系统 LLM 切到 DeepSeek 官方 API（`deepseek-flash`） | 用户定：官方 API 速度更快；成本更高，先只切系统默认，不继续测 `deepseek-v4-pro` |
 
 ## 6. 别再踩的坑
 

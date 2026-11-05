@@ -34,21 +34,21 @@ Source: 用户确认「Next.js + TS 全栈（推荐）」；细节由实现默�
 
 | 项 | 值 |
 |---|---|
-| 厂商 | **本机 OpenAI 兼容网关**（DSH magpie，`127.0.0.1:3425`） |
+| 厂商 | **DeepSeek 官方 API** |
 | 协议 | **OpenAI 兼容 Chat Completions**（首选实现） |
-| Base URL | `http://127.0.0.1:3425/v1` |
-| Chat Completions | `http://127.0.0.1:3425/v1/chat/completions` |
-| 默认模型 | **`opendesign/deepseek-v4.1-flash`** |
+| Base URL | `https://api.deepseek.com/v1` |
+| Chat Completions | `https://api.deepseek.com/v1/chat/completions` |
+| 默认模型 | **`deepseek-flash`**（DeepSeek-V4.1-Flash） |
 | API Key | 仅存 `.env.local` 的 `LLM_API_KEY`，**禁止**写入代码/文档/issue |
-| 备用通道 | StepFun 官方（`https://api.stepfun.com/step_plan/v1` · `step-3.7-flash`），换回只改三个 env |
+| 备用通道 | 本机网关 `http://127.0.0.1:3425/v1`（`opendesign/deepseek-v4.1-flash`），换回只改三个 env |
 
 环境变量约定：
 
 ```bash
-LLM_PROVIDER=magpie
-LLM_BASE_URL=http://127.0.0.1:3425/v1
+LLM_PROVIDER=deepseek
+LLM_BASE_URL=https://api.deepseek.com/v1
 LLM_API_KEY=...          # 仅 .env.local
-LLM_MODEL=opendesign/deepseek-v4.1-flash
+LLM_MODEL=deepseek-flash
 LLM_USE_FAKE=false       # 本地默认 false=真 LLM；仅 CI/单测/E2E 设 true
 ```
 

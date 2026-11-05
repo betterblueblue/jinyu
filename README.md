@@ -12,7 +12,7 @@
 
 **Next.js（App Router）+ TypeScript** 全栈 · 本地 JSON 报告快照 · Zod · Vitest · Playwright E2E · Fake/Real LLM 端口 · 摘要图（Satori 优先）。
 
-**真 LLM**：本机 OpenAI 兼容网关 · 模型 `opendesign/deepseek-v4.1-flash` · Chat Completions（`LLM_BASE_URL` + `LLM_API_KEY`，见 `docs/TECH.md` 与 `.env.example`）。
+**真 LLM**：DeepSeek 官方 API · 模型 `deepseek-flash` · Chat Completions（`LLM_BASE_URL` + `LLM_API_KEY`，见 `docs/TECH.md` 与 `.env.example`）。
 
 细节与目录约定见 `docs/TECH.md`。
 
