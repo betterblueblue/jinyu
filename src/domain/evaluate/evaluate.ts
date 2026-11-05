@@ -3,6 +3,7 @@ import { resolveSplit, scoreName } from "@/domain/score/score";
 import { buildFacts } from "./facts";
 import { parseOriginal, parseScores, scoresFromOriginal, type ParsedScores } from "./prompt";
 import type { EvaluateProvider } from "./provider";
+import { avoidChars, startRound } from "./recent-chars";
 import { anchorPronunciation, applyAgePenalty, BAND_CUTS, scoreBreakdown } from "./scoring";
 import { verifyCandidate } from "./verify";
 import type {
@@ -29,13 +30,6 @@ import type {
  * 性别没填不调模型：先返回基础材料，让主播问一句是男宝还是女宝。
  * 模型不输出分数，总分和上限都在这里算。
  */
-
-/**
- * 最近给过的候选替换字，传给模型让它这轮避开，解决「晴、妍、悦」反复出现。
- * 进程级，重启清空；直播一次一个名字，够用。
- */
-const recentCandidateChars: string[] = [];
-const BANNED_MAX = 18;
 
 export interface EvaluateInput {
   fullName: string;
@@ -280,6 +274,10 @@ export async function evaluateName(
   const facts = buildFacts(split, score);
 
   if (checked.input.gender === "unknown") return empty("needs_gender", facts, STATUS_NOTE.needs_gender);
+  // 最近几位换上的字这一位避开，男女分开记（recent-chars.ts）
+  const gender = checked.input.gender;
+  const banned = avoidChars(gender, facts.givenName);
+  const recordChars = startRound(gender);
 
   // 钉住时当作原名评价已经写完：模型这次写的分数和理由都不用，只收改法
   const pinned = options.pinnedOriginal ?? null;
@@ -305,13 +303,8 @@ export async function evaluateName(
     if (out.candidate) {
       if (!candidates.some((c) => c.givenName === out.candidate!.givenName)) {
         candidates.push(out.candidate);
-        // 记下换上的字，接下来几轮让模型避开
-        for (const ch of out.candidate.givenName) {
-          if (!facts.givenName.includes(ch)) {
-            recentCandidateChars.push(ch);
-            if (recentCandidateChars.length > BANNED_MAX) recentCandidateChars.shift();
-          }
-        }
+        // 记下换上的字，接下来几位让模型避开
+        recordChars([...out.candidate.givenName].filter((ch) => !facts.givenName.includes(ch)));
         callbacks.onOption?.(out.candidate);
       }
     } else {
@@ -370,9 +363,7 @@ export async function evaluateName(
 
   let raw: RawEvaluation | null;
   try {
-    raw = await provider.evaluate(facts, handleScores, handleRawOriginal, takeOption, callbacks.onThought, [
-      ...recentCandidateChars,
-    ], options.signal);
+    raw = await provider.evaluate(facts, handleScores, handleRawOriginal, takeOption, callbacks.onThought, banned, options.signal);
   } catch (err) {
     const message = err instanceof Error ? err.message : "评价没成功";
     if (early) {

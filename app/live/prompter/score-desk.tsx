@@ -149,6 +149,19 @@ export function ScoreDesk({ active }: { active: boolean }) {
           tip: Boolean(result.original?.reminders.length),
           ms: result.tookMs,
         });
+        // 出了哪些改法：没有「点改一个字」以后，改法一到就显示，这里一出结果就记（统计换上的字扎不扎堆靠它）
+        if (result.status !== "needs_gender") {
+          logLive({
+            kind: "fix",
+            fullName: result.facts.fullName,
+            waitMs: result.tookMs,
+            prefetched: true,
+            options: result.candidates.map((c) => ({ fullName: c.fullName, score: c.scores.total })),
+            // 日志接口超过 120 字整条不收
+            ...(result.status === "one_char_insufficient" && result.note ? { unfixable: result.note.slice(0, 120) } : {}),
+            ...((result.status === "error" || result.status === "timeout") && result.note ? { error: result.note.slice(0, 120) } : {}),
+          });
+        }
       } catch (e) {
         patch(id, (r) => ({ ...r, error: e instanceof Error ? e.message : "评价失败" }));
       }

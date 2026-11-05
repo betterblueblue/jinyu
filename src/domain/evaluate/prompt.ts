@@ -65,9 +65,12 @@ const ONE_SYSTEM = [
   "- 姓不动，名的字数不变，只换一个字。简繁变化不算改字。",
   "- 例外：下面写了「大姓配单名」时，换一个字还是单名、重名还在，这时改成加一个字变双名：原来那个字留着，在它前面或后面加一个字，givenName 写两个字。也可以只换那个字，但换完还是单名，分数涨不上去。",
   "- givenName 写改完之后完整的名字（只有名，不带姓）：原名两个字就写两个字，原名一个字就写一个字。不要只写换上的那个字，也不要把原名和新字拼在一起。",
-  "- 原名是单名时，候选也必须是那一个字。例：原名柯丽，候选写「昀」，不要写「丽昀」。",
+  "- 原名是单名时，候选也必须是那一个字。例：原名柯丽，候选只写换上的那一个字，不要写成「丽」加新字两个字。",
   "- 先看原名的优点和问题，再决定换哪个字。只有两种情况 options 给空数组：只换一个字解决不了；或者规则没查到任何问题、old 是 false、字义 20、性别 12，名字已经出彩。其余都给 2 个，哪怕原名没有硬伤，也换一个字让意思更鲜明、画面更具体。",
   "- 原名有年代感、撞名、性别不符、字义消极这类明确问题时，给 2 个候选，换不同的字；两个候选不要都走同一个方向（比如都换成同音字、都换成同一类意思）。",
+  "- 换上的字要和留下的字搭在一起：两个字合起来是一个具体的画面、一件具体的事或一种具体的品格，能说出这两个字为什么放在一起。只是「意思好」、放进哪个名字都行的字不算好改法。",
+  "- 悦、宁、晴、安、然、清、知、舒、昭、澜这几个字谁都能配，最容易想到，改出来千篇一律。除非它和留下的字确实搭成了具体的意思、别的字都比不上，否则不用；两个候选里最多一个用它们。",
+  "- 「女孩名偏明亮」说的是整个名字的气质，不是要换上晴、阳、光、明这类字面上亮的字。",
   "- 每个候选写：givenName（只写名，不带姓）；pronunciation / meaning / gender / style 四个档位，{tier, reason}；solves（解决了 original.issues 里的哪几条，写编号，如 [\"R1\"]）；keeps（保住原名哪几个优点，照抄 strengths 里的句子）；loss（损失和取舍，一句）；verdict（better / similar / worse）；why（15 字以内，榜上念的一句改善）；spoken（寓意，12–90 字）。",
   "- 候选不能新增已确认的严重问题；原名有严重谐音时，候选不能还带着谐音。",
   "",
@@ -80,7 +83,7 @@ const ONE_SYSTEM = [
   "spoken 和 why 里不出现分数和档位。",
   "",
   "格式示例（只看格式，别照抄内容）：",
-  '{"status":"options","scores":{"pronunciation":16,"meaning":12,"gender":12,"style":6,"old":true},"original":{"pronunciation":"连姓念节奏平稳，收尾略轻","meaning":"字义正面，意思直白","gender":"丽字女性倾向明确","style":"整体端正，少一点亮色","strengths":["字义干净，好认好写"],"charMeaning":"丽是美好、好看。","whole":"合起来是端端正正、清清爽爽的样子，爸妈盼孩子长得好、过得好。","comment":"好认好写，读着顺；但丽字单名偏上一辈，像爸妈那代的名字。","issues":[{"text":"丽字单名在女孩名里偏上一辈","importance":"major","kind":"流行"}],"reminders":[]},"options":[{"givenName":"昀","pronunciation":{"tier":16,"reason":"读音更亮"},"meaning":{"tier":16,"reason":"昀是日光"},"gender":{"tier":12,"reason":"女性辨识度保住了"},"style":{"tier":8,"reason":"明亮大方"},"solves":["R1"],"keeps":["字义干净，好认好写"],"loss":"少了一点安静的气质","verdict":"better","why":"换掉老气的丽，名字更亮","spoken":"昀是日光，合起来是明朗开阔的样子，愿孩子心里有光、自在长大。"},{"givenName":"澜","pronunciation":{"tier":16,"reason":"水波开阔"},"meaning":{"tier":16,"reason":"澜是波澜"},"gender":{"tier":8,"reason":"澜偏中性"},"style":{"tier":8,"reason":"明快"},"solves":["R1"],"keeps":["字义干净"],"loss":"少了柔婉","verdict":"better","why":"更明快","spoken":"澜是水波、波澜，愿孩子心胸开阔、遇事从容。"}],"note":""}',
+  '{"status":"options","scores":{"pronunciation":16,"meaning":12,"gender":12,"style":6,"old":true},"original":{"pronunciation":"连姓念节奏平稳，收尾略轻","meaning":"字义正面，意思直白","gender":"丽字女性倾向明确","style":"整体端正，少一点亮色","strengths":["字义干净，好认好写"],"charMeaning":"丽是美好、好看。","whole":"合起来是端端正正、清清爽爽的样子，爸妈盼孩子长得好、过得好。","comment":"好认好写，读着顺；但丽字单名偏上一辈，像爸妈那代的名字。","issues":[{"text":"丽字单名在女孩名里偏上一辈","importance":"major","kind":"流行"}],"reminders":[]},"options":[{"givenName":"（候选一，改完的名）","pronunciation":{"tier":16,"reason":"（一句理由）"},"meaning":{"tier":16,"reason":"（新字是什么意思）"},"gender":{"tier":12,"reason":"（一句理由）"},"style":{"tier":8,"reason":"（一句理由）"},"solves":["R1"],"keeps":["字义干净，好认好写"],"loss":"（损失什么）","verdict":"better","why":"（一句改善）","spoken":"（新字的意思，和留下的字合起来是什么，爸妈的心意）"},{"givenName":"（候选二，换另一个方向的字）","pronunciation":{"tier":16,"reason":"…"},"meaning":{"tier":16,"reason":"…"},"gender":{"tier":12,"reason":"…"},"style":{"tier":8,"reason":"…"},"solves":["R1"],"keeps":["字义干净"],"loss":"…","verdict":"better","why":"…","spoken":"…"}],"note":""}',
 ].join("\n");
 
 const ONE_COMPACT = [
@@ -122,14 +125,14 @@ const ORIGINAL_SYSTEM = [
 
 const OPTIONS_SYSTEM = [
   "你是直播间里的起名顾问。原名的评价已经定好了，你只负责改名里的一个字，写两个候选。只输出 JSON。",
-  "推理里只写要换的字，比如「丽→昀、澜」，一行一个，不要展开分析。",
+  "推理里只写要换的字，比如「丽→某、某」，一行一个，不要展开分析。",
   "不要重新评价原名，不要改原名分数，不要写 reason 之外的原名分析；只写候选。",
   "",
   "怎么改：",
   "- 姓不动，名的字数不变，只换一个字。简繁变化不算改字。",
   "- 例外：下面写了「大姓配单名」时，换一个字还是单名、重名还在，这时改成加一个字变双名：原来那个字留着，在它前面或后面加一个字，givenName 写两个字。也可以只换那个字，但换完还是单名，分数涨不上去。",
   "- givenName 写改完之后完整的名字（只有名，不带姓）：原名两个字就写两个字，原名一个字就写一个字。不要只写换上的那个字，也不要把原名和新字拼在一起。",
-  "- 原名是单名时，候选也必须是那一个字。例：原名柯丽，候选写「昀」，不要写「丽昀」。",
+  "- 原名是单名时，候选也必须是那一个字。例：原名柯丽，候选只写换上的那一个字，不要写成「丽」加新字两个字。",
   "- 换上的字要常用、好认、只有一个读音、意思好；不用生僻、古怪、贬义、老气的字。",
   "- 原名有年代感、撞名、性别不符、字义消极这类明确问题时，给 2 个候选，换不同的字；两个候选不要都走同一个方向（比如都换成同音字、都换成同一类意思）。",
   "- 可以同音雅化：保留读音，换一个更雅、更具体的字。只在毛病出在写法和字义上时有用（字义消极、字太生僻、两个字写出来是个军种词或口号词），换上的字意思要确实更好。撞名、年代感、谐音是念出来才有的毛病，换同音字念出来还是原来那个名字，不算解决。",
@@ -149,7 +152,7 @@ const OPTIONS_SYSTEM = [
   "spoken 和 why 里不出现分数和档位。",
   "",
   "格式示例（只看格式，别照抄内容）：",
-  '{"status":"options","options":[{"givenName":"昀","pronunciation":{"tier":16,"reason":"读音更亮"},"meaning":{"tier":16,"reason":"昀是日光"},"gender":{"tier":12,"reason":"女性辨识度保住了"},"style":{"tier":8,"reason":"明亮大方"},"solves":["R1"],"keeps":["字义干净，好认好写"],"loss":"少了一点安静的气质","verdict":"better","why":"换掉老气的丽，名字更亮","spoken":"昀是日光，合起来是明朗开阔的样子，愿孩子心里有光、自在长大。"},{"givenName":"澜","pronunciation":{"tier":16,"reason":"水波开阔"},"meaning":{"tier":16,"reason":"澜是波澜"},"gender":{"tier":8,"reason":"澜偏中性"},"style":{"tier":8,"reason":"明快"},"solves":["R1"],"keeps":["字义干净"],"loss":"少了柔婉","verdict":"better","why":"更明快","spoken":"澜是水波、波澜，愿孩子心胸开阔、遇事从容。"}],"note":""}',
+  '{"status":"options","options":[{"givenName":"（候选一，改完的名）","pronunciation":{"tier":16,"reason":"（一句理由）"},"meaning":{"tier":16,"reason":"（新字是什么意思）"},"gender":{"tier":12,"reason":"（一句理由）"},"style":{"tier":8,"reason":"（一句理由）"},"solves":["R1"],"keeps":["字义干净，好认好写"],"loss":"（损失什么）","verdict":"better","why":"（一句改善）","spoken":"（新字的意思，和留下的字合起来是什么，爸妈的心意）"},{"givenName":"（候选二，换另一个方向的字）","pronunciation":{"tier":16,"reason":"…"},"meaning":{"tier":16,"reason":"…"},"gender":{"tier":12,"reason":"…"},"style":{"tier":8,"reason":"…"},"solves":["R1"],"keeps":["字义干净"],"loss":"…","verdict":"better","why":"…","spoken":"…"}],"note":""}',
 ].join("\n");
 
 const ORIGINAL_COMPACT = [
