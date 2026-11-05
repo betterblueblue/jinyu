@@ -5,7 +5,7 @@ type Step = (signal?: AbortSignal) => Promise<Reply>;
 
 // 模型调用换成脚本：每次 streamChat 按顺序取一步，看补发逻辑怎么走
 const mock = vi.hoisted(() => ({
-  calls: [] as { signal?: AbortSignal; user: string }[],
+  calls: [] as { signal?: AbortSignal; user: string; timeoutMs?: number }[],
   script: [] as Step[],
 }));
 
@@ -13,8 +13,12 @@ vi.mock("@/providers/chat", async () => {
   const actual = await vi.importActual<typeof import("@/providers/chat")>("@/providers/chat");
   return {
     ...actual,
-    streamChat: vi.fn((_client: unknown, args: { signal?: AbortSignal; messages: { role: string; content: string }[] }) => {
-      mock.calls.push({ signal: args.signal, user: args.messages.find((m) => m.role === "user")?.content ?? "" });
+    streamChat: vi.fn((_client: unknown, args: { signal?: AbortSignal; timeoutMs?: number; messages: { role: string; content: string }[] }) => {
+      mock.calls.push({
+        signal: args.signal,
+        timeoutMs: args.timeoutMs,
+        user: args.messages.find((m) => m.role === "user")?.content ?? "",
+      });
       const next = mock.script.shift();
       return next ? next(args.signal) : Promise.reject(new Error("脚本用完了"));
     }),
@@ -56,6 +60,12 @@ beforeEach(() => {
 });
 
 describe("精简版补发", () => {
+  it("单路请求带 15 秒超时，不会干等 240 秒", async () => {
+    mock.script = [after(5, "清禾")];
+    await make(200).draft(req, round);
+    expect(mock.calls[0]!.timeoutMs).toBe(15_000);
+  });
+
   it("第一路及时回来就不补发", async () => {
     mock.script = [after(5, "清禾")];
     const p = make(200);

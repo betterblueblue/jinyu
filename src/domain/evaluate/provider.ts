@@ -30,6 +30,7 @@ export interface EvaluateProvider {
     onOption?: (raw: RawCandidate) => void,
     onThought?: (text: string) => void,
     banned?: string[],
+    signal?: AbortSignal,
   ): Promise<RawEvaluation | null>;
 }
 
@@ -54,6 +55,7 @@ export class LlmEvaluateProvider implements EvaluateProvider {
     onOption?: (raw: RawCandidate) => void,
     onThought?: (text: string) => void,
     banned: string[] = [],
+    signal?: AbortSignal,
   ): Promise<RawEvaluation | null> {
     let text = "";
     let scoresDone = false;
@@ -95,6 +97,7 @@ export class LlmEvaluateProvider implements EvaluateProvider {
         timeoutMs: this.timeoutMs,
         // 推理时可能十几秒没有新 token，空闲超时给太短会把还在想的长名字误杀
         idleTimeoutMs: 30_000,
+        signal,
         onThinking: emitThought,
         onContent: (chunk) => {
           if (!onScores && !onOriginal && !onOption) return;

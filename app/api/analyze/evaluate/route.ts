@@ -52,7 +52,7 @@ export async function POST(req: Request) {
   };
 
   if (new URL(req.url).searchParams.get("stream") !== "1") {
-    const result = await evaluateName(input, provider, { maxCandidates: 2 });
+    const result = await evaluateName(input, provider, { maxCandidates: 2, signal: req.signal });
     return NextResponse.json({ ok: true, result }, { status: result.status === "error" ? 502 : 200 });
   }
 
@@ -71,7 +71,7 @@ export async function POST(req: Request) {
 
       let result: EvaluateResult;
       try {
-        result = await evaluateName(input, provider, { maxCandidates: 2 }, {
+        result = await evaluateName(input, provider, { maxCandidates: 2, signal: req.signal }, {
           onScores: (original) => send({ type: "analysis", original }),
           onOriginal: (original) => send({ type: "analysis", original }),
           onOption: (option) => send({ type: "option", option }),

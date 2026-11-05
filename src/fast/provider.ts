@@ -16,6 +16,8 @@ import type { FastRequest } from "./types";
 
 const MAX_TOKENS = 4096;
 const RETRY_MAX_TOKENS = 8192;
+/** 单次模型请求最长等 15 秒（截断重试另算）：三路都没回就从名字库补位，不让直播台干等 240 秒 */
+const LANE_TIMEOUT_MS = 15_000;
 
 export interface RawFast {
   givenName: string;
@@ -114,7 +116,12 @@ export class FastProvider {
     // 一路请求：截断/解析失败只重试一次，且不清空已拿到的结果。index 0 是第一路，1 起是补发的
     const lane = async (signal: AbortSignal, index: number): Promise<LaneResult> => {
       const messages = messagesOf(index === 0 ? round : (hedges[index - 1] ?? round));
-      const first = await streamChat(this.client, { messages, maxTokens: MAX_TOKENS, signal });
+      const first = await streamChat(this.client, {
+        messages,
+        maxTokens: MAX_TOKENS,
+        timeoutMs: LANE_TIMEOUT_MS,
+        signal,
+      });
       let list = parseFast(first.content);
       let stats: LaneResult["stats"] = {
         reasoningChars: first.reasoningChars,
@@ -123,7 +130,12 @@ export class FastProvider {
         finishReason: first.finishReason,
       };
       if (list.length === 0 || first.finishReason === "length") {
-        const retry = await streamChat(this.client, { messages, maxTokens: RETRY_MAX_TOKENS, signal });
+        const retry = await streamChat(this.client, {
+          messages,
+          maxTokens: RETRY_MAX_TOKENS,
+          timeoutMs: LANE_TIMEOUT_MS,
+          signal,
+        });
         const retryList = parseFast(retry.content);
         if (retryList.length > list.length) list = retryList;
         stats = {

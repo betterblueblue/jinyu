@@ -45,6 +45,8 @@ export interface EvaluateInput {
 export interface EvaluateOptions {
   /** 最多收几个候选。直播只收 2 个，模型多给的丢掉 */
   maxCandidates?: number;
+  /** HTTP 请求断开时中止模型调用，别让网关白跑到超时 */
+  signal?: AbortSignal;
 }
 
 export interface EvaluateCallbacks {
@@ -313,7 +315,7 @@ export async function evaluateName(
   try {
     raw = await provider.evaluate(facts, handleScores, handleRawOriginal, takeOption, callbacks.onThought, [
       ...recentCandidateChars,
-    ]);
+    ], options.signal);
   } catch (err) {
     const message = err instanceof Error ? err.message : "评价没成功";
     if (early) {

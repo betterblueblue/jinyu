@@ -342,3 +342,20 @@ describe("三个已确认 bug 的回归", () => {
     expect(out.original?.issues.filter((it) => it.source === "model")).toHaveLength(0);
   });
 });
+
+describe("中止信号", () => {
+  it("外部 signal 会传给模型端口", async () => {
+    let seen: AbortSignal | undefined;
+    const provider: EvaluateProvider = {
+      name: "spy",
+      evaluate: async (_facts, _onScores, _onOriginal, _onOption, _onThought, _banned, signal) => {
+        seen = signal;
+        return null;
+      },
+    };
+    const ac = new AbortController();
+    const out = await evaluateName({ fullName: "文娟", gender: "female" }, provider, { signal: ac.signal });
+    expect(seen).toBe(ac.signal);
+    expect(out.status).toBe("error");
+  });
+});
