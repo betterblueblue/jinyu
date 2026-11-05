@@ -3,6 +3,7 @@ import { isAuthenticated } from "@/auth/session";
 import { validateAnalysisInput } from "@/domain/analysis/analyze";
 import { resolveSplit } from "@/domain/score/score";
 import { getQmzChar } from "@/dictionary/qmz";
+import { isSensitiveName, SENSITIVE_NOTE } from "@/domain/evaluate/sensitive";
 
 /**
  * 名字的字典初检：只读本地 data/qmz-dict/chars.json，几毫秒就回。
@@ -28,6 +29,9 @@ export async function GET(req: Request) {
     splitSurname: url.searchParams.get("surname") ?? undefined,
   });
   if (!checked.ok) return NextResponse.json({ ok: false, message: checked.message }, { status: 400 });
+  if (isSensitiveName(checked.input.fullName)) {
+    return NextResponse.json({ ok: false, message: SENSITIVE_NOTE }, { status: 400 });
+  }
   const split = resolveSplit(checked.input.fullName, checked.input.surnameOverride);
   if (!split) return NextResponse.json({ ok: false, message: "姓名无法拆分" }, { status: 400 });
 

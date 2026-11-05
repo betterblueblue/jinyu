@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { splitFullName } from "@/domain/analysis/split-name";
+import { isSensitiveName, SENSITIVE_NOTE } from "@/domain/evaluate/sensitive";
 import type { EvalCandidate, EvalStatus, NameFacts, OriginalEvaluation } from "@/domain/evaluate/types";
 import type { PrompterDictEntry } from "@/live/prompter";
 import { readEvaluateStream } from "./evaluate-stream";
@@ -89,6 +90,8 @@ export function AnalyzePanel({ open, onClose, onRename }: Props) {
   const [confirmClear, setConfirmClear] = useState(false);
   /** 输入法还在组字：这时候点「打分」会提交拼音，先挡住 */
   const [composing, setComposing] = useState(false);
+  /** 上一次回车的是不打分的名字，输入框下面说一句；再输入就清掉 */
+  const [blocked, setBlocked] = useState(false);
 
   const inputRef = useRef<HTMLInputElement | null>(null);
   const boardRef = useRef<HTMLOListElement | null>(null);
@@ -134,7 +137,8 @@ export function AnalyzePanel({ open, onClose, onRename }: Props) {
         const res = await fetch("/api/analyze/evaluate?stream=1", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(input),
+          // retry：原名评价按上次的钉住，只重写改法，分数不会变
+          body: JSON.stringify(retry ? { ...input, retry: true } : input),
         });
         if (res.status === 401) throw new Error("登录过期，刷新页面重新登录");
         if (!res.ok) {
@@ -209,6 +213,15 @@ export function AnalyzePanel({ open, onClose, onRename }: Props) {
     if (composing) return;
     const fullName = name.replace(/\s/g, "");
     if (fullName.length < 2 || fullName.length > 4) return;
+    // 敏感人物：不上榜、不推提词页、不记日志，只清掉输入框（2026-11-05）
+    if (isSensitiveName(fullName)) {
+      setName("");
+      setGender("unknown");
+      setSurnameOverride(null);
+      setBlocked(true);
+      inputRef.current?.focus();
+      return;
+    }
     const id = nextId.current++;
     const input = { fullName, gender, ...(splitPreview ? { splitSurname: splitPreview.surname } : {}) };
     setRows((all) => [...all, { id, input, candidates: [], thoughts: [], fixShown: false, startedAt: Date.now() }]);
@@ -344,6 +357,7 @@ export function AnalyzePanel({ open, onClose, onRename }: Props) {
           onChange={(e) => {
             setName(e.target.value);
             setSurnameOverride(null);
+            setBlocked(false);
           }}
           onKeyDown={(e) => {
             // 输入法选字时数字键和回车都归输入法，不能当成快捷键
@@ -400,6 +414,8 @@ export function AnalyzePanel({ open, onClose, onRename }: Props) {
               </span>
             )}
           </>
+        ) : blocked ? (
+          <span>{SENSITIVE_NOTE}</span>
         ) : (
           <span>
             {trimmed.length === 1

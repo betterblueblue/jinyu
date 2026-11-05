@@ -80,20 +80,53 @@ export function verifyCandidate(
   if (!tiers) return reject(["四个维度的档位或理由不完整"]);
 
   const facts = factsOf(surname, given, originalFacts.gender);
+  /*
+   * 读音没变的改法（李一诺 → 李仪诺、王伟 → 王玮）：撞名、年代感、谐音是念出来才有的毛病，
+   * 换个同音字，喊名字时还是原来那个。流行、谐音两维是按字查表的，会以为毛病没了。
+   * 所以读音没变时这两维按原名算，只认字义、写法上的提升（军 → 钧 不再是军种词，这算）。
+   * 不一律拦同音改法：看出来的毛病（字义、生僻、多音）换同音字正好（2026-11-05 用户：读音必须变不合理）。
+   */
+  const sameSound = plainAt(surname, given, index) === plainAt(surname, originalFacts.givenName, index);
+  const scoredFacts: NameFacts = sameSound
+    ? {
+        ...facts,
+        program: {
+          ...facts.program,
+          popularity: originalFacts.program.popularity,
+          homophone: originalFacts.program.homophone,
+        },
+      }
+    : facts;
   // 2026-11-05 定（方案 A）：原名和候选都不把风格算进总分；风格只用于 betterDimension 和排序
-  const scores = scoreBreakdown(facts, tiers, { styleBaseline: true });
+  const scores = scoreBreakdown(scoredFacts, tiers, { styleBaseline: true });
   const reasons: string[] = [];
 
   if (raw.verdict !== "better") reasons.push("模型自己的比较结论不是更值得用");
   if (facts.risk.severe.length > 0) reasons.push(`新增了已确认的严重问题：${facts.risk.severe[0]!.line}`);
   if (originalFacts.risk.hasSevereHomophone && facts.risk.hasHomophone) reasons.push("原来的严重谐音没有解决");
+  /*
+   * 候选解决了原名的谐音（谐音分比原名高；读音没变时按原名算，不会误判成解决了）。
+   * 杜子腾 → 杜子衡 69 → 90，原来被下面两条挡掉（2026-11-05）：
+   *   - 「至少一项比原名好」只看模型的四个档位，谐音是程序算的，不在里面；
+   *   - 「流行、识读不能变差」没有例外，杜宇腾因为宇是热门字被拒。
+   * 谐音是会被起外号的硬伤，比用了个热门字重，所以解决了谐音时流行分可以降；
+   * 识读可以降到 12（一个次常用字），再低就是换上了生僻或多音的次常用字，等于拿一个新麻烦换旧麻烦，照样拒。
+   */
+  const homophoneFixed = scoredFacts.program.homophone.score > originalFacts.program.homophone.score;
   // 独立于模型档位的检查：候选不能新增一般问题，也不能让流行或识读变差
   if (facts.risk.minor.length > originalFacts.risk.minor.length) reasons.push("新增了一般问题");
-  if (facts.program.popularity.score < originalFacts.program.popularity.score) reasons.push("流行分比原名低");
-  if (facts.program.literacy.score < originalFacts.program.literacy.score) reasons.push("识读分比原名低");
+  if (!homophoneFixed && facts.program.popularity.score < originalFacts.program.popularity.score) reasons.push("流行分比原名低");
+  const literacyFloor = homophoneFixed ? Math.min(12, originalFacts.program.literacy.score) : originalFacts.program.literacy.score;
+  if (facts.program.literacy.score < literacyFloor) reasons.push("识读分比原名低");
 
   const gain = scores.total - original.scores.total;
-  if (gain <= 0) reasons.push(`总分没有提高（${scores.total} 对 ${original.scores.total}）`);
+  if (gain <= 0) {
+    reasons.push(
+      sameSound && scoreBreakdown(facts, tiers, { styleBaseline: true }).total > original.scores.total
+        ? `读音没变，撞名、年代感念出来还在，总分没有提高（${scores.total} 对 ${original.scores.total}）`
+        : `总分没有提高（${scores.total} 对 ${original.scores.total}）`,
+    );
+  }
   // solves 只能引用原名真实存在的规则问题编号；模型常按示例习惯写 R1，这里必须过滤
   const ruleIds = new Set(originalFacts.issues.map((it) => it.id));
   const solves = Array.isArray(raw.solves)
@@ -110,10 +143,10 @@ export function verifyCandidate(
    * 文娟 → 文晴：风格变亮，过；文娟 → 文安：三维都没动，只是换了个中性字，拒。
    * 不看性别档降不降：性别辨识已经在气质分里算过，再单独拦一次会误伤「中性但更亮」的候选。
    */
-  const betterDimension = (["pronunciation", "meaning", "gender", "style"] as const).some(
-    (k) => tiers[k].tier > original.tiers[k].tier,
-  );
-  if (!betterDimension) reasons.push("读音、字义、风格没有一项比原名好");
+  const betterDimension =
+    homophoneFixed ||
+    (["pronunciation", "meaning", "gender", "style"] as const).some((k) => tiers[k].tier > original.tiers[k].tier);
+  if (!betterDimension) reasons.push("读音、字义、风格、谐音没有一项比原名好");
 
   const why = typeof raw.why === "string" ? raw.why.replace(/\s+/g, "").trim() : "";
   if (!why || !sayable(why, WHY_MAX)) reasons.push("榜上那句理由不能念");

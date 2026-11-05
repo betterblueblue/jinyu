@@ -48,6 +48,11 @@ export interface EvaluateOptions {
   maxCandidates?: number;
   /** HTTP 请求断开时中止模型调用，别让网关白跑到超时 */
   signal?: AbortSignal;
+  /**
+   * 钉住的原名评价（主播点「再试一次」时用上次的）：分数、理由不变，模型只重新写改法。
+   * 同一个名字两次分数不一样，当着观众说不过去（2026-11-05）。
+   */
+  pinnedOriginal?: OriginalEvaluation;
 }
 
 export interface EvaluateCallbacks {
@@ -251,10 +256,12 @@ export async function evaluateName(
 
   if (checked.input.gender === "unknown") return empty("needs_gender", facts, STATUS_NOTE.needs_gender);
 
-  let early: OriginalEvaluation | null = null;
-  let complete = false;
+  // 钉住时当作原名评价已经写完：模型这次写的分数和理由都不用，只收改法
+  const pinned = options.pinnedOriginal ?? null;
+  let early: OriginalEvaluation | null = pinned;
+  let complete = Boolean(pinned);
   let latestScores: ParsedScores | null = null;
-  let currentOriginal: OriginalEvaluation | null = null;
+  let currentOriginal: OriginalEvaluation | null = pinned;
 
   const candidates: EvalCandidate[] = [];
   const rejected: RejectedCandidate[] = [];

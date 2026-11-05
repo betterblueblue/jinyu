@@ -29,7 +29,7 @@ pnpm install
 cp .env.example .env.local   # 填 LLM_API_KEY，改掉默认密码和 JINYU_SESSION_SECRET
 pnpm dev                     # next dev -p 9000；也可以 .\start-dev.ps1（先查依赖和端口）
 pnpm typecheck               # tsc --noEmit
-pnpm test                    # vitest：20 个文件、303 个用例，全走假模型
+pnpm test                    # vitest：21 个文件、319 个用例，全走假模型
 ```
 
 - **直播**：双击 `启动直播台.bat`，用 Edge 或 Chrome 的 `--app` 模式开纯净窗口，再调 `tools/fit-window.ps1` 把窗口内容区压成 9:16（1080p 屏上是 576×1024）。直播伴侣里用「窗口」捕获这个窗口，不要用显示器捕获。`启动提词页.bat` 在直播窗口右边开提词页；手机打开同一地址，登录后自动回到提词页。两个 bat 里写死了局域网 IP `192.168.31.211`，IP 变了要改。
@@ -92,7 +92,8 @@ src/
                           名字好在哪 merit.ts（提词页上的字义和寓意）。打分榜 11-04 起不再调这几个，只有推荐线还在用
   domain/evaluate/        综合评分（11-04 加）：types（档位和结果）、facts（旧规则整理成确认问题 / 参考）、
                           scoring（六维算分、risk 上限、band）、prompt（一次调用的提示词和流式解析）、
-                          verify（候选验收）、evaluate（编排）、provider（模型端口和精简模式）
+                          verify（候选验收）、evaluate（编排）、provider（模型端口和精简模式）、
+                          cache（同一个名字同一个分，接口层用）、sensitive（敏感人物不打分，浏览器和接口共用）
   domain/analysis/        打分和改字的输入校验、字表 chars.ts、语料核对 corpus.ts、拆姓名、性别倾向
   domain/（其余）          完整版：normalizer、orchestrator、gate、soft-ranker、assembler；bazi.ts 是完整版自己的排盘
   dictionary/             起名字典（zd.qmz.in）本地适配：qmz.ts（只读 data/qmz-dict/chars.json，不访问外站）
@@ -100,7 +101,8 @@ src/
   providers/              模型客户端。chat.ts 是共用的流式 Chat Completions；stepfun-provider 名字是旧的，现在是通用 OpenAI 兼容客户端
   render/                 摘要图：satori 画 SVG，resvg 转 PNG
   store/                  完整版报告：data/reports/<id>.json + data/index.json
-  config/                 字表：忌字、谐音、热门名、起手字、用户评过不要的名字（rejected-names.json）、出生地（places-cn.json）等
+  config/                 字表：忌字、谐音、热门名、起手字、用户评过不要的名字（rejected-names.json）、出生地（places-cn.json）、
+                          打分榜不打分的敏感人物（sensitive-names.json，11-05 用户审过）等
 scripts/
   library/                建库：build-review、publish、corpus、find-pairs、mine-pairs、locate
   dict/                   起名字典抓取：fetch-qmz.ts（抓单字页到 data/qmz-dict，data/ 不进 git）
@@ -157,6 +159,13 @@ data/                     不进 git：reports/、index.json、corpus/、name-li
 
 候选验收（`src/domain/evaluate/verify.ts`）：只换一个字、不新增严重问题、原名严重谐音要解决、
 总分提高、读音/字义/风格至少一维比原名好、模型结论是 better、理由和寓意能念。
+换上的字读音没变（不看声调）时，流行和谐音两维按原名算：撞名、年代感、谐音念出来还在，只认字义和写法上的提升。
+
+同一个名字同一个分（`src/domain/evaluate/cache.ts`，接口层）：按「姓 + 名 + 性别」记住第一次完整评完的结果，再报直接重放（`result.cached`）；
+主播点「再试一次」时请求带 `retry: true`，原名评价钉住（`evaluateName` 的 `pinnedOriginal`），模型只重写改法。只在内存里，重启开发服务清空。
+
+敏感人物不打分（`src/domain/evaluate/sensitive.ts`，名单 `src/config/sensitive-names.json`）：全名一致或带声调读音一致就拦。
+打分榜在浏览器里先查，命中不上榜、不推提词页、不记日志，只显示「这个名字不打分」；评价和字典接口各再查一次，回 400。
 候选后台先生成，观众屏幕和提词页都先不显示，主播点「改一个字」才亮出来。
 精简模式（默认）：每维理由 12 字、候选 2 个、总超时 60 秒（空闲 30 秒），2026-11-05 重跑中位 26.8 秒（波动很大）。
 
@@ -225,6 +234,9 @@ data/                     不进 git：reports/、index.json、corpus/、name-li
 | 11-04 | 候选验收从「性别辨识不能降」改成「读音、字义、风格至少一维比原名好」，去掉字表兜底 | 用户指出规则太死：文娟→文晴被误伤，文娟→文安又只是换了个不老的字。新条件放过「中性但更亮」，挡住「三维都没变」 |
 | 11-05 | 直播起名闸门改用六维分（方案 A：风格不参与总分） | 用户定：起名和打分榜同一套分。模型每个候选多给读音/字义/性别三个档位，`gate.ts` 调 `scoreBreakdown`，默认 ≥85 才留（`FAST_SIX_MIN` 可调到 90）；没给档位回退 `recommend.ts` 旧规则。风格按基准 6 分，只在候选比较和排序里用 |
 | 11-05 | 系统 LLM 切到 DeepSeek 官方 API（`deepseek-flash`） | 用户定：官方 API 速度更快；成本更高，先只切系统默认，不继续测 `deepseek-v4-pro` |
+| 11-05 | 打分榜三处修复：敏感人物不打分（全名一致 + 同音同调，用户定）；同一个名字同一个分（接口缓存 + retry 钉住原名分）；读音没变的改法，流行和谐音按原名算 | 第三条：11-01 的「听出来的毛病读音必须变」在 11-04 换 `verify.ts` 时丢了，李一诺 → 李仪诺 92、王伟 → 王玮 91 能过。用户说「读音必须变」一刀切不合理（文海军 → 文海钧 是认可的），所以不拦同音，只是不让按字查表的两维白涨分 |
+| 11-05 | 改法解决了原名谐音（谐音分比原名高）时：算「有一项比原名好」；流行分可以降；识读最多降到 12 | 用户让我定。原来「至少一项比原名好」只看模型四个档位，谐音是程序算的不在里面，杜子腾 → 杜子衡 69 → 90 被拒；「流行、识读不能降」（11-05 08:35 加）没有例外，杜宇腾因为宇是热门字被拒。识读留底线：换上生僻字等于拿新麻烦换旧麻烦（马彤 → 马玥 照样拒）。真模型 6 个谐音名字各 3 轮：旧规则 4 轮一个改法都没有，新规则 0 轮 |
+| 11-05 | 打分提示词里不写评测名单里的名字：格式示例文娟 → 柯丽，规则里的「文海军 → 文海钧、文海峻」「文红艳 → 文红雁」换成原则，分类举例换成淑芬、国强、卫东、空军 | 用户定。37 个评测名字里 6 个写在提示词里，模型照抄：08:07 那次文海军的两个改法和提示词里一字不差。`tests/evaluate.test.ts` 查系统提示词有没有评测名单里的名字（名单不进 git，没有就跳过）。起名提示词早就不放具体名字（`src/fast/prompt.ts` 开头） |
 
 ## 6. 别再踩的坑
 
@@ -241,6 +253,7 @@ data/                     不进 git：reports/、index.json、corpus/、name-li
 - Next 的路由播报元素也是 `role="alert"`，Playwright 找表单报错要写 `form p[role='alert']`。
 - 临时走查脚本里每一处等待都要有时限。11-01 一次走查卡了七分多钟，日志停在「等后台改字的流结束」（Playwright 的 `response.finished()`，没有时限）之前；事后直接请这个接口三次，流都正常关了（7.6–20.7 秒）。停掉卡住的后台命令只杀了外层 shell，node 和无头 Chromium 还活着，那个 `/live` 页面还开着、还会推提词页；要按进程树杀（`taskkill /PID <pid> /T /F`）。
 - 比两版提示词的快慢，要放在同一时段交替跑（`scripts/eval-fast.ts` 就是这么跑的）：网关忙闲能让同一版的中位差一倍。
+- 提示词里别写评测名单（`data/eval/sample-names.json`）里的名字，包括格式示例和「比如」：模型会照抄例子里的答案，评测量出来的是它背没背，不是改得好不好。要举例就挑名单外的名字，或者只讲原则。
 - `reasoning_effort` 设成 `minimal`、`none`，这个网关照样推理，压不下来；只有 `low` 和「推理里只写候选名字」有用。这句只对起名管用：改字要权衡扣分理由，写了反而推理更长（11-01 实测，见 `docs/直播提示词.md` 第五节）。
 
 ## 7. 文档

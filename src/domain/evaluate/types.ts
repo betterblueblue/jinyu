@@ -258,4 +258,6 @@ export interface EvaluateResult {
   /** 模型说的情况说明，或者失败原因 */
   note?: string;
   tookMs: number;
+  /** 这一场评过同一个名字，直接重放的上次结果（tookMs 记 0） */
+  cached?: boolean;
 }

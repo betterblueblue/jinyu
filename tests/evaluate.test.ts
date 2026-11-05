@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import path from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
 
@@ -7,12 +8,14 @@ process.env.JINYU_CORPUS_DIR = path.join(process.cwd(), "tests", "fixtures", "sc
 import { resetCharTableCache } from "@/domain/analysis/chars";
 import { evaluateName } from "@/domain/evaluate/evaluate";
 import { buildFacts } from "@/domain/evaluate/facts";
-import { completedOriginal, parseEvaluation, parseTierChoice } from "@/domain/evaluate/prompt";
+import { buildEvaluateMessages, completedOriginal, parseEvaluation, parseTierChoice } from "@/domain/evaluate/prompt";
 import { FakeEvaluateProvider } from "@/domain/evaluate/provider";
 import { BAND_CUTS, bandOf, capFor, clampTier } from "@/domain/evaluate/scoring";
 import type { EvaluateProvider } from "@/domain/evaluate/provider";
 import type { NameFacts, OriginalEvaluation, RawCandidate, RawEvaluation } from "@/domain/evaluate/types";
 import { verifyCandidate } from "@/domain/evaluate/verify";
+import { cacheKey, clearEvalCache, getCached, setCached } from "@/domain/evaluate/cache";
+import { isSensitiveName } from "@/domain/evaluate/sensitive";
 import { resolveSplit, scoreName } from "@/domain/score/score";
 import type { AnalysisGender } from "@/domain/analysis/types";
 import { parsePrompterRound } from "@/live/prompter";
@@ -167,6 +170,123 @@ describe("候选验收", () => {
   it("不是只换一个字的不收", () => {
     const out = verifyCandidate(rawCandidate({ givenName: "宸梓" }), factsOf("马梓宸", "male"), ORIGINAL);
     expect(out.rejected?.reasons.join("；")).toContain("只换一个字");
+  });
+
+  it("文娟 → 文涓：读音没变，年代感念出来还在，流行分按原名算，只靠这一维涨分的拒", () => {
+    const out = verifyCandidate(
+      rawCandidate({ givenName: "涓", style: { tier: 8, reason: "清一点" } }),
+      factsOf("文娟", "female"),
+      ORIGINAL,
+    );
+    expect(out.candidate).toBeUndefined();
+    expect(out.rejected?.reasons.join("；")).toContain("读音没变");
+  });
+
+  it("读音没变但字义确实更好：收下，只算字义那部分的提升", () => {
+    const out = verifyCandidate(
+      rawCandidate({ givenName: "涓", meaning: { tier: 20, reason: "涓是细水长流" } }),
+      factsOf("文娟", "female"),
+      ORIGINAL,
+    );
+    expect(out.candidate?.soundLine).toBe("读音不变");
+    expect(out.candidate?.scores.dimensions.popularity).toBe(ORIGINAL.scores.dimensions.popularity);
+    expect(out.candidate?.gain).toBe(4);
+  });
+
+  it.each([
+    ["子衡", "四个档位都和原名一样，只解决了谐音"],
+    ["宇腾", "宇是热门字，流行分降了，但解决了谐音"],
+  ])("杜子腾 → 杜%s：%s，收下", (given) => {
+    const facts = factsOf("杜子腾", "male");
+    const out = verifyCandidate(
+      rawCandidate({
+        givenName: given,
+        pronunciation: { tier: 16, reason: "顺" },
+        meaning: { tier: 16, reason: "正面" },
+        gender: { tier: 12, reason: "男孩名" },
+        style: { tier: 6, reason: "温和" },
+        solves: facts.issues.map((i) => i.id),
+      }),
+      facts,
+      { ...ORIGINAL, scores: { ...ORIGINAL.scores, dimensions: { ...ORIGINAL.scores.dimensions, homophone: 0 }, total: 69 } },
+    );
+    expect(out.rejected?.reasons).toBeUndefined();
+    expect(out.candidate?.scores.dimensions.homophone).toBe(15);
+  });
+
+  it("杜子腾 → 杜子藤：读音没变，谐音没解决，不放宽", () => {
+    const facts = factsOf("杜子腾", "male");
+    const out = verifyCandidate(rawCandidate({ givenName: "子藤", solves: facts.issues.map((i) => i.id) }), facts, ORIGINAL);
+    expect(out.candidate).toBeUndefined();
+    expect(out.rejected?.reasons.join("；")).toContain("谐音");
+  });
+
+  it("读音变了的照旧按候选自己的字查流行分", () => {
+    const out = verifyCandidate(rawCandidate(), factsOf("文娟", "female"), ORIGINAL);
+    expect(out.candidate?.soundLine).not.toBe("读音不变");
+    expect(out.candidate?.scores.dimensions.popularity).toBeGreaterThan(ORIGINAL.scores.dimensions.popularity);
+  });
+});
+
+describe("敏感人物", () => {
+  it("全名一致和同音同调都拦，普通名字不拦", () => {
+    expect(isSensitiveName("习近平")).toBe(true);
+    expect(isSensitiveName("习进平")).toBe(true);
+    expect(isSensitiveName("文娟")).toBe(false);
+    expect(isSensitiveName("李一诺")).toBe(false);
+    // 声调不同不算
+    expect(isSensitiveName("李枪")).toBe(false);
+  });
+});
+
+/*
+ * 评测名单里的名字不能写进提示词（2026-11-05）：模型会照抄例子里的答案，
+ * 文海军每次都改成提示词里写的文海钧、文海峻，评测就量不出真实水平。
+ * 名单在 data/eval/（不进 git），没有这个文件的机器跳过。
+ */
+const SAMPLE_NAMES = path.join(process.cwd(), "data", "eval", "sample-names.json");
+describe.skipIf(!fs.existsSync(SAMPLE_NAMES))("打分提示词", () => {
+  it("不出现评测名单里的名字", () => {
+    const names = (JSON.parse(fs.readFileSync(SAMPLE_NAMES, "utf8")) as { name: string }[]).map((c) => c.name);
+    const words = new Set<string>();
+    for (const n of names) {
+      words.add(n);
+      // 双字名单独查（海军、志明）；单字名太容易误报，不查
+      for (const sur of [1, 2]) if (n.length - sur >= 2) words.add(n.slice(sur));
+    }
+    // 只查系统提示词：用户消息里本来就是观众报的名字
+    const system = [true, false]
+      .flatMap((compact) => buildEvaluateMessages(factsOf("柯丽", "female"), compact))
+      .filter((m) => m.role === "system")
+      .map((m) => m.content)
+      .join("\n");
+    const leaks = [...words].filter((w) => system.includes(w));
+    expect(leaks).toEqual([]);
+  });
+});
+
+describe("同一个名字同一个分", () => {
+  it("钉住原名评价时，模型这次给的档位不用，分数不变，改法照常核", async () => {
+    let scoresSeen = 0;
+    const out = await evaluateName({ fullName: "文娟", gender: "female" }, new FakeEvaluateProvider(), { pinnedOriginal: ORIGINAL }, {
+      onScores: () => scoresSeen++,
+      onOriginal: () => scoresSeen++,
+    });
+    expect(out.original).toBe(ORIGINAL);
+    expect(scoresSeen).toBe(0);
+    expect(out.candidates[0]?.fullName).toBe("文妍");
+  });
+
+  it("缓存只记完整评完的结果", () => {
+    clearEvalCache();
+    const key = cacheKey("文", "娟", "female");
+    const base = { facts: factsOf("文娟", "female"), candidates: [], rejected: [], tookMs: 1 };
+    setCached(key, { ...base, status: "error", original: ORIGINAL });
+    setCached(key, { ...base, status: "options", original: null });
+    expect(getCached(key)).toBeUndefined();
+    setCached(key, { ...base, status: "no_better", original: ORIGINAL });
+    expect(getCached(key)?.original?.scores.total).toBe(ORIGINAL.scores.total);
+    clearEvalCache();
   });
 });
 
