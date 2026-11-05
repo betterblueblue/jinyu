@@ -3,7 +3,7 @@ import { buildFastSystem, buildFastUser, type FastPromptRound } from "./prompt";
 import type { FastRequest, FastTierScores } from "./types";
 
 /**
- * 精简版 provider：一次调用，取名字和 why 两个字段。
+ * 精简版 provider：一轮发几路请求（默认两路一起发），每路取名字、why 和三个档位，回来的几路都交给调用方合起来用。
  *
  * 出处字段（source/piece/line）提示词已经不要了，但模型自己给了照样解析，交给 run.ts 逐字核。
  * 原来的「首推没出处就单独补查一次」已删：提示词不要出处以后它每轮都会触发，白白多 2–3 秒。
@@ -40,57 +40,66 @@ export interface FastClientOptions {
   baseUrl: string;
   apiKey: string;
   model: string;
-  /** 第一路多久没回就补发第二路，默认 HEDGE_MS；测试可调小 */
+  /** 第一路多久没回就发其余几路，默认 HEDGE_MS（0，一起发）；测试可调 */
   hedgeMs?: number;
+  /** 整轮最长等多久，到点用手里已有的，默认 ROUND_TIMEOUT_MS；测试可调小 */
+  roundTimeoutMs?: number;
   /** 不传就用 prompt.ts */
   prompt?: FastPromptBuilders;
 }
 
 /**
- * 补发：第一路 5 秒没回，就再发一路，谁先成功用谁，另一路取消。
+ * 第一路发出去多少毫秒以后发其余几路。默认 0：几路一起发（2026-11-05 改，原来 5000）。
  *
- * 为什么（2026-10-31，只用 DeepSeek v4.1 Flash）：慢轮次是模型那一轮自己想多了（推理 1000–3600 字），
- * 不是网关排队——第一个字都在 0.7 秒内到。两路同时跑时首字仍在 0.3–0.6 秒，网关扛得住。
- *
- * 补发那一路要**换一组起手字**（调用方传 hedgeRound）：第一版补发一模一样的请求，
- * 沈姓 20 轮补发了 10 轮、只赢 2 轮——难配的那组字两路一样难，一起慢。
- * 第一路在 5 秒内就报错的，立刻补发，相当于自动重试一次。代价：慢的那些轮次多一次模型调用。
+ * 回来的几路现在都合起来用（draftLanes），晚发的那一路晚回来就白等；
+ * 独立评审按 5000 重放，中位 8.9 秒、p90 12.0 秒，一起发是 7.3 / 11.1 秒。本机 .env.local 早就设的 0。
+ * 每一路**换一组起手字**：一模一样的请求两路一样难配、一起慢（10-31 沈姓 20 轮实测）。
+ * 第一路出错时，还没发的几路立刻发。
  */
-export const HEDGE_MS = 5000;
+export const HEDGE_MS = 0;
 
-/** 一次 draft 的耗时构成：推理字数是 3–5 秒预算里唯一还能压的部分 */
-export interface DraftStats {
+/**
+ * 整轮最长等多久（2026-11-05）：到点没回的取消，用手里已有的，不够从名字库补。
+ * 单路请求 15 秒超时，截断重试另算，整轮可能拖到 30 秒；直播里不能让观众干等。
+ * 给 18 秒：第一次请求能跑满 15 秒，重试的不再等。
+ */
+export const ROUND_TIMEOUT_MS = 18_000;
+
+type LaneResult = { list: RawFast[]; stats: LaneStats };
+
+/** 一路回来的名字和这一路的耗时构成 */
+export interface LaneStats {
   reasoningChars: number;
   firstTokenMs: number;
   retried: boolean;
   finishReason: string | null;
-  /** 这一轮补发过第二路 */
-  hedged: boolean;
-  /** 最后用的是补发的那一路 */
-  hedgeWon: boolean;
-  /** 最后用的是第几路：0 是第一路，1 起是补发的（第几组起手字） */
-  lane: number;
 }
 
-type LaneResult = { list: RawFast[]; stats: Omit<DraftStats, "hedged" | "hedgeWon" | "lane"> };
+export interface LaneOutcome {
+  /** 第几路：0 是第一路（第几组起手字） */
+  index: number;
+  list: RawFast[];
+  stats: LaneStats;
+  /** 从这一轮开始到这一路回来的毫秒数 */
+  ms: number;
+}
+
+export interface DraftSummary {
+  /** 成功回来的几路，按回来的先后 */
+  lanes: LaneOutcome[];
+  /** 一共发出去几路（含出错、被取消的） */
+  launched: number;
+}
 
 export class FastProvider {
   private readonly client: ChatClientOptions;
   private readonly hedgeMs: number;
+  private readonly roundTimeoutMs: number;
   private readonly prompt: FastPromptBuilders;
-  /** 最近一次 draft 的耗时构成，写给 run.ts 的 debug，不进提示词、不影响结果 */
-  lastDraft: DraftStats = {
-    reasoningChars: 0,
-    firstTokenMs: -1,
-    retried: false,
-    finishReason: null,
-    hedged: false,
-    hedgeWon: false,
-    lane: 0,
-  };
 
   constructor(opts: FastClientOptions) {
-    const { hedgeMs, prompt, ...client } = opts;
+    const { hedgeMs, roundTimeoutMs, prompt, ...client } = opts;
+    this.roundTimeoutMs = roundTimeoutMs ?? ROUND_TIMEOUT_MS;
     this.prompt = prompt ?? { system: buildFastSystem, user: buildFastUser };
     // reasoning_effort 必须显式 low。实测（同一提示词，2026-10-31）：
     //   默认档 → 12.7s，推理吃满 2048 token，finish=length，只出 4 个名还被截断
@@ -101,23 +110,32 @@ export class FastProvider {
   }
 
   /**
-   * @param round  第一路用的这一轮参数
-   * @param hedge  补发用的参数（每一路换一组起手字）：给一组就补发一路，给两组就补发两路；不给就补发同样的请求
+   * 发几路请求，**每一路回来都交给 onLane**，不再只用最先回来的那一路（2026-11-05 用户定）。
+   *
+   * 原来是「谁先回用谁，其余取消」：三路一起发，另两路的 10 个名字全扔掉；第一路过闸不够 3 个就去名字库补。
+   * 用户说模型正常返回还从名字库拿名字不合理，三路并发、扔两路也浪费。独立评审实测（本地网关，女孩为主）：
+   * 两路一起发、回来的都合起来用，补位从 48 轮 8 轮 14 个降到 1 轮 2 个，请求少三分之一。
+   *
+   * onLane 返回 true 表示够了：其余还没回的取消，这一轮结束。
+   * 全部回来、或到了整轮的截止时间（roundTimeoutMs）就结束，用手里已有的。
+   * 一路都没成功才报错（调用方从名字库兜底）。
+   *
+   * @param rounds  每一路用的参数（每路一组不同的起手字）；第 0 路先发，其余 hedgeMs 后发（hedgeMs=0 就一起发）
    */
-  async draft(
+  async draftLanes(
     req: FastRequest,
-    round: FastPromptRound,
-    hedge?: FastPromptRound | readonly FastPromptRound[],
-  ): Promise<RawFast[]> {
-    const hedges = hedge === undefined ? [] : Array.isArray(hedge) ? hedge : [hedge as FastPromptRound];
+    rounds: readonly FastPromptRound[],
+    onLane: (lane: LaneOutcome) => boolean,
+  ): Promise<DraftSummary> {
     const messagesOf = (r: FastPromptRound) => [
       { role: "system" as const, content: this.prompt.system() },
       { role: "user" as const, content: this.prompt.user(req, r) },
     ];
+    const started = Date.now();
 
-    // 一路请求：截断/解析失败只重试一次，且不清空已拿到的结果。index 0 是第一路，1 起是补发的
+    // 一路请求：截断/解析失败只重试一次，且不清空已拿到的结果
     const lane = async (signal: AbortSignal, index: number): Promise<LaneResult> => {
-      const messages = messagesOf(index === 0 ? round : (hedges[index - 1] ?? round));
+      const messages = messagesOf(rounds[index] ?? rounds[0]!);
       const first = await streamChat(this.client, {
         messages,
         maxTokens: MAX_TOKENS,
@@ -151,57 +169,84 @@ export class FastProvider {
       return { list, stats };
     };
 
-    const won = await this.race(lane, Math.max(1, hedges.length));
-    this.lastDraft = { ...won.stats, hedged: won.hedged, hedgeWon: won.lane > 0, lane: won.lane };
-    return won.list;
-  }
-
-  /**
-   * 先发一路；hedgeMs 内没回（或已经报错）就把补发的几路一起发出去。谁先成功用谁，其余取消；全都失败才报错
-   */
-  private race(
-    lane: (signal: AbortSignal, index: number) => Promise<LaneResult>,
-    hedgeCount: number,
-  ): Promise<LaneResult & { hedged: boolean; lane: number }> {
     return new Promise((resolve, reject) => {
       const controllers: AbortController[] = [];
+      const outcomes: LaneOutcome[] = [];
       let settled = false;
-      let failed = 0;
-      let timer: ReturnType<typeof setTimeout> | undefined;
+      let pending = 0;
+      let lastError: unknown;
+      let hedgeTimer: ReturnType<typeof setTimeout> | undefined;
+      let roundTimer: ReturnType<typeof setTimeout> | undefined;
+      const total = Math.max(1, rounds.length);
+
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(hedgeTimer);
+        clearTimeout(roundTimer);
+        // 够了或到点：没回的取消，免得网关白跑
+        for (const c of controllers) c.abort();
+        if (outcomes.length) resolve({ lanes: outcomes, launched: controllers.length });
+        else reject(lastError ?? new Error("模型这一轮没有返回"));
+      };
 
       const launch = (index: number) => {
+        if (settled) return;
         const ctrl = new AbortController();
         controllers.push(ctrl);
+        pending++;
         lane(ctrl.signal, index).then(
           (value) => {
+            pending--;
             if (settled) return;
-            settled = true;
-            clearTimeout(timer);
-            for (const c of controllers) if (c !== ctrl) c.abort();
-            resolve({ ...value, hedged: controllers.length > 1, lane: index });
+            const outcome: LaneOutcome = { index, ...value, ms: Date.now() - started };
+            outcomes.push(outcome);
+            let enough: boolean;
+            try {
+              enough = onLane(outcome);
+            } catch (err) {
+              // 调用方处理这一路时出错（过闸、核出处……）：整轮直接报错，不干等到截止时间
+              settled = true;
+              clearTimeout(hedgeTimer);
+              clearTimeout(roundTimer);
+              for (const c of controllers) c.abort();
+              reject(err);
+              return;
+            }
+            if (enough) {
+              finish();
+            } else if (controllers.length < total) {
+              // 回来了但不够、其余还没发：立刻发，不等满 hedgeMs
+              clearTimeout(hedgeTimer);
+              launchRest();
+            } else if (pending === 0) {
+              finish();
+            }
           },
           (err: unknown) => {
+            pending--;
             if (settled) return;
-            failed++;
-            if (controllers.length === 1) {
-              // 还没补发就失败了：立刻补发，不等满 hedgeMs
-              clearTimeout(timer);
-              launchHedges();
-            } else if (failed >= controllers.length) {
-              settled = true;
-              reject(err);
+            lastError = err;
+            // 还没补发的几路：这一路出错就立刻发，不等满 hedgeMs
+            if (controllers.length < total) {
+              clearTimeout(hedgeTimer);
+              launchRest();
+            } else if (pending === 0) {
+              finish();
             }
           },
         );
       };
-      const launchHedges = () => {
-        for (let i = 1; i <= hedgeCount; i++) launch(i);
+      const launchRest = () => {
+        for (let i = controllers.length; i < total; i++) launch(i);
       };
 
       launch(0);
-      timer = setTimeout(() => {
-        if (!settled && controllers.length === 1) launchHedges();
-      }, this.hedgeMs);
+      if (total > 1) {
+        if (this.hedgeMs <= 0) launchRest();
+        else hedgeTimer = setTimeout(launchRest, this.hedgeMs);
+      }
+      roundTimer = setTimeout(finish, this.roundTimeoutMs);
     });
   }
 }
@@ -307,7 +352,7 @@ function cleanScores(raw: unknown): FastTierScores | undefined {
 export function createFastProvider(prompt?: FastPromptBuilders): FastProvider {
   const apiKey = process.env.LLM_API_KEY;
   if (!apiKey) throw new Error("LLM_API_KEY 缺失（检查 .env.local）");
-  // FAST_HEDGE_MS：补发等多久，不设就是 HEDGE_MS。设 0 等于每轮一开始就两路一起发
+  // FAST_HEDGE_MS：第一路发出去多久以后发其余几路，不设就是 HEDGE_MS（0，一起发）
   const hedge = Number(process.env.FAST_HEDGE_MS);
   return new FastProvider({
     baseUrl: process.env.LLM_BASE_URL ?? "http://127.0.0.1:3425/v1",

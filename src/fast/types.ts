@@ -80,9 +80,9 @@ export interface FastDebug {
   firstTokenMs: number;
   /** 是否因为截断/解析失败重跑过一次 */
   retried: boolean;
-  /** 第一路 5 秒没回，补发过第二路 */
+  /** 这一轮发出去不止一路 */
   hedged: boolean;
-  /** 最后用的是补发的那一路 */
+  /** 最先回来的不是第一路 */
   hedgeWon: boolean;
   dropped: { name: string; reasons: string[] }[];
   /** 这一轮给模型的起手字 */
@@ -91,6 +91,8 @@ export interface FastDebug {
   avoid: string[];
   /** 最近配得太多、这一轮提醒别用的字 */
   tired: string[];
+  /** 回来的几路（按回来的先后）：用的哪组起手字、给了几个、多久回来、名字有没有用上（2026-11-05 几路合起来用以后加） */
+  lanes?: { index: number; seeds: string[]; drafted: number; names: string[]; ms: number; used: boolean }[];
 }
 
 export interface FastSuccess {

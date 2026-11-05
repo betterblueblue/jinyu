@@ -5,7 +5,7 @@ import { loadLibrary, matchLibrary, pickLibraryCandidate, pickLibraryCandidates 
 import { citeFromLine, locateCitation } from "./cite";
 import { checkFastCandidate } from "./gate";
 import { normalizeFastInput } from "./normalize";
-import { createFastProvider, type FastPromptBuilders, type FastProvider } from "./provider";
+import { createFastProvider, type DraftSummary, type FastPromptBuilders, type RawFast } from "./provider";
 import { birthTimeOf, seasonSeeds, zodiacOf } from "./birth";
 import { pickSeeds } from "./seeds";
 import { tasteProblems } from "./taste";
@@ -93,15 +93,16 @@ function rankCandidates(
   pool: FastCandidate[],
   recent: readonly string[],
   nameChars: ReadonlySet<string> = NAME_CHARS,
-  /** 填了生日时按出生季节抽的那个起手字（birth.ts）：带这个字的名字排在同档的前面 */
-  echo?: string,
+  /** 填了生日时按出生季节抽的起手字（birth.ts）：带这个字的名字排在同档的前面。几路合起来用时每路各一个 */
+  echo?: string | readonly string[],
 ): FastCandidate[] {
+  const echoes = echo === undefined ? [] : typeof echo === "string" ? [echo] : echo;
   const recentChars = new Set(recent.slice(-STALE_WINDOW).flatMap((n) => [...n]));
   const nearChars = new Set(recent.slice(-NEAR_WINDOW).flatMap((n) => [...n]));
   const staleOf = (c: FastCandidate) => [...c.givenName].filter((ch) => recentChars.has(ch)).length;
   const nearOf = (c: FastCandidate) => [...c.givenName].filter((ch) => nearChars.has(ch)).length;
   const offTableOf = (c: FastCandidate) => [...c.givenName].filter((ch) => !nameChars.has(ch)).length;
-  const echoOf = (c: FastCandidate) => (echo && c.givenName.includes(echo) ? 0 : 1);
+  const echoOf = (c: FastCandidate) => (echoes.some((e) => e && c.givenName.includes(e)) ? 0 : 1);
   return pool
     .map((c, i) => ({ c, i, stale: staleOf(c), near: nearOf(c), off: offTableOf(c), echo: echoOf(c) }))
     .sort((a, b) => {
@@ -200,13 +201,14 @@ export interface RunFastOptions {
 }
 
 /**
- * 一轮一共发几路（每路一组不同的起手字，谁先回用谁）。不设是 3（用户 11-01 定）；FAST_LANES=2 回到两路。
- * 模型每轮想多想少差得很远，三路取最快的那一路：评测里中位和 10-31 那一版一样（2.9 秒），
- * 两路时中位慢半秒左右、超 5 秒的轮次多。代价是调用量比两路多一半。
+ * 一轮一共发几路（每路一组不同的起手字，回来的都合起来用）。不设是 2（2026-11-05 用户定，原来 3）；FAST_LANES=3 发三路。
+ * 11-01 定三路时是「谁先回用谁、其余扔掉」，三路取最快的那一路。现在回来的几路都合起来用，
+ * 独立评审实测（本地网关，各 20 轮交替）：三路合并中位 5.4 / p90 8.2 秒，两路合并 5.7 / 9.7 秒，补位都是 0；
+ * 两路请求少三分之一。用户说三路并发对 API 要求太高、扔两路浪费，定两路。
  */
 function laneCount(options: RunFastOptions): number {
   const n = options.variant?.lanes ?? Number(process.env.FAST_LANES);
-  return Number.isInteger(n) && n >= 2 && n <= 3 ? n : 3;
+  return Number.isInteger(n) && n >= 2 && n <= 3 ? n : 2;
 }
 
 function primarySource(options: RunFastOptions): "library" | "model" {
@@ -273,84 +275,118 @@ export async function runFast(
     ...(debug ? { debug } : {}),
   });
 
-  let provider: FastProvider;
-  let raw;
+  const rounds = [main, ...backups];
+  const library = loadLibrary();
+  const seen = new Set<string>();
+  const kept: FastCandidate[] = [];
+  const dropped: { name: string; reasons: string[] }[] = [];
+  let drafted = 0;
+  let withLine = 0;
+  let citeTried = 0;
+  /** 名字真用上的那几路（按回来的先后），排序时呼应时节、debug 里的起手字都按这几路算 */
+  const usedLanes: number[] = [];
+
+  // 一路回来的名字：过闸、换成库里那条、口味过滤，留下的进 kept。几路都走同一套
+  const take = (raw: RawFast[], laneIndex: number) => {
+    const before = kept.length;
+    drafted += raw.length;
+    for (const c of raw) {
+      const name = stripSurname(c.givenName.trim(), req.surname);
+      if (seen.has(name)) continue;
+      const verdict = checkFastCandidate(name, req.surname, req.gender, c.scores);
+      if (!verdict.keep) {
+        dropped.push({ name, reasons: verdict.reasons });
+        continue;
+      }
+      // 模型起出了名字库里的名字（用户评过的）：换成库里那一条，带上核过的出处和整段口播稿
+      const fromLibrary = matchLibrary(library, name, req.surname, req.gender, verdict.hotChar);
+      if (fromLibrary) {
+        seen.add(name);
+        kept.push(fromLibrary);
+        continue;
+      }
+      const taste = tasteProblems(name);
+      if (taste.length) {
+        dropped.push({ name, reasons: taste });
+        continue;
+      }
+      seen.add(name);
+      if (c.line) withLine++;
+      if (c.source || c.piece) citeTried++;
+
+      const py = fullNamePinyin(req.surname, name);
+      kept.push({
+        givenName: name,
+        fullName: `${req.surname}${name}`,
+        pinyin: py.text,
+        ...(py.hint ? { pinyinHint: py.hint } : {}),
+        why: c.why ?? "",
+        hotChar: verdict.hotChar,
+        ...((): { citation?: FastCandidate["citation"] } => {
+          // 提示词不再要出处；模型自己给了，照旧逐字核，核不过就当没有
+          if (!c.source && !c.piece) return {};
+          const byLine = c.line ? citeFromLine(c.source, c.piece, name, c.line) : null;
+          const hit = byLine ?? locateCitation(c.source, c.piece, name);
+          return hit ? { citation: hit } : {};
+        })(),
+      });
+    }
+    if (kept.length > before) usedLanes.push(laneIndex);
+  };
+
+  /**
+   * 这一轮能上屏的：同轮撞字去重、去掉这一场给过的。「够不够」按这个数，不按模型给了几个、过闸几个
+   * （用户 11-01 定：一场里不能重复。评测里出过起手字轮回时模型又配出徽音、昭宁）
+   */
+  const usableOf = (list: readonly FastCandidate[]) => {
+    const distinct = dedupeChars([...list]);
+    const base = distinct.length >= KEEP_MIN ? distinct : [...list];
+    return { base, fresh: recent.length ? base.filter((c) => !recent.includes(c.givenName)) : base };
+  };
+
+  let summary: DraftSummary;
   try {
-    provider = createFastProvider(options.variant?.prompt);
-    raw = await provider.draft(req, main, backups);
+    const provider = createFastProvider(options.variant?.prompt);
+    // 每一路回来就过一遍；凑够 3 个能上屏的就不等其余几路（其余取消）
+    summary = await provider.draftLanes(req, rounds, (lane) => {
+      take(lane.list, lane.index);
+      return usableOf(kept).fresh.length >= KEEP_MIN;
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "生成失败";
     const filled = fillFromLibrary(req, recent, [], options);
     if (filled) return fallback(filled, `模型这一轮没出来（${message}），名字都来自名字库`);
     return { ok: false, code: "UPSTREAM", message };
   }
-  onStage?.({ stage: "draft", drafted: raw.length });
-  const { seeds, avoid, tired } = [main, ...backups][provider.lastDraft.lane] ?? main;
+  onStage?.({ stage: "draft", drafted });
 
-  const library = loadLibrary();
-  const seen = new Set<string>();
-  const kept: FastCandidate[] = [];
-  const dropped: { name: string; reasons: string[] }[] = [];
-  let withLine = 0;
-  let citeTried = 0;
-
-  for (const c of raw) {
-    const name = stripSurname(c.givenName.trim(), req.surname);
-    if (seen.has(name)) continue;
-    const verdict = checkFastCandidate(name, req.surname, req.gender, c.scores);
-    if (!verdict.keep) {
-      dropped.push({ name, reasons: verdict.reasons });
-      continue;
-    }
-    // 模型起出了名字库里的名字（用户评过的）：换成库里那一条，带上核过的出处和整段口播稿
-    const fromLibrary = matchLibrary(library, name, req.surname, req.gender, verdict.hotChar);
-    if (fromLibrary) {
-      seen.add(name);
-      kept.push(fromLibrary);
-      continue;
-    }
-    const taste = tasteProblems(name);
-    if (taste.length) {
-      dropped.push({ name, reasons: taste });
-      continue;
-    }
-    seen.add(name);
-    if (c.line) withLine++;
-    if (c.source || c.piece) citeTried++;
-
-    const py = fullNamePinyin(req.surname, name);
-    kept.push({
-      givenName: name,
-      fullName: `${req.surname}${name}`,
-      pinyin: py.text,
-      ...(py.hint ? { pinyinHint: py.hint } : {}),
-      why: c.why ?? "",
-      hotChar: verdict.hotChar,
-      ...((): { citation?: FastCandidate["citation"] } => {
-        // 提示词不再要出处；模型自己给了，照旧逐字核，核不过就当没有
-        if (!c.source && !c.piece) return {};
-        const byLine = c.line ? citeFromLine(c.source, c.piece, name, c.line) : null;
-        const hit = byLine ?? locateCitation(c.source, c.piece, name);
-        return hit ? { citation: hit } : {};
-      })(),
-    });
-  }
-
-  const debugInfo = {
-    drafted: raw.length,
+  const firstUsed = rounds[usedLanes[0] ?? summary.lanes[0]?.index ?? 0] ?? main;
+  const { seeds, avoid, tired } = firstUsed;
+  const head = summary.lanes[0]!;
+  const debugInfo: FastDebug = {
+    drafted,
     kept: kept.length,
     withLine,
-    reasoningChars: provider.lastDraft.reasoningChars,
-    firstTokenMs: provider.lastDraft.firstTokenMs,
-    retried: provider.lastDraft.retried,
-    hedged: provider.lastDraft.hedged,
-    hedgeWon: provider.lastDraft.hedgeWon,
+    reasoningChars: summary.lanes.reduce((n, l) => n + l.stats.reasoningChars, 0),
+    firstTokenMs: head.stats.firstTokenMs,
+    retried: summary.lanes.some((l) => l.stats.retried),
+    hedged: summary.launched > 1,
+    hedgeWon: head.index > 0,
     dropped,
     seeds,
     avoid,
     tired,
+    lanes: summary.lanes.map((l) => ({
+      index: l.index,
+      seeds: rounds[l.index]?.seeds ?? [],
+      drafted: l.list.length,
+      // 模型这一路给的名字：对上屏的库名能分清是模型起出来的（换成库里那条）还是从名字库补的
+      names: l.list.map((c) => stripSurname(c.givenName.trim(), req.surname)),
+      ms: l.ms,
+      used: usedLanes.includes(l.index),
+    })),
   };
-  onStage?.({ stage: "gate", drafted: raw.length, kept: kept.length, dropped });
+  onStage?.({ stage: "gate", drafted, kept: kept.length, dropped });
 
   if (kept.length < KEEP_MIN) {
     const filled = fillFromLibrary(req, recent, kept, options);
@@ -363,12 +399,9 @@ export async function runFast(
     };
   }
 
-  // 这一场给过的名字不再出（整场都记）。用户 11-01 定：一场里不能重复。
-  // 过滤后不够 3 个，先从名字库补没给过的；还不够就少出几个备选；一个新名字都没有才放行重复。
-  // （评测里出过：起手字轮回时模型又配出徽音、昭宁，旧做法「不够 3 个就不过滤」让它们第二次上了屏）
-  const distinct = dedupeChars(kept);
-  const base = distinct.length >= KEEP_MIN ? distinct : kept;
-  const fresh = recent.length ? base.filter((c) => !recent.includes(c.givenName)) : base;
+  // 这一场给过的名字不再出（整场都记）。过滤后不够 3 个，先从名字库补没给过的；还不够就少出几个备选；
+  // 一个新名字都没有才放行重复。几路都合起来过以后还不够，才走到这里
+  const { base, fresh } = usableOf(kept);
   let pool = fresh;
   if (pool.length < KEEP_MIN) {
     const extra = pickLibraryCandidates(
@@ -384,9 +417,11 @@ export async function runFast(
   }
   if (pool.length === 0) pool = base;
 
-  // 这一轮真用上的那组起手字里，按季节抽的是第一个
-  const timelyChar = timely.length && timely.includes(seeds[0] ?? "") ? seeds[0] : undefined;
-  const ranked = rankCandidates(pool, recent, nameChars, timelyChar);
+  // 名字真用上的那几路，各自第一个起手字是按季节抽的（birth.ts）；带它的名字排前面
+  const timelyChars = usedLanes
+    .map((i) => rounds[i]?.seeds[0])
+    .filter((ch): ch is string => Boolean(ch) && timely.includes(ch!));
+  const ranked = rankCandidates(pool, recent, nameChars, timelyChars);
   const fromLibrary =
     primarySource(options) === "library" ? pickLibraryCandidate(loadLibrary(), req.surname, req.gender, recent) : null;
   const primary = fromLibrary ?? ranked[0]!;
