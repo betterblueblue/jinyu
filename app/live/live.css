@@ -427,22 +427,13 @@
 .live-stage .hint {
   margin: 0;
   text-align: center;
-  /* 左右留了安全边距以后只有 808 宽：三行礼物说得短，「留姓名和性别」挪到下面一行小字 */
+  /* 左右留了安全边距以后只有 808 宽：四行礼物都说短 */
   font-size: 40px;
   letter-spacing: 0.08em;
   color: var(--ink);
   font-weight: 700;
-  /* 三行都带礼物图标，行距放宽一点，图标不挤上下两行 */
+  /* 前三行带礼物图标，行距放宽一点，图标不挤上下两行 */
   line-height: 1.7;
-}
-.live-stage .hint-note {
-  display: block;
-  margin-top: 10px;
-  font-size: 28px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  line-height: 1.4;
-  color: var(--ink-2);
 }
 
 /* 礼物图标（gift.tsx）：高度跟着字号走，和字的中线对齐 */

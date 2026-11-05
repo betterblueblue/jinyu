@@ -323,7 +323,10 @@ export function AnalyzePanel({ open, onClose, onRename }: Props) {
       <header className="ap-top">
         <div className="ap-title">
           <span className="ap-name">名字打分</span>
-          <span className="ap-sub">瑾瑜综合分 · 读音、字义、气质、识读、流行、谐音</span>
+          <span className="ap-sub">
+            <span>瑾瑜综合分 · 音律、字义、气质、识读、</span>
+            <span>流行、谐音、国学、字形</span>
+          </span>
         </div>
         <div className="ap-top-actions">
           {rows.length > 0 && (
@@ -349,6 +352,20 @@ export function AnalyzePanel({ open, onClose, onRename }: Props) {
           </button>
         </div>
       </header>
+
+      {/* 礼物引导：放在标题和输入之间，打完分也一直看得见（11-05 用户定，原来只在空榜时出现） */}
+      <div className="ap-offer">
+        <p>
+          点关注+送<Gift name="灯牌" />分析名字
+        </p>
+        <p>
+          送<Gift name="墨镜" />可插队分析
+        </p>
+        <p>
+          送<Gift name="比心兔兔" />起三个名字
+        </p>
+        <p>定制起名私信 666</p>
+      </div>
 
       <div className="ap-entry">
         <input
@@ -423,15 +440,6 @@ export function AnalyzePanel({ open, onClose, onRename }: Props) {
       </div>
 
       <ol className="ap-board" ref={boardRef}>
-        {rows.length === 0 && (
-          <li className="ap-board-empty">
-            点关注+送<Gift name="灯牌" />分析名字
-            <br />
-            送<Gift name="墨镜" />可插队分析
-            <br />
-            送<Gift name="比心兔兔" />起三个名字
-          </li>
-        )}
         {rows.map((r, i) => {
           const marks = markedPositions(r);
           return (

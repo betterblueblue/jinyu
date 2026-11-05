@@ -77,17 +77,20 @@
 .live-stage .ap-top {
   position: relative;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 20px;
   padding-bottom: 28px;
   border-bottom: 1px solid var(--hair);
   flex: none;
 }
+/* 标题块竖着排：第一行「名字打分」，第二行副标题通栏，不再和右边的按钮抢宽度 */
 .live-stage .ap-title {
   display: flex;
-  align-items: center;
-  gap: 22px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  flex: 1 1 auto;
   min-width: 0;
 }
 .live-stage .ap-name {
@@ -95,16 +98,22 @@
   font-size: 42px;
   font-weight: 600;
   letter-spacing: 0.18em;
+  line-height: 1.3;
 }
 .live-stage .ap-sub {
   font-family: "Noto Sans SC", system-ui, sans-serif;
-  font-size: 20px;
+  /* 11-05 用户说太小看不清：20 → 26 → 30，直播画面缩到手机后约 13px */
+  font-size: 30px;
   font-weight: 500;
   letter-spacing: 0.06em;
   line-height: 1.5;
   color: var(--ink-2);
-  padding-left: 22px;
-  border-left: 1px solid var(--hair-2);
+  /* 吃满标题块宽度，不要在 align-items:flex-start 下缩成内容宽 */
+  align-self: stretch;
+}
+/* 六个维度分两行写，写在 JSX 里控制断点 */
+.live-stage .ap-sub span {
+  display: block;
 }
 .live-stage .ap-top-actions {
   flex: none;
@@ -253,6 +262,26 @@
   color: var(--accent);
 }
 
+/* 礼物引导：标题和输入之间的小字，打完分也一直在（11-05 用户定），不抢名字和分数的眼 */
+.live-stage .ap-offer {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 18px 0 0;
+  font-family: "Noto Sans SC", system-ui, sans-serif;
+  font-size: 36px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  line-height: 1.5;
+  color: var(--ink-2);
+  text-align: center;
+}
+.live-stage .ap-offer p {
+  margin: 0;
+}
+
 /* ---------- 打分榜 ---------- */
 .live-stage .ap-board {
   flex: 1 1 0;
@@ -266,16 +295,7 @@
 .live-stage .ap-board::-webkit-scrollbar {
   display: none;
 }
-.live-stage .ap-board-empty {
-  padding: 80px 0;
-  text-align: center;
-  /* 11-05 实机看偏浅：换成正文墨色、加粗、放大；左右留了安全边距，字距收一点 */
-  font-size: 40px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  line-height: 1.7;
-  color: var(--ink);
-}
+
 .live-stage .ap-row {
   display: grid;
   grid-template-columns: 52px minmax(0, 1fr) 104px minmax(0, 1.3fr);

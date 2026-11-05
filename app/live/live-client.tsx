@@ -304,7 +304,8 @@ export function LiveClient() {
                 插队分析：送<Gift name="墨镜" />
                 <br />
                 起名：送<Gift name="比心兔兔" />起三个名字
-                <span className="hint-note">分析留姓名、性别 · 起名留姓氏、性别</span>
+                <br />
+                定制起名私信 666
               </p>
               <div className="field">
                 <input
