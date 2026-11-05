@@ -44,7 +44,7 @@
   z-index: 40;
   display: flex;
   flex-direction: column;
-  padding: 84px 76px 72px;
+  padding: 84px var(--safe-x) 72px;
   background: var(--stage-bg);
   animation: ap-in 0.22s ease-out;
 }
@@ -98,11 +98,11 @@
 }
 .live-stage .ap-sub {
   font-family: "Noto Sans SC", system-ui, sans-serif;
-  font-size: 19px;
-  font-weight: 300;
-  letter-spacing: 0.08em;
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
   line-height: 1.5;
-  color: var(--ink-3);
+  color: var(--ink-2);
   padding-left: 22px;
   border-left: 1px solid var(--hair-2);
 }
@@ -118,8 +118,9 @@
   border-radius: var(--btn-radius);
   font-family: inherit;
   font-size: 23px;
+  font-weight: 600;
   letter-spacing: 0.14em;
-  color: var(--ink-2);
+  color: var(--ink);
   cursor: pointer;
   white-space: nowrap;
 }
@@ -153,10 +154,10 @@
 }
 .live-stage .ap-entry-name::placeholder {
   font-size: 38px;
-  font-weight: 400;
+  font-weight: 500;
   letter-spacing: 0.2em;
-  color: var(--ink-3);
-  opacity: 0.45;
+  color: var(--ink-2);
+  opacity: 0.7;
 }
 .live-stage .ap-entry-name:focus {
   border-bottom-color: var(--accent);
@@ -174,8 +175,9 @@
   border-radius: var(--btn-radius);
   font-family: inherit;
   font-size: 28px;
+  font-weight: 600;
   letter-spacing: 0.12em;
-  color: var(--ink-2);
+  color: var(--ink);
   cursor: pointer;
   transition: all 0.16s ease-out;
 }
@@ -220,10 +222,10 @@
   padding-bottom: 18px;
   border-bottom: 1px solid var(--hair);
   font-family: "Noto Sans SC", system-ui, sans-serif;
-  font-size: 21px;
-  font-weight: 300;
+  font-size: 22px;
+  font-weight: 500;
   letter-spacing: 0.08em;
-  color: var(--ink-3);
+  color: var(--ink-2);
 }
 .live-stage .ap-split b {
   font-family: inherit;
@@ -267,9 +269,12 @@
 .live-stage .ap-board-empty {
   padding: 80px 0;
   text-align: center;
-  font-size: 34px;
-  letter-spacing: 0.22em;
-  color: var(--ink-3);
+  /* 11-05 实机看偏浅：换成正文墨色、加粗、放大；左右留了安全边距，字距收一点 */
+  font-size: 40px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  line-height: 1.7;
+  color: var(--ink);
 }
 .live-stage .ap-row {
   display: grid;
@@ -297,13 +302,14 @@
 }
 .live-stage .ap-row-no {
   font-family: "Noto Sans SC", system-ui, sans-serif;
-  font-size: 20px;
+  font-size: 22px;
+  font-weight: 600;
   letter-spacing: 0.1em;
-  color: var(--ink-3);
+  color: var(--ink-2);
 }
 .live-stage .ap-row-name {
   font-size: 50px;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0.08em;
   color: var(--ink);
   white-space: nowrap;
@@ -314,15 +320,16 @@
 }
 .live-stage .ap-row-score {
   font-size: 50px;
-  font-weight: 600;
+  font-weight: 700;
   text-align: right;
   font-variant-numeric: tabular-nums;
   color: var(--ink);
 }
 .live-stage .ap-row-verdict {
   font-size: 36px;
+  font-weight: 600;
   letter-spacing: 0.06em;
-  color: var(--ink-2);
+  color: var(--ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -367,10 +374,10 @@
   display: flex;
   gap: 14px;
   font-family: "Noto Sans SC", system-ui, sans-serif;
-  font-size: 22px;
-  font-weight: 400;
+  font-size: 24px;
+  font-weight: 500;
   letter-spacing: 0.04em;
-  color: var(--ink-3);
+  color: var(--ink-2);
 }
 .live-stage .ap-detail-py sup {
   font-size: 13px;
@@ -390,9 +397,10 @@
   font-variant-numeric: tabular-nums;
 }
 .live-stage .ap-detail-score span {
-  font-size: 30px;
+  font-size: 32px;
+  font-weight: 600;
   letter-spacing: 0.1em;
-  color: var(--ink-2);
+  color: var(--ink);
 }
 .live-stage .ap-detail-score.b-change b,
 .live-stage .ap-detail-score.b-change span {
@@ -420,9 +428,9 @@
 }
 .live-stage .ap-act.ghost {
   background: transparent;
-  color: var(--ink-2);
+  color: var(--ink);
   border: 1px solid var(--hair);
-  font-weight: 400;
+  font-weight: 600;
   box-shadow: none;
 }
 .live-stage .ap-act:disabled {
@@ -432,10 +440,10 @@
 .live-stage .ap-wait {
   margin: 0;
   font-family: "Noto Sans SC", system-ui, sans-serif;
-  font-size: 24px;
-  font-weight: 300;
+  font-size: 26px;
+  font-weight: 500;
   letter-spacing: 0.1em;
-  color: var(--ink-3);
+  color: var(--ink-2);
 }
 
 /* 打分之后的下一步：先问能不能只改字、建议重新起名 */
@@ -446,9 +454,10 @@
 }
 .live-stage .ap-next-why {
   margin: 0;
-  font-size: 27px;
+  font-size: 28px;
+  font-weight: 500;
   line-height: 1.6;
-  color: var(--ink-2);
+  color: var(--ink);
 }
 .live-stage .ap-next-ask {
   margin: 0;
@@ -486,20 +495,22 @@
 }
 .live-stage .ap-fix-name {
   font-size: 44px;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0.08em;
   white-space: nowrap;
 }
 .live-stage .ap-fix-change {
   font-family: "Noto Sans SC", system-ui, sans-serif;
-  font-size: 22px;
-  color: var(--ink-3);
+  font-size: 24px;
+  font-weight: 500;
+  color: var(--ink-2);
   white-space: nowrap;
 }
 .live-stage .ap-fix-why {
-  font-size: 26px;
+  font-size: 28px;
+  font-weight: 600;
   line-height: 1.5;
-  color: var(--ink-2);
+  color: var(--ink);
 }
 
 .live-stage .ap-error {

@@ -11,6 +11,7 @@ import { GENDER_WORD, fetchTalks, namesNeedingTalk, prompterFromFast, pushPrompt
 import { RevealView } from "./reveal-view";
 import { fastToShow, type Gender, type Phase, type ShowData, type Skin } from "./show-data";
 import { useLiveKeys } from "./use-live-keys";
+import { Gift } from "./gift";
 import "./live.css";
 
 /**
@@ -298,9 +299,12 @@ export function LiveClient() {
             {/* 输入态 */}
             <section className={`pane pane-input ${phase === "input" ? "on" : ""}`}>
               <p className="hint">
-                想分析名字：送「墨镜」，留姓名和性别
+                分析名字：点关注+送<Gift name="灯牌" />
                 <br />
-                想取名：送「比心兔兔」，留姓氏和性别
+                插队分析：送<Gift name="墨镜" />
+                <br />
+                起名：送<Gift name="比心兔兔" />起三个名字
+                <span className="hint-note">分析留姓名、性别 · 起名留姓氏、性别</span>
               </p>
               <div className="field">
                 <input
@@ -422,7 +426,8 @@ export function LiveClient() {
                 <div className="marquee-track">
                   {[0, 1, 2].map((i) => (
                     <span key={i}>
-                      送「墨镜」分析名字<em>◆</em>送「比心兔兔」起名<em>◆</em>主播挑选讲解<em>◆</em>
+                      点关注+送<Gift name="灯牌" />分析名字<em>◆</em>送<Gift name="墨镜" />可插队<em>◆</em>送
+                      <Gift name="比心兔兔" />起名<em>◆</em>主播挑选讲解<em>◆</em>
                     </span>
                   ))}
                 </div>

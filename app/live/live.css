@@ -34,6 +34,12 @@
 }
 
 .live-stage {
+  /*
+   * 左右安全边距（2026-11-05 实机看到两边字被切）：直播画面是 9:16，手机屏更长（9:19.5–9:21），
+   * 抖音按高度铺满、把左右切掉。用户的手机截图 899×2000 只看得到中间 80%，1080 宽左右各切 108px；
+   * 9:21 的手机切 128px。字和按钮都放在这条线里面，四套皮肤共用；电脑上看两边会多留一点白。
+   */
+  --safe-x: 136px;
   --stage-bg: radial-gradient(88% 62% at 50% 6%, #fcf9f0 0%, #f4f0e5 42%, #ece6d6 78%, #e5decc 100%);
   --ink: #1b1510;
   --ink-name: #191510;
@@ -384,8 +390,8 @@
   position: relative;
   z-index: 2;
   height: 100%;
-  /* 顶部 92px 会被抖音头像和榜单盖住，正文往下挪；底部留给评论区 */
-  padding: 150px 76px 210px;
+  /* 顶部 92px 会被抖音头像和榜单盖住，正文往下挪；底部留给评论区；左右留安全边距 */
+  padding: 150px var(--safe-x) 210px;
   display: flex;
   flex-direction: column;
 }
@@ -421,10 +427,35 @@
 .live-stage .hint {
   margin: 0;
   text-align: center;
-  font-size: 38px;
-  letter-spacing: 0.12em;
+  /* 左右留了安全边距以后只有 808 宽：三行礼物说得短，「留姓名和性别」挪到下面一行小字 */
+  font-size: 40px;
+  letter-spacing: 0.08em;
   color: var(--ink);
   font-weight: 700;
+  /* 三行都带礼物图标，行距放宽一点，图标不挤上下两行 */
+  line-height: 1.7;
+}
+.live-stage .hint-note {
+  display: block;
+  margin-top: 10px;
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  line-height: 1.4;
+  color: var(--ink-2);
+}
+
+/* 礼物图标（gift.tsx）：高度跟着字号走，和字的中线对齐 */
+.live-stage .gift {
+  white-space: nowrap;
+}
+.live-stage .gift-icon {
+  display: inline-block;
+  height: 1.25em;
+  width: auto;
+  margin: 0 0.12em 0 0.18em;
+  vertical-align: -0.28em;
+  user-select: none;
 }
 .live-stage .field {
   display: flex;
@@ -1196,7 +1227,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 34px 76px 20px;
+  padding: 34px var(--safe-x) 20px;
   border-bottom: 1px solid var(--hair-2);
 }
 .live-stage .drawer-title {
@@ -1216,7 +1247,7 @@
   cursor: pointer;
 }
 .live-stage .drawer-body {
-  padding: 32px 76px 20px;
+  padding: 32px var(--safe-x) 20px;
   display: flex;
   flex-direction: column;
   gap: 32px;

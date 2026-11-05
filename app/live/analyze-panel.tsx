@@ -6,6 +6,7 @@ import { isSensitiveName, SENSITIVE_NOTE } from "@/domain/evaluate/sensitive";
 import type { EvalCandidate, EvalStatus, NameFacts, OriginalEvaluation } from "@/domain/evaluate/types";
 import type { PrompterDictEntry } from "@/live/prompter";
 import { readEvaluateStream } from "./evaluate-stream";
+import { Gift } from "./gift";
 import { logLive } from "./live-log-client";
 import { prompterFromEvaluation, pushPrompter } from "./prompter-sync";
 import "./analyze.css";
@@ -416,21 +417,19 @@ export function AnalyzePanel({ open, onClose, onRename }: Props) {
           </>
         ) : blocked ? (
           <span>{SENSITIVE_NOTE}</span>
-        ) : (
-          <span>
-            {trimmed.length === 1
-              ? "再填一个字 · 姓名要两个字以上才能打分"
-              : "填完整姓名，按 1 / 2 / 3 选男、女、不填，回车打分"}
-          </span>
-        )}
+        ) : trimmed.length === 1 ? (
+          <span>再填一个字 · 姓名要两个字以上才能打分</span>
+        ) : null}
       </div>
 
       <ol className="ap-board" ref={boardRef}>
         {rows.length === 0 && (
           <li className="ap-board-empty">
-            送「墨镜」分析名字
+            点关注+送<Gift name="灯牌" />分析名字
             <br />
-            送「比心兔兔」起名
+            送<Gift name="墨镜" />可插队分析
+            <br />
+            送<Gift name="比心兔兔" />起名
           </li>
         )}
         {rows.map((r, i) => {
