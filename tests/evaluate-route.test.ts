@@ -8,7 +8,7 @@ process.env.JINYU_CORPUS_DIR = path.join(process.cwd(), "tests", "fixtures", "sc
  * 假模型每调一次给不同的字义档位，用来看分数是重放的还是重算的。
  */
 
-const spy = vi.hoisted(() => ({ calls: 0 }));
+const spy = vi.hoisted(() => ({ calls: 0, emptyFirst: false }));
 
 vi.mock("@/auth/session", () => ({ isAuthenticated: async () => true }));
 
@@ -22,6 +22,11 @@ vi.mock("@/domain/evaluate", async (importOriginal) => {
       // 第一次字义给 20，之后给 12：重算的话原名分会掉 8 分
       const scores = { pronunciation: 16, meaning: spy.calls === 1 ? 20 : 12, gender: 12, style: 6 };
       raw.scores = scores;
+      // emptyFirst：第一次不写改法，看接口会不会钉住原名分再试一次
+      if (spy.emptyFirst && spy.calls === 1) {
+        raw.options = [];
+        raw.status = "no_better";
+      }
       onScores?.(scores);
       if (raw.original) onOriginal?.(raw.original);
       for (const o of (raw.options as unknown[]) ?? []) onOption?.(o as never);
@@ -50,6 +55,7 @@ async function call(body: Record<string, unknown>): Promise<{ status: number; re
 
 beforeEach(() => {
   spy.calls = 0;
+  spy.emptyFirst = false;
   clearEvalCache();
   resetCharTableCache();
 });
@@ -90,6 +96,14 @@ describe("打分接口", () => {
     expect(spy.calls).toBe(0);
     await call({ fullName: "文娟", gender: "female" });
     expect(spy.calls).toBe(1);
+  });
+
+  it("不到 90 分、第一次一个改法都没有：钉住原名分再试一次，第二次的改法交出去", async () => {
+    spy.emptyFirst = true;
+    const out = await call({ fullName: "文娟", gender: "female" });
+    expect(spy.calls).toBe(2);
+    expect(out.result?.original?.scores.total).toBeLessThan(90);
+    expect(out.result?.candidates.length).toBeGreaterThan(0);
   });
 
   it("敏感人物的名字（含同音同调）直接拒，不调模型", async () => {

@@ -17,9 +17,12 @@ import type { FastTierScores } from "./types";
 
 const L2 = new Set(l2Chars as string[]);
 const HAN2 = /^[\u4e00-\u9fff]{2}$/;
-/** 直播推荐默认按 85（面板“可以用”线）；FAST_SIX_MIN 可调到 90（“非常优秀”线）做 A/B */
+/**
+ * 直播起名上屏线默认 90（2026-11-05 用户定，原来 85）：打分榜 90 以上才是「非常优秀」，
+ * 系统自己起的名字不能放到打分榜上就是 89、再被挑出毛病。FAST_SIX_MIN=85 可以回到原来的线。
+ */
 const envSixMin = Number(process.env.FAST_SIX_MIN);
-export const FAST_SIX_MIN = Number.isFinite(envSixMin) && envSixMin > 0 ? envSixMin : 85;
+export const FAST_SIX_MIN = Number.isFinite(envSixMin) && envSixMin > 0 ? envSixMin : 90;
 
 export interface FastGateVerdict {
   keep: boolean;

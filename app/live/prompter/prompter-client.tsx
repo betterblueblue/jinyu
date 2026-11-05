@@ -104,6 +104,8 @@ function Ready({ round }: { round: Extract<PrompterRound, { state: "ready" }> })
  */
 const BAND_STYLE: Record<string, { text: string; chip: string }> = {
   非常优秀: { text: "text-emerald-300", chip: "border-emerald-400/60 bg-emerald-400/15 text-emerald-200" },
+  还能更好: { text: "text-sky-200", chip: "border-sky-400/50 bg-sky-400/10 text-sky-200" },
+  // 11-05 改名前缓存过的提词稿还是旧叫法
   可以用: { text: "text-sky-200", chip: "border-sky-400/50 bg-sky-400/10 text-sky-200" },
   建议改: { text: "text-rose-300", chip: "border-rose-400/60 bg-rose-400/15 text-rose-200" },
 };

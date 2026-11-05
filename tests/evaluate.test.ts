@@ -8,9 +8,9 @@ process.env.JINYU_CORPUS_DIR = path.join(process.cwd(), "tests", "fixtures", "sc
 import { resetCharTableCache } from "@/domain/analysis/chars";
 import { evaluateName } from "@/domain/evaluate/evaluate";
 import { buildFacts } from "@/domain/evaluate/facts";
-import { buildEvaluateMessages, completedOriginal, parseEvaluation, parseTierChoice } from "@/domain/evaluate/prompt";
+import { buildEvaluateMessages, completedOriginal, parseEvaluation, parseScores, parseTierChoice } from "@/domain/evaluate/prompt";
 import { cleanThought, FakeEvaluateProvider } from "@/domain/evaluate/provider";
-import { anchorPronunciation, BAND_CUTS, bandOf, capFor, clampTier, pronunciationBase, SCORING_REV } from "@/domain/evaluate/scoring";
+import { anchorPronunciation, BAND_CUTS, bandOf, capFor, clampTier, pronunciationBase, SCORING_REV, scoreBreakdown } from "@/domain/evaluate/scoring";
 import { checkFastCandidate } from "@/fast/gate";
 import type { EvaluateProvider } from "@/domain/evaluate/provider";
 import type { NameFacts, OriginalEvaluation, RawCandidate, RawEvaluation } from "@/domain/evaluate/types";
@@ -265,6 +265,120 @@ describe("读音档以规则为准", () => {
 
   it("改了口径，缓存 key 跟着变", () => {
     expect(cacheKey("文", "娟", "female")).toContain(`${SCORING_REV}|`);
+  });
+});
+
+describe("像上一辈的名字", () => {
+  const rawWith = (scores: Record<string, unknown>, issueText: string): RawEvaluation => ({
+    status: "options",
+    scores,
+    original: {
+      pronunciation: "顺", meaning: "正", gender: "可", style: "稳",
+      strengths: ["正"], charMeaning: "x", whole: "合起来 x", comment: "x",
+      issues: issueText ? [{ text: issueText, importance: "major" }] : [],
+      reminders: [],
+    },
+    options: [],
+    note: "",
+  });
+  const run = async (fullName: string, raw: RawEvaluation) => {
+    const frames: number[] = [];
+    const provider: EvaluateProvider = {
+      name: "age",
+      evaluate: async (_f, onScores, onOriginal) => {
+        const s = parseScores(raw.scores);
+        if (s) onScores?.(s);
+        onOriginal?.(raw.original!);
+        return raw;
+      },
+    };
+    const out = await evaluateName({ fullName, gender: "male" }, provider, { maxCandidates: 2 }, {
+      onScores: (o) => frames.push(o.scores.total),
+      onOriginal: (o) => frames.push(o.scores.total),
+    });
+    return { out, frames };
+  };
+
+  it("林建宏：规则查到建字、模型说像上一辈，原来被去重掉不降分；现在字义压到 12、流行压到 4，第一帧就是最终分", async () => {
+    const { out, frames } = await run("林建宏", rawWith({ pronunciation: 20, meaning: 16, gender: 12, style: 6, old: true }, "建宏像上一辈名字"));
+    expect(out.original?.scores.dimensions.meaning).toBe(12);
+    expect(out.original?.scores.dimensions.popularity).toBe(4);
+    expect(new Set(frames).size).toBe(1);
+  });
+
+  it("没写 old 时从模型原话认：「年代感重」算，「没有年代感」不算", async () => {
+    const hit = await run("李志明", rawWith({ pronunciation: 20, meaning: 16, gender: 12, style: 6 }, "志明组合年代感重"));
+    expect(hit.out.original?.scores.dimensions.meaning).toBe(12);
+    expect(hit.out.original?.scores.dimensions.popularity).toBe(4);
+    const miss = await run("李嘉明", rawWith({ pronunciation: 20, meaning: 16, gender: 12, style: 6 }, "嘉明没有年代感，读着顺"));
+    expect(miss.out.original?.scores.dimensions.meaning).toBe(16);
+  });
+
+  it("old 写 false、原话却说像上一辈：按老派算（刘志豪一轮这样打到 94）", async () => {
+    const { out } = await run("李嘉明", rawWith({ pronunciation: 20, meaning: 16, gender: 12, style: 6, old: false }, "嘉明像上一辈"));
+    expect(out.original?.scores.dimensions.meaning).toBe(12);
+    expect(out.original?.scores.total).toBeLessThan(90);
+  });
+
+  it("old 是 true 时第一帧就降分，后面不再变", async () => {
+    const { frames } = await run("李嘉明", rawWith({ pronunciation: 20, meaning: 16, gender: 12, style: 6, old: true }, "嘉明像上一辈"));
+    expect(new Set(frames).size).toBe(1);
+  });
+
+  it("parseScores 读 old", () => {
+    expect(parseScores({ pronunciation: 16, meaning: 16, gender: 12, style: 6, old: true })?.old).toBe(true);
+    expect(parseScores({ pronunciation: 16, meaning: 16, gender: 12, style: 6, old: "false" })?.old).toBe(false);
+    expect(parseScores({ pronunciation: 16, meaning: 16, gender: 12, style: 6 })?.old).toBeUndefined();
+  });
+});
+
+describe("非常优秀要过门", () => {
+  const tiers = (meaning: number, gender = 12) => ({
+    pronunciation: { tier: 20, reason: "" },
+    meaning: { tier: meaning, reason: "" },
+    gender: { tier: gender, reason: "" },
+    style: { tier: 6, reason: "" },
+  });
+
+  it("规则没查到问题、字义 16、性别 12：照样非常优秀", () => {
+    const s = scoreBreakdown(factsOf("陈思远", "male"), tiers(16), { styleBaseline: true });
+    expect(s.total).toBeGreaterThanOrEqual(90);
+    expect(s.bandLabel).toBe("非常优秀");
+  });
+
+  it("两个热门字：字义给满也封顶 89，理由写热门字", () => {
+    const s = scoreBreakdown(factsOf("王梓萱", "female"), tiers(20), { styleBaseline: true });
+    expect(s.total).toBe(89);
+    expect(s.bandLabel).toBe("还能更好");
+    expect(s.capReason).toContain("梓");
+  });
+
+  it("字义不到 16、性别不到 12、老派：都封顶 89", () => {
+    // 20 + 12 + 18 + 15 + 10 + 15 = 90，差一点也不进非常优秀
+    expect(scoreBreakdown(factsOf("陈思远", "male"), tiers(12), { styleBaseline: true }).total).toBe(89);
+    expect(scoreBreakdown(factsOf("陈思远", "male"), tiers(20, 8), { styleBaseline: true }).total).toBeLessThan(90);
+    expect(scoreBreakdown(factsOf("陈思远", "male"), tiers(20), { styleBaseline: true, old: true }).total).toBe(89);
+  });
+
+  it("没到 90、这轮没改法：不再说「原名已经很好」", async () => {
+    const provider: EvaluateProvider = {
+      name: "no-opt",
+      evaluate: async (_f, onScores, onOriginal) => {
+        const raw: RawEvaluation = {
+          status: "no_better",
+          scores: { pronunciation: 20, meaning: 16, gender: 12, style: 6, old: false },
+          original: { pronunciation: "顺", meaning: "正", gender: "可", style: "稳", strengths: ["正"], issues: [], reminders: [] },
+          options: [],
+          note: "",
+        };
+        onScores?.(parseScores(raw.scores)!);
+        onOriginal?.(raw.original!);
+        return raw;
+      },
+    };
+    const out = await evaluateName({ fullName: "王梓萱", gender: "female" }, provider);
+    expect(out.original?.scores.total).toBeLessThan(90);
+    expect(out.note ?? "").not.toContain("已经很好");
   });
 });
 

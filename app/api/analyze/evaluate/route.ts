@@ -3,6 +3,7 @@ import { isAuthenticated } from "@/auth/session";
 import { validateAnalysisInput } from "@/domain/analysis/analyze";
 import { createEvaluateProvider, evaluateName } from "@/domain/evaluate";
 import { cacheKey, getCached, setCached } from "@/domain/evaluate/cache";
+import { BAND_CUTS } from "@/domain/evaluate/scoring";
 import { buildFacts } from "@/domain/evaluate/facts";
 import { isSensitiveName, SENSITIVE_NOTE } from "@/domain/evaluate/sensitive";
 import type { EvaluateResult } from "@/domain/evaluate/types";
@@ -72,9 +73,27 @@ export async function POST(req: Request) {
     setCached(key, result);
   };
 
+  /**
+   * 不到 90 分又一个改法都没有：钉住原名分，再让模型写一次改法（2026-11-05）。
+   * 打分榜是引导改字的，89 分以下必须有改法；模型那一轮写的全被拒、或者自己说不用改，都再试一次。
+   * 改法是后台先生成的，主播讲分数那几秒里就跑完了。只试一次。
+   */
+  const withRetry = async (first: EvaluateResult, onOption?: (o: EvaluateResult["candidates"][number]) => void) => {
+    const o = first.original;
+    const retryable = ["no_better", "all_rejected", "options"].includes(first.status);
+    if (!o || first.candidates.length > 0 || o.scores.total >= BAND_CUTS.great || !retryable) return first;
+    const again = await evaluateName(
+      input,
+      provider,
+      { maxCandidates: 2, signal: req.signal, pinnedOriginal: o },
+      onOption ? { onOption } : {},
+    ).catch(() => null);
+    return again && again.candidates.length > 0 ? { ...again, tookMs: first.tookMs + again.tookMs } : first;
+  };
+
   if (new URL(req.url).searchParams.get("stream") !== "1") {
     if (replay) return NextResponse.json({ ok: true, result: replay });
-    const result = await evaluateName(input, provider, { maxCandidates: 2, signal: req.signal, pinnedOriginal });
+    const result = await withRetry(await evaluateName(input, provider, { maxCandidates: 2, signal: req.signal, pinnedOriginal }));
     remember(result);
     return NextResponse.json({ ok: true, result }, { status: result.status === "error" ? 502 : 200 });
   }
@@ -128,6 +147,7 @@ export async function POST(req: Request) {
         return;
       }
 
+      result = await withRetry(result, (option) => send({ type: "option", option }));
       remember(result);
       send({ type: "result", result });
       close();

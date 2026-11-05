@@ -41,10 +41,37 @@ export function clampTier(dim: TierDim, raw: unknown): number {
  */
 export const BAND_CUTS = { great: 90, ok: 80 } as const;
 
+/** 80–89 叫「还能更好」（2026-11-05 用户定）：打分榜是引导改字的，「可以用」听着像不用改 */
 export function bandOf(total: number): { band: EvalBand; label: string } {
   if (total >= BAND_CUTS.great) return { band: "great", label: "非常优秀" };
-  if (total >= BAND_CUTS.ok) return { band: "ok", label: "可以用" };
+  if (total >= BAND_CUTS.ok) return { band: "ok", label: "还能更好" };
   return { band: "change", label: "建议改" };
+}
+
+/**
+ * 进「非常优秀」要过门（2026-11-05 用户定，独立评审建议）。
+ *
+ * 分数是从满分往下扣的，原来没查到毛病就直接 90 以上：30 个常见现代名配 10 个大姓，67% 到 90。
+ * 打分榜是引导改字的，90 以上又不给改法，这一段就没内容了。现在 90 以上要同时满足：
+ *   规则没查到问题（热门字、撞名、同调、年代字、容易念错……都有字表或声调可查，观众听得懂）、
+ *   不是老派名字、字义至少 16、性别辨识 12。
+ * 差一条就封顶 89，理由写那一条。模型自己写的问题只当提示，不封顶，免得每个名字都被挑一句压下来。
+ * 热门字挡不挡 90 用户定了挡；真实名字跑出来「非常优秀」低于 15% 时，把 POPULAR_BLOCKS_GREAT 改成 false。
+ */
+export const POPULAR_BLOCKS_GREAT = true;
+const POPULAR_RULES = new Set(["hot", "template", "singleName"]);
+
+export function greatBlock(
+  facts: NameFacts,
+  tiers: { meaning: TierChoice; gender: TierChoice },
+  old: boolean,
+): string | null {
+  const rule = facts.issues.find((it) => POPULAR_BLOCKS_GREAT || !POPULAR_RULES.has(it.rule));
+  if (rule) return rule.line;
+  if (old) return "整名像上一辈的名字";
+  if (tiers.meaning.tier < 16) return "两个字的意思联系偏弱";
+  if (tiers.gender.tier < 12) return "整体偏中性，性别辨识度不够";
+  return null;
 }
 
 const LITERACY_TIERS = [15, 12, 9, 6, 3, 0];
@@ -171,8 +198,10 @@ export function anchorPronunciation(facts: NameFacts, model: TierChoice): TierCh
 /**
  * 打分口径的版本号：改了算分规则就加一，接口层缓存按它分开，不会把旧口径的分数重放出来。
  * 2：读音档以规则为准（2026-11-05）。
+ * 3：模型判「像上一辈」由程序压字义和流行，不再被规则的年代字去重掉（2026-11-05）。
+ * 4：「非常优秀」要过门，80–89 叫「还能更好」（2026-11-05）。
  */
-export const SCORING_REV = 2;
+export const SCORING_REV = 4;
 
 export function dimensionScores(
   facts: NameFacts,
@@ -192,8 +221,8 @@ export function dimensionScores(
   };
 }
 
-/** 风险上限：只认已确认的问题，不认模型的主观否定 */
-export const CAPS = { severe: 69, minor: 79, neutralFemale: 89 } as const;
+/** 风险上限：只认已确认的问题，不认模型的主观否定。notGreat 是没过「非常优秀」门槛时的封顶 */
+export const CAPS = { severe: 69, minor: 79, neutralFemale: 89, notGreat: 89 } as const;
 
 export interface CapInput {
   gender: AnalysisGender;
@@ -239,7 +268,7 @@ export const STYLE_BASE = 6;
 export function scoreBreakdown(
   facts: NameFacts,
   tiers: { pronunciation: TierChoice; meaning: TierChoice; gender: TierChoice; style: TierChoice },
-  opts: { styleBaseline?: boolean } = {},
+  opts: { styleBaseline?: boolean; old?: boolean } = {},
 ): ScoreBreakdown {
   const dimensions = dimensionScores(facts, tiers);
   if (opts.styleBaseline) dimensions.temperament = dimensions.gender + STYLE_BASE;
@@ -250,7 +279,11 @@ export function scoreBreakdown(
     dimensions.literacy +
     dimensions.popularity +
     dimensions.homophone;
-  const cap = capFor({ gender: facts.gender, lean: facts.lean, risk: facts.risk, genderTier: tiers.gender.tier });
+  let cap = capFor({ gender: facts.gender, lean: facts.lean, risk: facts.risk, genderTier: tiers.gender.tier });
+  if (!cap) {
+    const why = greatBlock(facts, tiers, opts.old ?? false);
+    if (why) cap = { cap: CAPS.notGreat, reason: why };
+  }
   const total = Math.max(0, Math.min(base, cap?.cap ?? 100));
   const { band, label } = bandOf(total);
   return {

@@ -21,7 +21,7 @@ const ISSUE_KINDS: EvalIssueKind[] = ["读音", "字义", "气质", "识读", "�
 
 const EVAL_RULES = [
   "你是直播间里的起名顾问。观众报了一个名字，性别已知。只输出 JSON。",
-  "推理里只写「读音 x 字义 x 性别 x 风格 x」这一行，不要展开分析、不要复述规则。",
+  "推理里只写「读音 x 字义 x 性别 x 风格 x 老派 是/否」这一行，不要展开分析、不要复述规则。",
   "",
   "评价标准：",
   "- 女孩名偏明亮、聪慧、大方，有力量但不过分硬，不刻意柔弱；要重视女性辨识度，但不是非得用女字旁。",
@@ -29,7 +29,7 @@ const EVAL_RULES = [
   "- 评价的是连着姓的整个名字，字表只作参考。",
   "- 年代感、撞名、热门字已经在事实里单独给了，style 只评整体气质，不要因为「老气」重复扣一次。",
   "- 读音只评按正确读法顺不顺，不评多音字会不会被念错；多音、生僻在识读维度里，程序已经处理。",
-  "- 整名像上一辈的名字、菜市场名（到处都有人叫）、时代口号或职业词（淑芬、国强、卫东、空军），在 issues 里单独写一条，并把 meaning 压到最多 12：这是这类名字最主要的毛病，不要因为字义正面就给高分。",
+  "- 整名像上一辈的名字、菜市场名（到处都有人叫）、时代口号或职业词（淑芬、国强、卫东、空军），scores 里写 \"old\":true，issues 里单独写一条；不是就写 \"old\":false。程序按 old 压字义和流行分，你不用自己压。古雅、有诗意但不时髦的名字不算 old。",
   "- issues 最多 3 条，同一类只写一条，尤其年代感最多一条；读音、字义、气质、识读、流行、谐音、联想里哪个维度明显弱，就写一条具体的问题，不要只复述规则编号，也不要为了凑数写空话。",
   "",
   "档位只能取下面几个数，不要写别的：",
@@ -44,10 +44,10 @@ const EVAL_RULES = [
 const ONE_SYSTEM = [
   ...EVAL_RULES,
   "",
-  "输出顺序：status → scores → original → options。scores 先写四个档位数字，程序立刻算分上屏；理由、优点、问题放 original；候选最后写。",
+  "输出顺序：status → scores → original → options。scores 先写四个档位数字和 old，程序立刻算分上屏；理由、优点、问题放 original；候选最后写。",
   "",
-  "scores 只写四个数字，不要写理由（档位取值见上）：",
-  '{"pronunciation":16,"meaning":16,"gender":12,"style":6}',
+  "scores 只写四个档位数字和 old，不要写理由（档位取值见上）：",
+  '{"pronunciation":16,"meaning":16,"gender":12,"style":6,"old":false}',
   "",
   "original 写理由和优缺点：",
   "- comment：先像跟家长聊天一样，用一段话把名字讲一遍：好在哪、问题在哪、像哪类名字（比如「像军种词」「偏上一辈」「文雅但偏静」），80 字以内，不要分点、不要打分。这段话主播会先念。",
@@ -58,28 +58,28 @@ const ONE_SYSTEM = [
   "- issues：最多 3 条，每条 {\"text\":\"具体问题\",\"importance\":\"major 或 minor\",\"kind\":\"读音/字义/气质/识读/流行/谐音/联想\"}。规则已确认的问题在下面给了编号，照抄编号对应的问题，同一类只写一条（尤其年代感最多一条）；你另外看出来的具体问题也写进来。没有就空数组。",
   "- reminders：只给主播看的提醒，只写谐音、联想、撞名人这类没把握的事；没把握就空数组，不要编。",
   "",
-  "候选 options（原名有明显问题时给 2 个，最多 3 个，程序最后留 2 个）：",
+  "候选 options（一般给 2 个，最多 3 个，程序最后留 2 个）：",
   "- 小改优先：姓不动，尽量保住原名里还有价值的字或读音，能换一个字就不换两个。",
   "- 第一个候选是首选，第二个是备选，按推荐顺序排，不要随便排。",
   "- 同音雅化：保留读音，换一个更雅、更具体的字。只在毛病出在写法和字义上时有用（字义消极、字太生僻、两个字写出来是个军种词或口号词），换上的字意思要确实更好。撞名、年代感、谐音是念出来才有的毛病，换同音字念出来还是原来那个名字，不算解决。",
   "- 姓不动，名的字数不变，只换一个字。简繁变化不算改字。",
   "- givenName 写改完之后完整的名字（只有名，不带姓）：原名两个字就写两个字，原名一个字就写一个字。不要只写换上的那个字，也不要把原名和新字拼在一起。",
   "- 原名是单名时，候选也必须是那一个字。例：原名柯丽，候选写「昀」，不要写「丽昀」。",
-  "- 先看原名的优点和问题，再决定换哪个字。只换一个字解决不了、或者原名已经很好，options 给空数组。",
+  "- 先看原名的优点和问题，再决定换哪个字。只有两种情况 options 给空数组：只换一个字解决不了；或者规则没查到任何问题、old 是 false、字义 20、性别 12，名字已经出彩。其余都给 2 个，哪怕原名没有硬伤，也换一个字让意思更鲜明、画面更具体。",
   "- 原名有年代感、撞名、性别不符、字义消极这类明确问题时，给 2 个候选，换不同的字；两个候选不要都走同一个方向（比如都换成同音字、都换成同一类意思）。",
   "- 每个候选写：givenName（只写名，不带姓）；pronunciation / meaning / gender / style 四个档位，{tier, reason}；solves（解决了 original.issues 里的哪几条，写编号，如 [\"R1\"]）；keeps（保住原名哪几个优点，照抄 strengths 里的句子）；loss（损失和取舍，一句）；verdict（better / similar / worse）；why（15 字以内，榜上念的一句改善）；spoken（寓意，12–90 字）。",
   "- 候选不能新增已确认的严重问题；原名有严重谐音时，候选不能还带着谐音。",
   "",
   "status 三选一：",
   "- options：有值得换的候选；",
-  "- no_better：原名可以用，没有比它更值得换的；",
+  "- no_better：原名已经出彩（见上），没有比它更值得换的；",
   "- one_char_insufficient：只改一个字解决不了已经指出的问题。",
   "note：只写一句具体原因，不指示保留还是重新起名。",
   "",
   "spoken 和 why 里不出现分数和档位。",
   "",
   "格式示例（只看格式，别照抄内容）：",
-  '{"status":"options","scores":{"pronunciation":16,"meaning":16,"gender":12,"style":6},"original":{"pronunciation":"连姓念节奏平稳，收尾略轻","meaning":"字义正面，意思直白","gender":"丽字女性倾向明确","style":"整体端正，少一点亮色","strengths":["字义干净，好认好写"],"charMeaning":"丽是美好、好看。","whole":"合起来是端端正正、清清爽爽的样子，爸妈盼孩子长得好、过得好。","comment":"好认好写，读着顺；但丽字单名偏上一辈，像爸妈那代的名字。","issues":[{"text":"丽字单名在女孩名里偏上一辈","importance":"major","kind":"流行"}],"reminders":[]},"options":[{"givenName":"昀","pronunciation":{"tier":16,"reason":"读音更亮"},"meaning":{"tier":16,"reason":"昀是日光"},"gender":{"tier":12,"reason":"女性辨识度保住了"},"style":{"tier":8,"reason":"明亮大方"},"solves":["R1"],"keeps":["字义干净，好认好写"],"loss":"少了一点安静的气质","verdict":"better","why":"换掉老气的丽，名字更亮","spoken":"昀是日光，合起来是明朗开阔的样子，愿孩子心里有光、自在长大。"},{"givenName":"澜","pronunciation":{"tier":16,"reason":"水波开阔"},"meaning":{"tier":16,"reason":"澜是波澜"},"gender":{"tier":8,"reason":"澜偏中性"},"style":{"tier":8,"reason":"明快"},"solves":["R1"],"keeps":["字义干净"],"loss":"少了柔婉","verdict":"better","why":"更明快","spoken":"澜是水波、波澜，愿孩子心胸开阔、遇事从容。"}],"note":""}',
+  '{"status":"options","scores":{"pronunciation":16,"meaning":12,"gender":12,"style":6,"old":true},"original":{"pronunciation":"连姓念节奏平稳，收尾略轻","meaning":"字义正面，意思直白","gender":"丽字女性倾向明确","style":"整体端正，少一点亮色","strengths":["字义干净，好认好写"],"charMeaning":"丽是美好、好看。","whole":"合起来是端端正正、清清爽爽的样子，爸妈盼孩子长得好、过得好。","comment":"好认好写，读着顺；但丽字单名偏上一辈，像爸妈那代的名字。","issues":[{"text":"丽字单名在女孩名里偏上一辈","importance":"major","kind":"流行"}],"reminders":[]},"options":[{"givenName":"昀","pronunciation":{"tier":16,"reason":"读音更亮"},"meaning":{"tier":16,"reason":"昀是日光"},"gender":{"tier":12,"reason":"女性辨识度保住了"},"style":{"tier":8,"reason":"明亮大方"},"solves":["R1"],"keeps":["字义干净，好认好写"],"loss":"少了一点安静的气质","verdict":"better","why":"换掉老气的丽，名字更亮","spoken":"昀是日光，合起来是明朗开阔的样子，愿孩子心里有光、自在长大。"},{"givenName":"澜","pronunciation":{"tier":16,"reason":"水波开阔"},"meaning":{"tier":16,"reason":"澜是波澜"},"gender":{"tier":8,"reason":"澜偏中性"},"style":{"tier":8,"reason":"明快"},"solves":["R1"],"keeps":["字义干净"],"loss":"少了柔婉","verdict":"better","why":"更明快","spoken":"澜是水波、波澜，愿孩子心胸开阔、遇事从容。"}],"note":""}',
 ].join("\n");
 
 const ONE_COMPACT = [
@@ -97,8 +97,8 @@ const ORIGINAL_SYSTEM = [
   "这次只做原名评价，不要写候选：options 给空数组。",
   "输出顺序：status → scores → original。",
   "",
-  "scores 只写四个档位数字，不要写理由：",
-  '{"pronunciation":16,"meaning":16,"gender":12,"style":6}',
+  "scores 只写四个档位数字和 old，不要写理由：",
+  '{"pronunciation":16,"meaning":16,"gender":12,"style":6,"old":false}',
   "",
   "original 写理由和优缺点：",
   "- comment：先像跟家长聊天一样，用一段话把名字讲一遍：好在哪、问题在哪、像哪类名字（比如「像军种词」「偏上一辈」「文雅但偏静」），80 字以内，不要分点、不要打分。这段话主播会先念。",
@@ -116,7 +116,7 @@ const ORIGINAL_SYSTEM = [
   "note：只写一句具体原因。",
   "",
   "格式示例（只看格式，别照抄内容）：",
-  '{"status":"options","scores":{"pronunciation":16,"meaning":16,"gender":12,"style":6},"original":{"pronunciation":"连姓念节奏平稳，收尾略轻","meaning":"字义正面，意思直白","gender":"丽字女性倾向明确","style":"整体端正，少一点亮色","strengths":["字义干净，好认好写"],"charMeaning":"丽是美好、好看。","whole":"合起来是端端正正、清清爽爽的样子，爸妈盼孩子长得好、过得好。","comment":"好认好写，读着顺；但丽字单名偏上一辈，像爸妈那代的名字。","issues":[{"text":"丽字单名在女孩名里偏上一辈","importance":"major","kind":"流行"}],"reminders":[]},"options":[],"note":""}',
+  '{"status":"options","scores":{"pronunciation":16,"meaning":12,"gender":12,"style":6,"old":true},"original":{"pronunciation":"连姓念节奏平稳，收尾略轻","meaning":"字义正面，意思直白","gender":"丽字女性倾向明确","style":"整体端正，少一点亮色","strengths":["字义干净，好认好写"],"charMeaning":"丽是美好、好看。","whole":"合起来是端端正正、清清爽爽的样子，爸妈盼孩子长得好、过得好。","comment":"好认好写，读着顺；但丽字单名偏上一辈，像爸妈那代的名字。","issues":[{"text":"丽字单名在女孩名里偏上一辈","importance":"major","kind":"流行"}],"reminders":[]},"options":[],"note":""}',
 ].join("\n");
 
 const OPTIONS_SYSTEM = [
@@ -364,6 +364,11 @@ export interface ParsedScores {
   meaning: number;
   gender: number;
   style: number;
+  /**
+   * 模型判整名像上一辈、菜市场名、口号或职业词（2026-11-05）。
+   * 跟四个档位一起写在最前面，第一帧分数就按它降分，不会先上屏再往下掉。没写是 undefined。
+   */
+  old?: boolean;
 }
 
 function toNumber(v: unknown): number {
@@ -380,11 +385,13 @@ export function parseScores(raw: unknown): ParsedScores | null {
     style: toNumber(o.style),
   };
   if (Object.values(values).some((v) => !Number.isFinite(v))) return null;
+  const old = o.old === true || o.old === "true" ? true : o.old === false || o.old === "false" ? false : undefined;
   return {
     pronunciation: clampTier("pronunciation", values.pronunciation),
     meaning: clampTier("meaning", values.meaning),
     gender: clampTier("gender", values.gender),
     style: clampTier("style", values.style),
+    ...(old === undefined ? {} : { old }),
   };
 }
 

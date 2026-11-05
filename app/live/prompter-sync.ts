@@ -246,8 +246,8 @@ export interface EvaluationForPrompter {
 }
 
 const STATUS_WORD: Record<EvalStatus, string> = {
-  options: "可以用",
-  no_better: "可以用",
+  options: "还能更好",
+  no_better: "还能更好",
   all_rejected: "改法没通过核验",
   one_char_insufficient: "一个字难改",
   needs_gender: "先确认性别",
@@ -304,7 +304,8 @@ export function prompterFromEvaluation(s: EvaluationForPrompter): PrompterRound 
   let say: string | undefined;
   if (status === "needs_gender") say = "先问一句：是男宝还是女宝？选好性别再打一次分。";
   else if (status === "options") say = o && o.issues.length ? "毛病在哪说清楚了，往下看改法。" : "这个名字整体不错。";
-  else if (status === "no_better") say = "这个名没有更好的改法，可以用。";
+  else if (status === "no_better")
+    say = o && o.scores.total >= 90 ? "这个名字查过几项都没问题，非常优秀，不用改。" : "这轮没有比原名更好的改法，可以再试一次。";
   else if (status === "all_rejected") say = "模型给的改法没通过核验，可以再试一次。";
   else if (status === "one_char_insufficient") say = `只改一个字解决不了${s.note ? `：${s.note}` : ""}。`;
   else if (status === "timeout") say = "评价没跑完，先念上面已经核过的部分。";

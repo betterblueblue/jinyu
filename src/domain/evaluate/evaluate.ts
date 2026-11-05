@@ -3,7 +3,7 @@ import { resolveSplit, scoreName } from "@/domain/score/score";
 import { buildFacts } from "./facts";
 import { parseOriginal, parseScores, scoresFromOriginal, type ParsedScores } from "./prompt";
 import type { EvaluateProvider } from "./provider";
-import { anchorPronunciation, applyAgePenalty, scoreBreakdown } from "./scoring";
+import { anchorPronunciation, applyAgePenalty, BAND_CUTS, scoreBreakdown } from "./scoring";
 import { verifyCandidate } from "./verify";
 import type {
   EvalCandidate,
@@ -67,7 +67,7 @@ export interface EvaluateCallbacks {
 }
 
 const STATUS_NOTE: Record<string, string> = {
-  no_better: "原名可以用，这轮没有比它更值得换的。",
+  no_better: "这轮没有比原名更值得换的，可以再试一次。",
   all_rejected: "模型给的改法没有比原名更好，可以再试一次。",
   one_char_insufficient: "只改一个字解决不了已经指出的问题。",
   needs_gender: "请先确认是男宝还是女宝，再做完整评价。",
@@ -193,26 +193,49 @@ function mergeReminders(facts: NameFacts, modelReminders: string[]): string[] {
   return out.slice(0, 4);
 }
 
+/**
+ * 模型说的「像上一辈」（2026-11-05 修）。
+ * 原来只从合并以后的 issues 里认，有三处漏：
+ *   - 规则已经查到一个年代字（林建宏的建、王淑芬的芬），模型那句被当成同一类问题去重掉了，降分也跟着没了；
+ *   - 只认「上一辈」这几个词，模型写「年代感重」「老式女孩名」就不算（李志明一轮 94）；
+ *   - 提示词让模型自己把字义压到 12，实测 21 轮里 17 轮没压。
+ * 现在优先看 scores 里的 old（和档位一起最先写，第一帧分数就按它算，不会先上屏再往下掉），
+ * 没写才从模型原话里认；认到了程序自己压字义和流行。
+ */
+const AGE_WORDS = /上一辈|老一辈|父辈|爸妈那辈|爷爷奶奶|菜市场|口号|军种|职业词|老式|老名字|老派|年代感(很|特别|比较)?(重|强|明显)/;
+const AGE_NEGATED = /(没有|不显|不带|没|无)(什么|明显的?)?年代感/;
+
+/**
+ * 标记和原话有一处说老派就算（2026-11-05 改）：原来写了 old 就只认 old，
+ * 刘志豪一轮 old 写 false、问题里却写「偏上一辈」，打到 94。
+ * 代价是这种自相矛盾的轮次，第一帧按 old 出分，原话到了再往下掉（8 次里见过 1 次）。
+ */
+function oldFrom(scores: ParsedScores | null, rawIssueTexts: string[]): boolean {
+  if (scores?.old === true) return true;
+  return rawIssueTexts.some((t) => AGE_WORDS.test(t) && !AGE_NEGATED.test(t));
+}
+
+/** 字义最多 12、流行最多 4：这类名字最主要的毛病，不因为字义正面给高分（提示词 11-04 就这么定了，现在程序来压） */
+const OLD_MEANING_MAX = 12;
+
 function buildOriginal(
   facts: NameFacts,
   tiers: NonNullable<ReturnType<typeof parseOriginal>["tiers"]>,
   strengths: string[],
   issues: EvalIssue[],
   reminders: string[],
+  old: boolean,
   charMeaning = "",
   whole = "",
   comment = "",
 ): OriginalEvaluation {
   // 读音档以规则为准，模型只有说得出具体哪里不顺才往下调一档（2026-11-05）
   tiers = { ...tiers, pronunciation: anchorPronunciation(facts, tiers.pronunciation) };
-  const scores = scoreBreakdown(facts, tiers, { styleBaseline: true });
-  // 模型说整名像上一辈、菜市场名、口号或职业词：规则表可能没收录（志明、俊杰），这里再压一档
-  const modelAge = issues.some(
-    (it) => it.source === "model" && /上一辈|老一辈|父辈|爸妈那辈|爷爷奶奶|菜市场|口号|军种|职业词/.test(it.text),
-  );
+  if (old && tiers.meaning.tier > OLD_MEANING_MAX) tiers = { ...tiers, meaning: { ...tiers.meaning, tier: OLD_MEANING_MAX } };
+  const scores = scoreBreakdown(facts, tiers, { styleBaseline: true, old });
   return {
     // 风格只用于改法排序，不压原名总分
-    scores: modelAge ? applyAgePenalty(scores) : scores,
+    scores: old ? applyAgePenalty(scores) : scores,
     tiers,
     strengths,
     issues,
@@ -314,6 +337,7 @@ export async function evaluateName(
       [],
       mergeIssues(facts, []),
       mergeReminders(facts, []),
+      oldFrom(scores, []),
     );
     early = built;
     currentOriginal = built;
@@ -332,6 +356,7 @@ export async function evaluateName(
       p.strengths,
       mergeIssues(facts, p.issueTexts),
       mergeReminders(facts, p.reminders),
+      oldFrom(s, p.issueTexts.map((it) => it.text)),
       p.charMeaning,
       p.whole,
       p.comment,
@@ -389,6 +414,7 @@ export async function evaluateName(
           parsed.strengths,
           issues,
           mergeReminders(facts, parsed.reminders),
+          oldFrom(parsedScores, parsed.issueTexts.map((it) => it.text)),
           parsed.charMeaning,
           parsed.whole,
           parsed.comment,
@@ -409,7 +435,8 @@ export async function evaluateName(
       : // 大姓配单名，换一个字解决不了重名，不能说成「没有更好的改法」
         facts.popularityFacts.singleNameBigSurname
         ? "one_char_insufficient"
-        : original.scores.total >= 85
+        : // 只有过了「非常优秀」门槛才算不用改；原来是 85，和 90 的分档对不上，85–89 分的名字也说「已经很好」
+          original.scores.total >= BAND_CUTS.great
           ? "no_better"
         : raw.status === "one_char_insufficient"
           ? "one_char_insufficient"
@@ -422,7 +449,7 @@ export async function evaluateName(
   const note =
     candidates.length === 0 && facts.popularityFacts.singleNameBigSurname
       ? "大姓配单名，换一个字解决不了重名，按姓重新起名更合适。"
-      : candidates.length === 0 && original.scores.total >= 85
+      : candidates.length === 0 && original.scores.total >= BAND_CUTS.great
         ? "原名已经很好了，这轮没有比它更值得换的。"
       : typeof raw.note === "string" && raw.note.trim()
         ? raw.note.replace(/\s+/g, "").trim().slice(0, 120)

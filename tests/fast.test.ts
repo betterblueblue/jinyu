@@ -78,9 +78,13 @@ describe("精简版闸门", () => {
   });
 
   it("模型给了档位时按六维总分判断", () => {
-    const high = checkFastCandidate("清瑶", "林", "female", { pronunciation: 20, meaning: 20, gender: 12 });
+    // 11-05 起上屏线 90、要过「非常优秀」门槛：原来用的清瑶带热门字瑶，现在封顶 89，换成没有规则问题的清禾
+    const high = checkFastCandidate("清禾", "林", "female", { pronunciation: 20, meaning: 20, gender: 12 });
     expect(high.keep).toBe(true);
     expect(high.score).toBeGreaterThanOrEqual(90);
+    const hot = checkFastCandidate("清瑶", "林", "female", { pronunciation: 20, meaning: 20, gender: 12 });
+    expect(hot.keep).toBe(false);
+    expect(hot.score).toBe(89);
     const low = checkFastCandidate("清瑶", "林", "female", { pronunciation: 8, meaning: 8, gender: 4 });
     expect(low.keep).toBe(false);
     expect(low.reasons.join("；")).toContain("六维分");
