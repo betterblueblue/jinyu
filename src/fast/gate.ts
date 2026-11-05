@@ -17,8 +17,9 @@ import type { FastTierScores } from "./types";
 
 const L2 = new Set(l2Chars as string[]);
 const HAN2 = /^[\u4e00-\u9fff]{2}$/;
-/** 直播推荐要求六维总分至少 90，和打分榜“非常优秀”同线；先跑 eval-fast 看通过率再调 */
-export const FAST_SIX_MIN = 90;
+/** 直播推荐默认按 85（面板“可以用”线）；FAST_SIX_MIN 可调到 90（“非常优秀”线）做 A/B */
+const envSixMin = Number(process.env.FAST_SIX_MIN);
+export const FAST_SIX_MIN = Number.isFinite(envSixMin) && envSixMin > 0 ? envSixMin : 85;
 
 export interface FastGateVerdict {
   keep: boolean;
