@@ -123,6 +123,7 @@ function rankCandidates(
 
 /** 仅供测试 */
 export const __rankCandidates = rankCandidates;
+export const __fillFromLibrary = fillFromLibrary;
 
 /**
  * 首推换成名字库里的那个以后，备选去掉和它同名的；和它撞字的排到后面，不够三个才用上。
@@ -136,15 +137,16 @@ function alternativesBeside(primary: FastCandidate, ranked: readonly FastCandida
 
 /**
  * 模型这一轮没出来（报错、超时、没配好钥匙），或者过了闸的不够三个时，用名字库补齐，不让这一轮白等。
- * 首推从库里出，模型过了闸的名字当备选，缺几个从库里补几个；这一场给过的都不再出。
+ * 模型过了闸的名字排前面（首推仍是模型起的），缺几个从库里补几个；模型一个都没过才用库名当首推。这一场给过的都不再出。
  * 加起来还不够三个，返回 null，照旧报失败。
  */
 function fillFromLibrary(
   req: FastRequest,
   recent: readonly string[],
   modelKept: readonly FastCandidate[],
+  options: RunFastOptions = {},
 ): { primary: FastCandidate; alternatives: FastCandidate[] } | null {
-  // 和正常一轮一样：首推是库里的，模型过了闸的当备选，库只补缺口，省着用
+  // 库只补缺口，省着用
   const model = modelKept.filter((c) => !recent.includes(c.givenName)).slice(0, ALTERNATIVES_MAX);
   const fromLib = pickLibraryCandidates(
     loadLibrary(),
@@ -155,7 +157,14 @@ function fillFromLibrary(
     Math.random,
     model.flatMap((c) => [...c.givenName]),
   );
-  const ordered = fromLib.length ? [fromLib[0]!, ...model, ...fromLib.slice(1)] : model;
+  /*
+   * 首推由模型起（用户 11-01 定）：模型有过闸的就排前面，库名只补备选；模型一个都没过才用库名当首推。
+   * 原来补位时首推一律换成库名（「首推从库里挑」那一版留下的），上屏线提到 90 以后补位变多，
+   * 首推由模型起的轮次只剩约 77%，这样改回到约 97%（2026-11-05 独立评审回放），库名消耗不变。
+   * FAST_PRIMARY=library 时照旧库名在前。
+   */
+  const libraryFirst = primarySource(options) === "library";
+  const ordered = libraryFirst && fromLib.length ? [fromLib[0]!, ...model, ...fromLib.slice(1)] : [...model, ...fromLib];
   if (ordered.length < KEEP_MIN) return null;
   const primary = ordered[0]!;
   return { primary, alternatives: alternativesBeside(primary, ordered) };
@@ -271,7 +280,7 @@ export async function runFast(
     raw = await provider.draft(req, main, backups);
   } catch (err) {
     const message = err instanceof Error ? err.message : "生成失败";
-    const filled = fillFromLibrary(req, recent, []);
+    const filled = fillFromLibrary(req, recent, [], options);
     if (filled) return fallback(filled, `模型这一轮没出来（${message}），名字都来自名字库`);
     return { ok: false, code: "UPSTREAM", message };
   }
@@ -344,7 +353,7 @@ export async function runFast(
   onStage?.({ stage: "gate", drafted: raw.length, kept: kept.length, dropped });
 
   if (kept.length < KEEP_MIN) {
-    const filled = fillFromLibrary(req, recent, kept);
+    const filled = fillFromLibrary(req, recent, kept, options);
     if (filled) return fallback(filled, `模型这一轮只有 ${kept.length} 个能用，其余从名字库补`, debugInfo);
     return {
       ok: false,

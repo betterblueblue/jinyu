@@ -29,7 +29,7 @@ pnpm install
 cp .env.example .env.local   # 填 LLM_API_KEY，改掉默认密码和 JINYU_SESSION_SECRET
 pnpm dev                     # next dev -p 9000；也可以 .\start-dev.ps1（先查依赖和端口）
 pnpm typecheck               # tsc --noEmit
-pnpm test                    # vitest：21 个文件、345 个用例，全走假模型
+pnpm test                    # vitest：22 个文件、356 个用例，全走假模型
 ```
 
 - **直播**：双击 `启动直播台.bat`，用 Edge 或 Chrome 的 `--app` 模式开纯净窗口，再调 `tools/fit-window.ps1` 把窗口内容区压成 9:16（1080p 屏上是 576×1024）。直播伴侣里用「窗口」捕获这个窗口，不要用显示器捕获。`启动提词页.bat` 在直播窗口右边开提词页；手机打开同一地址，登录后自动回到提词页。两个 bat 里写死了局域网 IP `192.168.31.211`，IP 变了要改。
@@ -42,6 +42,7 @@ pnpm test                    # vitest：21 个文件、345 个用例，全走假
 - **不要跑 `pnpm lint`**：项目没有 ESLint 配置，`next lint` 会停在交互提问上。
 - **语料**第一次要下载：`pnpm corpus:build`（Unihan 字表 + 23 部书，约 31MB）。没装也能跑，出处一律不显示，不会编。
 - **起名字典补抓**：每场直播后跑一次 `pnpm tsx scripts/dict/fetch-qmz.ts`。抓的是字表、观众常报的字（热门字、烂大街名、年代名）和直播时查不到的字（`data/qmz-dict/missing.jsonl`），已有的跳过，结果合并进 `chars.json`，开着的直播台不用重启。加 `--all` 再带上 sitemap 的单字页；`CHARS=子梓` 另外指定。sitemap 只列了 500 个字，不在里面的字直接请求也有页面。窈、薰、辩、渥四个字页面是空的，每次都会失败，不用管。
+- **新华字典兜底**：第一次要跑 `pnpm tsx scripts/dict/build-xinhua.ts`（下载约 27MB 的 `word.json`，抽成 `data/xinhua/gloss.json` 约 0.6MB）。没跑也能用，起名字典没收的字照旧等模型。
 
 环境变量写在 `.env.local`（不进 git，不要打印、不要提交）：
 
@@ -98,7 +99,8 @@ src/
   domain/analysis/        打分和改字的输入校验、字表 chars.ts、语料核对 corpus.ts、拆姓名、性别倾向
   domain/（其余）          完整版：normalizer、orchestrator、gate、soft-ranker、assembler；bazi.ts 是完整版自己的排盘
   dictionary/             起名字典（zd.qmz.in）本地适配：qmz.ts（只读 data/qmz-dict/chars.json，不访问外站；文件变了自动重读）、
-                          missing-log.ts（直播时查不到的字记到 data/qmz-dict/missing.jsonl）
+                          missing-log.ts（直播时查不到的字记到 data/qmz-dict/missing.jsonl）、
+                          xinhua.ts（起名字典没收的字用新华字典补一句释义，读 data/xinhua/gloss.json）
   fortune/                八字页：normalize（含农历）、chart、strength、relations、prompt、provider、reading、consistency
   providers/              模型客户端。chat.ts 是共用的流式 Chat Completions；stepfun-provider 名字是旧的，现在是通用 OpenAI 兼容客户端
   render/                 摘要图：satori 画 SVG，resvg 转 PNG
@@ -120,7 +122,7 @@ scripts/
   name-library/           10-30 那版自动建库，已不用
   其余 bench-*、probe-*、e2e-real-llm.mjs  早期比模型、测完整版用的
 tests/                    单元测试；e2e/ 只有完整版
-data/                     不进 git：reports/、index.json、corpus/、name-library/v2/{drafts,review,library.json}（v2 以外是旧版）、live-log/（直播日志）、qmz-dict/（起名字典抓取、missing.jsonl 查不到的字）
+data/                     不进 git：reports/、index.json、corpus/、name-library/v2/{drafts,review,library.json}（v2 以外是旧版）、live-log/（直播日志）、qmz-dict/（起名字典抓取、missing.jsonl 查不到的字）、xinhua/（新华字典原始数据和抽好的释义）
 ```
 
 ## 4. 关键流程
@@ -144,7 +146,7 @@ data/                     不进 git：reports/、index.json、corpus/、name-li
 
 ### 名字打分、改字
 
-按 A 打开打分榜，输全名（2–4 个汉字，性别可不填）→ 面板同时请求 `GET /api/dictionary?name=...`（本地字典，几毫秒）和 `POST /api/analyze/evaluate?stream=1`。字典先回，提词页先显示每个字的基本含义、起名寓意和拆字，主播可以先照着念；模型分析随后到：
+按 A 打开打分榜，输全名（2–4 个汉字，性别可不填）→ 面板同时请求 `GET /api/dictionary?name=...`（本地字典，几毫秒）和 `POST /api/analyze/evaluate?stream=1`。字典先回，提词页先显示每个字的基本含义和拆字，主播可以先照着念；字典没收的字显示拼音、笔画、是不是常用字、多音提醒（本地当场算的），字义等模型；模型分析随后到：
 
 规则先出事实（拆名、拼音、命中的规则），几毫秒推 `facts`；一次模型调用先写四个档位数字，
 程序立刻算分推第一帧 `analysis`（只有分数和维度），理由、优点、问题随后补第二帧 `analysis`，
@@ -247,6 +249,9 @@ data/                     不进 git：reports/、index.json、corpus/、name-li
 | 11-05 | 模型判「像上一辈」由程序压分：字义最多 12、流行最多 4。模型在 scores 里和档位一起写 `old`，第一帧分数就按它算；没写才从模型原话里认 | 用户让查的（老派名字分数偏高）。模型 21 轮全都写了「像上一辈」，判断没问题，是代码漏了三处：规则查到一个年代字（建、芬）时模型那句被去重，降分跟着没了；只认「上一辈」几个词，「年代感重」「老式」不算；提示词让模型自己把字义压到 12，21 轮里 17 轮没压。改完 7 个老派名字各 3 轮都在 80–84，没有一次到 90；7 个对照名字（子轩、雅南、望舒、舜华……）0 次被判老派。`SCORING_REV` 3 |
 | 11-05 | 读音档以规则为准（`anchorPronunciation`，打分榜、候选验收、起名闸门都用）：没有读音毛病 20，同调、变调 16，和姓同音 12；模型要在理由里说出具体哪个字怎么不顺才能降一档 | 用户定。模型给读音档很随机：洪锐 4 次 16 20 20 20、黄锐 20 20 16 16，两个名字声调一样，打分榜上挨着差 4 分。改完各 4 次：洪锐 4 次都是 94、黄锐都是 92（差的 2 分是大姓单名）。起名闸门原来只看模型给的读音档，规则查到的同调、变调不扣分，12 轮 36 个上屏名字里有 2 个（刘荷晴三个二声、李允成变调）。连读成词（trap）在谐音维度里算，读音不重复扣。缓存 key 带 `SCORING_REV`，改口径后旧分不会被重放 |
 | 11-05 | 提词页的字典只给基本含义和拆字，不给站点的「起名寓意」；基本含义去掉讲五行的分句（`spokenBasicMeaning`） | 用户定。抽查 26 个字（观众常报 14 个 + 随机 12 个），起名寓意 5 个有写错或编的：梓涵说成男孩名、炜说成上火下为、子「王子张子李子是家族后代」；全量扫 899 个，11 个写财运官运运势五行，辰写成「五行之一属水」；宸夸「天子宫殿、权威尊严」，和打分扣「字太大」对着干；中位 324 字也念不完。基本含义中位 28 字、大体可靠，12 个混了五行说法（锐「金五行很强」）。数据照样抓、照样存，只是不上提词页 |
+| 11-05 | 起名字典没收的字，用新华字典补一句释义（`src/dictionary/xinhua.ts`），提词页标「新华字典·本义 / 释义」 | 用户定用。数据是 GitHub pwxcoo/chinese-xinhua 的 `data/word.json`（16142 个字，钉在提交 `cad702f`）。**仓库是 MIT，但 README 写明数据是作者从各网站抓取整理的，释义本身的版权没说清楚；我提醒过，用户判断可以用**。只给提词页、主播自己看，不对外发布。原文是长篇古文引证，离线抽成每字一句（有「本义」用本义，否则用现代释义），抽出 10930 个字，起名字典没有的能多补 10111 个；窈、听、渥、薰（起名字典站点那一页是空的）都有了。婳、赟新华也没有，照旧等模型 |
+| 11-05 | 女孩起手字去掉晖、皓、章、远、光（`build-seed-chars.ts` 的 `GIRL_OK` 清空，重新生成）；名字库补位时首推仍用模型过闸的名字 | 用户定（独立评审建议）。评审本地网关连续跑一场 78 轮、再回放 1000 场：女孩 39 轮里 12 轮过闸不满 3 个，场末王姓女孩库名中位只剩 2 个，30% 的场至少一轮报失败。原因是这 5 个字规则判偏男，带它们的女孩名封顶 89 上不了屏，被拦的又不算「本场用过」，越往后越常抽到（女孩被拦 70 个里 22 个是这个原因，晖 19 次）。补位原来首推一律换成库名（「首推从库里挑」那一版留下的），首推由模型起的轮次只剩约 77%，现在模型有过闸的就排前面，约 97%；`FAST_PRIMARY=library` 照旧库名在前 |
+| 11-05 | 字典没收的字，接口用本地数据当场补拼音（按整个名字读多音字）、笔画、常用度、别的读音；字义等模型分析 | 用户问生僻字查不到怎么办。原来只显示「字典没收」，连拼音都没有，生僻字最怕主播念错。拼音用 pinyin-pro，笔画和常用度用本地 Unihan 字表（`data/corpus/chars.json`，没装就不写，不编）。不在直播时去外站查。顺手补抓了婳、锴、赟、葳，字典 903 个字 |
 | 11-05 | 起名字典补抓观众常报的字，直播时查不到的字记下来下次补；抓取改成合并写入 | 用户让做的。原来只抓字表里的 669 个字，都是项目推荐起名的字；观众报的偏偏是项目避开的热门字，热门字 26 个缺 10 个（梓涵诺航）。原来每次运行整个覆盖 `chars.json`，补抓几个字会把其余的全丢掉。补抓后 665 → 899 个字：评测名字缺的字 12 → 0、改法换上的字 24 → 0、热门字 10 → 0，名字库只剩窈（站点页面是空的）。不在直播时临时去站点抓：外站慢或限流会拖住直播 |
 | 11-05 | 打分提示词里不写评测名单里的名字：格式示例文娟 → 柯丽，规则里的「文海军 → 文海钧、文海峻」「文红艳 → 文红雁」换成原则，分类举例换成淑芬、国强、卫东、空军 | 用户定。37 个评测名字里 6 个写在提示词里，模型照抄：08:07 那次文海军的两个改法和提示词里一字不差。`tests/evaluate.test.ts` 查系统提示词有没有评测名单里的名字（名单不进 git，没有就跳过）。起名提示词早就不放具体名字（`src/fast/prompt.ts` 开头） |
 

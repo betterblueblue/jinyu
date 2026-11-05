@@ -107,6 +107,24 @@ describe("提词页字典初检", () => {
     // 站点的起名寓意不上提词页（11-05 抽查有写错、编造、财运官运）
     expect(parsed.dictionary?.[0]).not.toHaveProperty("nameMeaning");
   });
+
+  it("字典没收的字带上本地算的笔画、常用度、多音，格式校验能过；乱写的丢掉", () => {
+    const parsed = parsePrompterRound({
+      state: "score", no: 1, full: "王婳", pinyin: "wáng huà", score: 0, bandLabel: "评价中",
+      dictionary: [{ char: "婳", pinyin: "huà", missing: true, strokes: 11, gbLevel: 0, otherReadings: ["huò"] }],
+      deductions: [], folk: [],
+    });
+    if (!parsed || parsed.state !== "score") throw new Error("提词页格式校验失败");
+    expect(parsed.dictionary?.[0]).toMatchObject({ strokes: 11, gbLevel: 0, otherReadings: ["huò"] });
+    const bad = parsePrompterRound({
+      state: "score", no: 1, full: "王婳", pinyin: "wáng huà", score: 0, bandLabel: "评价中",
+      dictionary: [{ char: "婳", missing: true, strokes: "十一", gbLevel: 5 }],
+      deductions: [], folk: [],
+    });
+    if (!bad || bad.state !== "score") throw new Error("提词页格式校验失败");
+    expect(bad.dictionary?.[0]).not.toHaveProperty("strokes");
+    expect(bad.dictionary?.[0]).not.toHaveProperty("gbLevel");
+  });
 });
 
 describe("基本含义去掉五行", () => {

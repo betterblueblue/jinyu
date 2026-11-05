@@ -226,7 +226,29 @@ function ScoreView({ round }: { round: PrompterScoreRound }) {
                   {d.pinyin ? <span className="ml-2 text-neutral-400">{d.pinyin}</span> : null}
                 </p>
                 {d.missing ? (
-                  <p className="text-neutral-500">字典没收这个字，模型分析马上到</p>
+                  <>
+                    {d.strokes !== undefined || d.gbLevel !== undefined ? (
+                      <p data-testid="prompter-dict-offline">
+                        {[
+                          d.strokes !== undefined ? `${d.strokes} 画` : "",
+                          d.gbLevel === 1 ? "常用字" : d.gbLevel === 2 ? "次常用字" : d.gbLevel === 0 ? "不在常用字表，念之前确认读音" : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </p>
+                    ) : null}
+                    {d.otherReadings?.length ? (
+                      <p className="text-amber-200">多音字，名字里读 {d.pinyin}，别念成 {d.otherReadings.join("、")}</p>
+                    ) : null}
+                    {d.basicMeaning ? (
+                      <p data-testid="prompter-dict-fallback">
+                        基本含义：{d.basicMeaning}
+                        {d.meaningSource ? <span className="ml-2 text-neutral-500">（{d.meaningSource}）</span> : null}
+                      </p>
+                    ) : (
+                      <p className="text-neutral-500">字典没收这个字，字义等模型分析，十几秒就到</p>
+                    )}
+                  </>
                 ) : (
                   <>
                     {d.basicMeaning ? <p>基本含义：{d.basicMeaning}</p> : null}

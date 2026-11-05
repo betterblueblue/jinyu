@@ -50,8 +50,12 @@ const POLYPHONE = "乐长重朝调降藏传转觉校率省便曾着还只少中�
 /** 放进名字读起来像第二个姓（沈苏晴）或谐音不讨喜（桑→丧）。实测出过「沈苏晴」「沈桑宁」 */
 const SURNAME_LIKE = "苏柳桑";
 const MAX_STROKES = 17;
-/** 性别倾向表判成偏男、但用户给女孩名评过高分的字：晴光 90、皓月 90、晴晖 90、含章 80、心远 80 */
-const GIRL_OK = "光晖皓章远";
+/**
+ * 性别倾向表判成偏男、但仍放进女孩表的字。原来是「光晖皓章远」（用户给晴光 90、皓月 90、晴晖 90、含章 80、心远 80），
+ * 2026-11-05 清空（用户定）：这几个名字是当初凭感觉收的，起名闸门按规则把带这些字的女孩名封顶 89，
+ * 女孩起手字里放着它们，一场直播里被拦的女孩名有三分之一是这个原因（晖一个字 19 次），名字库补位会见底。
+ */
+const GIRL_OK = "";
 
 function loadJsonChars(file: string): Set<string> {
   const list = JSON.parse(readFileSync(join(process.cwd(), "src", "config", file), "utf8")) as string[];

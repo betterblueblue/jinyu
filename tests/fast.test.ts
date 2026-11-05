@@ -1,10 +1,14 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import seedChars from "@/config/seed-chars.json";
+import { leanOf } from "@/domain/analysis/gender-lean";
 import { normalizeFastInput } from "@/fast/normalize";
 import { checkFastCandidate, firstCharConflict } from "@/fast/gate";
 import { __displayableQuote, citeFromLine, locateCitation } from "@/fast/cite";
 import { buildFastSystem, buildFastUser } from "@/fast/prompt";
-import { __rankCandidates, __sanitizeRecent, __stripSurname } from "@/fast/run";
+import { __fillFromLibrary, __rankCandidates, __sanitizeRecent, __stripSurname } from "@/fast/run";
 import type { FastCandidate } from "@/fast/types";
 import { pickLibraryCandidates } from "@/library/live-pick";
 import type { LibraryEntry } from "@/library/review-types";
@@ -258,6 +262,37 @@ describe("起手字", () => {
 describe("名字库补位", () => {
   const entry = (givenName: string, gender: LibraryEntry["gender"]): LibraryEntry => ({
     id: givenName, givenName, gender, meaning: "示例", grade: 90, batch: "test",
+  });
+
+  it("补位时首推仍是模型起的，库名只补备选；模型一个都没过才用库名当首推；FAST_PRIMARY=library 照旧库名在前", () => {
+    const before = process.env.JINYU_DATA_DIR;
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "jinyu-fill-"));
+    fs.mkdirSync(path.join(dir, "name-library", "v2"), { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, "name-library", "v2", "library.json"),
+      JSON.stringify({ builtAt: "", entries: [entry("清禾", "neutral"), entry("知夏", "neutral"), entry("书宁", "neutral")] }),
+    );
+    process.env.JINYU_DATA_DIR = dir;
+    try {
+      const req = { surname: "林", gender: "female" as const };
+      const model: FastCandidate = { givenName: "嘉言", fullName: "林嘉言", pinyin: "lín jiā yán", why: "模型起的", hotChar: false };
+      const some = __fillFromLibrary(req, [], [model], { primary: "model" });
+      expect(some?.primary.givenName).toBe("嘉言");
+      expect(some?.alternatives.every((c) => c.library)).toBe(true);
+      const none = __fillFromLibrary(req, [], [], { primary: "model" });
+      expect(none?.primary.library).toBeTruthy();
+      const libFirst = __fillFromLibrary(req, [], [model], { primary: "library" });
+      expect(libFirst?.primary.library).toBeTruthy();
+    } finally {
+      if (before === undefined) delete process.env.JINYU_DATA_DIR;
+      else process.env.JINYU_DATA_DIR = before;
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("女孩起手字里没有规则判为偏男的字（晖皓章远光 11-05 拿掉）", () => {
+    const female = (seedChars as { female: string[] }).female;
+    expect(female.filter((ch) => leanOf(ch) === "male")).toEqual([]);
   });
 
   it("配这个姓、这个性别时规则查到问题的库名不补位（北辰热门字、心远给女孩偏中性）", () => {

@@ -58,6 +58,17 @@ export interface PrompterDictEntry {
   basicMeaning?: string;
   decomposition?: string;
   missing?: boolean;
+  /**
+   * 字典没收的字，本地当场算的兜底（2026-11-05）：笔画、常用度、别的读音。
+   * 拼音照样放在 pinyin 里（按整个名字的上下文读多音字）。字义等模型分析。
+   */
+  strokes?: number;
+  /** 1 最常用、2 次常用、0 不在常用字表；查不到不写 */
+  gbLevel?: 0 | 1 | 2;
+  /** 多音字的其他读音，提醒主播别念错 */
+  otherReadings?: string[];
+  /** 起名字典没收、基本含义取自别处时写来源，如「新华字典·本义」（2026-11-05） */
+  meaningSource?: string;
 }
 
 export interface PrompterScoreRound {
@@ -230,10 +241,19 @@ function parseDictEntry(v: unknown): PrompterDictEntry | null {
   const basicMeaning = x.basicMeaning === undefined ? undefined : text(x.basicMeaning, 220);
   const decomposition = x.decomposition === undefined ? undefined : text(x.decomposition, 100);
   if (pinyin === null || basicMeaning === null || decomposition === null) return null;
+  const strokes = typeof x.strokes === "number" && Number.isInteger(x.strokes) && x.strokes > 0 && x.strokes < 80 ? x.strokes : undefined;
+  const gbLevel = x.gbLevel === 0 || x.gbLevel === 1 || x.gbLevel === 2 ? x.gbLevel : undefined;
+  const otherReadings = Array.isArray(x.otherReadings)
+    ? x.otherReadings.filter((r): r is string => typeof r === "string" && r.length > 0 && r.length <= 8).slice(0, 4)
+    : [];
   return {
     char,
     ...(pinyin ? { pinyin } : {}),
     ...(basicMeaning ? { basicMeaning } : {}),
+    ...(strokes !== undefined ? { strokes } : {}),
+    ...(gbLevel !== undefined ? { gbLevel } : {}),
+    ...(otherReadings.length ? { otherReadings } : {}),
+    ...(typeof x.meaningSource === "string" && x.meaningSource && [...x.meaningSource].length <= 12 ? { meaningSource: x.meaningSource } : {}),
     ...(decomposition ? { decomposition } : {}),
     ...(x.missing === true ? { missing: true } : {}),
   };
