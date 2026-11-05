@@ -216,6 +216,26 @@ describe("候选验收", () => {
     expect(out.candidate?.scores.dimensions.homophone).toBe(15);
   });
 
+  it("陈俊熙 → 陈俊朗：四个档位和原名一样，只解决了撞名，收下（热门名封顶 89 以后要有改法）", () => {
+    const facts = factsOf("陈俊熙", "male");
+    const tiers = {
+      pronunciation: { tier: 20, reason: "顺" },
+      meaning: { tier: 16, reason: "正面" },
+      gender: { tier: 12, reason: "男孩名" },
+      style: { tier: 6, reason: "温和" },
+    };
+    const original = { ...ORIGINAL, tiers, scores: scoreBreakdown(facts, tiers, { styleBaseline: true }) };
+    expect(original.scores.total).toBeLessThan(90);
+    const out = verifyCandidate(rawCandidate({ givenName: "俊朗", ...tiers, solves: facts.issues.map((i) => i.id) }), facts, original);
+    expect(out.rejected?.reasons).toBeUndefined();
+    expect(out.candidate?.scores.total).toBeGreaterThan(original.scores.total);
+  });
+
+  it("文娟 → 文安 照样拒：年代感不算在「解决了撞名」里", () => {
+    const out = verifyCandidate(rawCandidate({ givenName: "安", style: { tier: 6, reason: "安静温和" } }), factsOf("文娟", "female"), ORIGINAL);
+    expect(out.candidate).toBeUndefined();
+  });
+
   it("杜子腾 → 杜子藤：读音没变，谐音没解决，不放宽", () => {
     const facts = factsOf("杜子腾", "male");
     const out = verifyCandidate(rawCandidate({ givenName: "子藤", solves: facts.issues.map((i) => i.id) }), facts, ORIGINAL);

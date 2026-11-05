@@ -145,8 +145,19 @@ export function verifyCandidate(
    * 文娟 → 文晴：风格变亮，过；文娟 → 文安：三维都没动，只是换了个中性字，拒。
    * 不看性别档降不降：性别辨识已经在气质分里算过，再单独拦一次会误伤「中性但更亮」的候选。
    */
+  /*
+   * 候选解决了原名的撞名、热门字（2026-11-05）：「非常优秀」门槛把热门字算问题以后，热门名都封顶 89，
+   * 改法要是不认「撞名解决了」，陈俊熙 → 陈俊朗 94、陈彦熙 94 都因为「没有一项比原名好」被拒，热门名就出不了改法。
+   * 读音没变时流行分按原名算，换同音字不会被当成解决了。年代感不算在这里：文娟 → 文安 照样拒（11-04 用户定）。
+   */
+  const POPULAR = new Set(["hot", "template", "singleName"]);
+  const popularFixed =
+    originalFacts.issues.some((it) => POPULAR.has(it.rule)) &&
+    scoredFacts.program.popularity.score > originalFacts.program.popularity.score &&
+    !facts.issues.some((it) => it.rule === "template");
   const betterDimension =
     homophoneFixed ||
+    popularFixed ||
     (["pronunciation", "meaning", "gender", "style"] as const).some((k) => tiers[k].tier > original.tiers[k].tier);
   if (!betterDimension) reasons.push("读音、字义、风格、谐音没有一项比原名好");
 

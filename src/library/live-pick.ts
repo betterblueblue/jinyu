@@ -1,5 +1,6 @@
 import { readFileSync, statSync } from "node:fs";
 import path from "node:path";
+import { factsOf } from "@/domain/evaluate/facts";
 import { fullNamePinyin } from "@/domain/pinyin-name";
 import { checkFastCandidate } from "@/fast/gate";
 import type { FastCandidate, FastCitation, FastGender } from "@/fast/types";
@@ -165,6 +166,13 @@ export function pickLibraryCandidates(
     if ([...e.givenName].some((ch) => takenChars.has(ch))) continue;
     const verdict = checkFastCandidate(e.givenName, surname, gender);
     if (!verdict.keep) continue;
+    /*
+     * 补位上屏的库名，配这个姓、这个性别时规则不能查到任何问题（2026-11-05 用户定）。
+     * 库名补位不过六维闸门，79 个里 8 个本身带问题（心远、修竹、晴光、皓月、晴晖、清晖、含章偏中性，北辰是热门字），
+     * 上屏以后拿到打分榜上封顶 89、还被挑毛病。用户说这几个当初是凭感觉收的，一起处理。
+     * 名字库文件不动，只在补位时挑掉：拦了以后每个姓男孩至少 38 个、女孩至少 37 个，够一场用。
+     */
+    if (factsOf(surname, e.givenName, gender).issues.length > 0) continue;
     out.push(toCandidate(e, surname, verdict.hotChar));
     for (const ch of e.givenName) takenChars.add(ch);
   }

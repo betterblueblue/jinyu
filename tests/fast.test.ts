@@ -6,6 +6,8 @@ import { __displayableQuote, citeFromLine, locateCitation } from "@/fast/cite";
 import { buildFastSystem, buildFastUser } from "@/fast/prompt";
 import { __rankCandidates, __sanitizeRecent, __stripSurname } from "@/fast/run";
 import type { FastCandidate } from "@/fast/types";
+import { pickLibraryCandidates } from "@/library/live-pick";
+import type { LibraryEntry } from "@/library/review-types";
 import { AVOID_MAX, SEEDS_PER_ROUND, pickSeeds } from "@/fast/seeds";
 import { seasonSeeds } from "@/fast/birth";
 import { FAST_RECENT_MAX } from "@/fast/types";
@@ -250,6 +252,21 @@ describe("起手字", () => {
     expect(firstCharConflict("静", "沈")).toBe(true); // 沈静 → 神经
     expect(firstCharConflict("默", "沈")).toBe(true); // 沈默 → 沉默
     expect(firstCharConflict("望", "苏")).toBe(false);
+  });
+});
+
+describe("名字库补位", () => {
+  const entry = (givenName: string, gender: LibraryEntry["gender"]): LibraryEntry => ({
+    id: givenName, givenName, gender, meaning: "示例", grade: 90, batch: "test",
+  });
+
+  it("配这个姓、这个性别时规则查到问题的库名不补位（北辰热门字、心远给女孩偏中性）", () => {
+    const lib = [entry("北辰", "male"), entry("心远", "neutral"), entry("清禾", "neutral")];
+    const boy = pickLibraryCandidates(lib, "林", "male", [], 3, () => 0.5).map((c) => c.givenName);
+    expect(boy).not.toContain("北辰");
+    const girl = pickLibraryCandidates(lib, "林", "female", [], 3, () => 0.5).map((c) => c.givenName);
+    expect(girl).not.toContain("心远");
+    expect(girl).toContain("清禾");
   });
 });
 
