@@ -5,7 +5,6 @@ import { FAST_RECENT_MAX, type FastFormInput } from "@/fast/types";
 import { AnalyzePanel } from "./analyze-panel";
 import { downloadCard } from "./card-export";
 import { readFastResponse } from "./fast-stream";
-import type { PrompterRound } from "@/live/prompter";
 import { logLive } from "./live-log-client";
 import { GENDER_WORD, fetchTalks, namesNeedingTalk, prompterFromFast, pushPrompter } from "./prompter-sync";
 import { RevealView } from "./reveal-view";
@@ -55,22 +54,6 @@ export function LiveClient() {
   const bgImage = useRef<HTMLImageElement | null>(null);
   /** 这一场已经给过的名字（整场都记，最多 FAST_RECENT_MAX 个），随请求带给精简版：去重、抽起手字都靠它 */
   const recentRef = useRef<string[]>([]);
-
-  /**
-   * 打分榜开着时，提词页归打分榜（推选中那位观众的打分稿，见 analyze-panel.tsx）。
-   * 这时起名这边的稿子（比如晚到几秒的拆字稿）先记着不推，免得盖掉主播正在念的打分稿；关面板时补推最新的一份。
-   */
-  const liveRound = useRef<PrompterRound>({ state: "idle" });
-  const analyzeOpenRef = useRef(false);
-  const pushLive = useCallback((round: PrompterRound) => {
-    liveRound.current = round;
-    if (!analyzeOpenRef.current) pushPrompter(round);
-  }, []);
-  useEffect(() => {
-    const wasOpen = analyzeOpenRef.current;
-    analyzeOpenRef.current = analyzeOpen;
-    if (wasOpen && !analyzeOpen) pushPrompter(liveRound.current);
-  }, [analyzeOpen]);
 
   /* 竹兰背景图预加载：导出卡片时要同步画进 canvas */
   useEffect(() => {
@@ -124,24 +107,15 @@ export function LiveClient() {
     if (el && el.value) setDraft((prev) => (prev ? prev : el.value));
   }, []);
 
-  /** 从名字分析带过来的约束：姓氏已定、要避开的字、定向要求 */
   const generate = useCallback(
-    async (override?: {
-      surname?: string;
-      gender?: Gender;
-      birthday?: string;
-      taboo?: string;
-      requirements?: string;
-      /** 从打分榜「重新起名」过来的：日志里分开数 */
-      from?: "score";
-    }) => {
+    async () => {
     if (busy.current) return;
-    const surname = (override?.surname ?? draft).trim();
+    const surname = draft.trim();
     if (!surname) {
       inputRef.current?.focus();
       return;
     }
-    const picked = override?.gender ?? gender;
+    const picked = gender;
     if (picked === "unknown") {
       // 没选性别就留在输入页提示，不先闪一下加载页再跳回来
       setError("先选性别：按 1 男 / 2 女，再点开始取名");
@@ -160,15 +134,14 @@ export function LiveClient() {
     };
 
     try {
-      // 打分榜「重新起名」会传空串：那位观众没报生日，不能带上直播台上一位的
-      const bday = override?.birthday ?? birthday;
+      const bday = birthday;
       const body: FastFormInput = {
         surname,
         gender: picked,
         ...(bday ? { birthday: bday } : {}),
         ...(recentRef.current.length ? { recent: recentRef.current } : {}),
       };
-      pushLive({ state: "pending", no: cardNo, surname, gender: GENDER_WORD[picked] });
+      pushPrompter({ state: "pending", no: cardNo, surname, gender: GENDER_WORD[picked] });
       const res = await fetch("/api/fast?stream=1", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -187,13 +160,13 @@ export function LiveClient() {
       }
 
       setShow(fastToShow(payload, cardNo, recentRef.current.length));
-      pushLive(prompterFromFast(payload, cardNo));
+      pushPrompter(prompterFromFast(payload, cardNo));
       // 模型起的名字没有现成稿子：再请模型写拆字、合起来，写好了补推一次提词页。
       // 观众屏幕不等它；主播已经点了「下一个」的话（token 变了）就不推，免得盖掉下一位
       const needed = namesNeedingTalk(payload).length;
       void fetchTalks(payload, bday || undefined).then((talks) => {
         if (needed) logLive({ kind: "talk", primary: payload.primary.fullName, needed, written: Object.keys(talks).length });
-        if (roundToken.current === token) pushLive(prompterFromFast(payload, cardNo, talks));
+        if (roundToken.current === token) pushPrompter(prompterFromFast(payload, cardNo, talks));
       });
       // 记下这一场已经给过哪些名字：下一轮带着去重，观众不会连着看到同一个名。
       // 重复出现的名字必须挪到队尾再截断——直接 Set + slice(-N) 会让它停在最早的位置，
@@ -212,7 +185,6 @@ export function LiveClient() {
         alternatives: payload.alternatives.map((a) => a.fullName),
         library: Boolean(payload.primary.library),
         waitMs: Date.now() - startedAt,
-        ...(override?.from ? { from: override.from } : {}),
       });
       setCardNo((n) => n + 1);
       setReady(false);
@@ -224,7 +196,7 @@ export function LiveClient() {
       setError(message);
       setPhase("input");
       setShow(null);
-      pushLive({ state: "idle" });
+      pushPrompter({ state: "idle" });
     } finally {
       busy.current = false;
     }
@@ -232,21 +204,9 @@ export function LiveClient() {
     [draft, gender, birthday, cardNo],
   );
 
-  /** 打分榜「重新起名」：姓和性别带过去，走直播用的精简版（3–5 秒） */
-  const renameFromScore = useCallback(
-    (input: { surname: string; gender: "male" | "female" }) => {
-      setAnalyzeOpen(false);
-      setDraft(input.surname);
-      setGender(input.gender);
-      setBirthday("");
-      void generate({ surname: input.surname, gender: input.gender, birthday: "", from: "score" });
-    },
-    [generate],
-  );
-
   const resetToInput = useCallback(() => {
     roundToken.current++;
-    pushLive({ state: "idle" });
+    pushPrompter({ state: "idle" });
     setShow(null);
     setReady(false);
     setDraft("");
@@ -454,11 +414,7 @@ export function LiveClient() {
             换肤 · {SKIN_LABEL[skin]} · S
           </button>
 
-          <AnalyzePanel
-            open={analyzeOpen}
-            onClose={() => setAnalyzeOpen(false)}
-            onRename={renameFromScore}
-          />
+          <AnalyzePanel open={analyzeOpen} onClose={() => setAnalyzeOpen(false)} />
         </div>
       </div>
     </div>

@@ -2,7 +2,7 @@ import type { Deduction, FixOption, GenderRisk, NameScore, NextStep, ScoreRuleId
 import type { EvalCandidate, EvalStatus, NameFacts, OriginalEvaluation } from "@/domain/evaluate/types";
 import type { FastCandidate, FastSuccess } from "@/fast/types";
 import { checkLine, talkLines } from "@/library/talk";
-import type { PrompterDictEntry, PrompterName, PrompterRound } from "@/live/prompter";
+import type { PrompterDictEntry, PrompterName, PrompterRound, PrompterScoreRound } from "@/live/prompter";
 import { citeFrom, type Gender } from "./show-data";
 
 /* ---------- 主播提词页（/live/prompter） ---------- */
@@ -255,7 +255,7 @@ const STATUS_WORD: Record<EvalStatus, string> = {
   timeout: "超时",
 };
 
-export function prompterFromEvaluation(s: EvaluationForPrompter): PrompterRound {
+export function prompterFromEvaluation(s: EvaluationForPrompter): PrompterScoreRound {
   const o = s.original;
   const status = s.status;
   const dimensions = o
