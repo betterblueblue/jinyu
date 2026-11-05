@@ -1,7 +1,7 @@
 import l2Chars from "@/config/l2-chars.json";
 import type { AnalysisGender } from "@/domain/analysis/types";
 import { factsOf } from "@/domain/evaluate/facts";
-import { clampTier, scoreBreakdown, STYLE_BASE } from "@/domain/evaluate/scoring";
+import { anchorPronunciation, clampTier, scoreBreakdown, STYLE_BASE } from "@/domain/evaluate/scoring";
 import { nameSyllables } from "@/domain/pinyin-name";
 import { BAD_WORDS, SURNAME_TRAP } from "@/domain/score/lexicon";
 import { checkRecommendable } from "@/domain/score/recommend";
@@ -59,7 +59,8 @@ export function checkFastCandidate(
   if (modelScores) {
     const facts = factsOf(surname.trim(), name, gender);
     const tiers = {
-      pronunciation: { tier: clampTier("pronunciation", modelScores.pronunciation), reason: "" },
+      // 读音以规则为准（和打分榜同一套）；起名时模型只给数字不给理由，所以就是规则的基准档
+      pronunciation: anchorPronunciation(facts, { tier: clampTier("pronunciation", modelScores.pronunciation), reason: "" }),
       meaning: { tier: clampTier("meaning", modelScores.meaning), reason: "" },
       gender: { tier: clampTier("gender", modelScores.gender), reason: "" },
       // 2026-11-05 定：风格是偏好，不进总分；给 baseline 保证和打分榜同一把尺子

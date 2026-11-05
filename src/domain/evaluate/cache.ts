@@ -1,3 +1,4 @@
+import { SCORING_REV } from "./scoring";
 import type { EvaluateResult } from "./types";
 
 /**
@@ -18,8 +19,9 @@ const store: Map<string, EvaluateResult> =
   new Map<string, EvaluateResult>();
 (globalThis as Record<string, unknown>).__jinyuEvalCache = store;
 
+/** 带上打分口径的版本：改了算分规则，旧口径算的分不会被重放出来 */
 export function cacheKey(surname: string, givenName: string, gender: string): string {
-  return `${surname}|${givenName}|${gender}`;
+  return `${SCORING_REV}|${surname}|${givenName}|${gender}`;
 }
 
 export function getCached(key: string): EvaluateResult | undefined {

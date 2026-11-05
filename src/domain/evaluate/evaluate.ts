@@ -3,7 +3,7 @@ import { resolveSplit, scoreName } from "@/domain/score/score";
 import { buildFacts } from "./facts";
 import { parseOriginal, parseScores, scoresFromOriginal, type ParsedScores } from "./prompt";
 import type { EvaluateProvider } from "./provider";
-import { applyAgePenalty, scoreBreakdown } from "./scoring";
+import { anchorPronunciation, applyAgePenalty, scoreBreakdown } from "./scoring";
 import { verifyCandidate } from "./verify";
 import type {
   EvalCandidate,
@@ -203,6 +203,8 @@ function buildOriginal(
   whole = "",
   comment = "",
 ): OriginalEvaluation {
+  // 读音档以规则为准，模型只有说得出具体哪里不顺才往下调一档（2026-11-05）
+  tiers = { ...tiers, pronunciation: anchorPronunciation(facts, tiers.pronunciation) };
   const scores = scoreBreakdown(facts, tiers, { styleBaseline: true });
   // 模型说整名像上一辈、菜市场名、口号或职业词：规则表可能没收录（志明、俊杰），这里再压一档
   const modelAge = issues.some(

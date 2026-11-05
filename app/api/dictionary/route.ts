@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { isAuthenticated } from "@/auth/session";
 import { validateAnalysisInput } from "@/domain/analysis/analyze";
 import { resolveSplit } from "@/domain/score/score";
-import { getQmzChar } from "@/dictionary/qmz";
+import { logMissingChars } from "@/dictionary/missing-log";
+import { getQmzChar, spokenBasicMeaning } from "@/dictionary/qmz";
 import { isSensitiveName, SENSITIVE_NOTE } from "@/domain/evaluate/sensitive";
 
 /**
@@ -38,14 +39,20 @@ export async function GET(req: Request) {
   const entries = [...split.givenName].map((char) => {
     const info = getQmzChar(char);
     if (!info) return { char, missing: true };
+    const basic = clip(spokenBasicMeaning(info.basicMeaning), 220);
     return {
       char,
       ...(info.pinyin ? { pinyin: info.pinyin } : {}),
-      ...(clip(info.basicMeaning, 220) ? { basicMeaning: clip(info.basicMeaning, 220) } : {}),
-      ...(clip(info.nameMeaning, 800) ? { nameMeaning: clip(info.nameMeaning, 800) } : {}),
+      // 只给基本含义（去掉讲五行的话）和拆字。站点的「起名寓意」不给提词页：11-05 抽查 26 个字，
+      // 5 个有写错或编的（梓涵说成男孩名、炜说成上火下为），899 个里 11 个写财运、官运、五行，
+      // 宸还夸「天子宫殿、权威尊严」，和打分扣「字太大」对着干；寓意交给随后到的模型分析
+      ...(basic ? { basicMeaning: basic } : {}),
       ...(clip(info.decomposition, 100) ? { decomposition: clip(info.decomposition, 100) } : {}),
     };
   });
+  // 查不到的字记下来，下次抓取补上；写失败不影响返回
+  const missed = entries.filter((e) => "missing" in e && e.missing).map((e) => e.char);
+  if (missed.length) void logMissingChars(missed).catch(() => {});
   return NextResponse.json(
     { ok: true, surname: split.surname, givenName: split.givenName, entries },
     { headers: { "Cache-Control": "no-store" } },

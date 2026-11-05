@@ -56,7 +56,6 @@ export interface PrompterDictEntry {
   char: string;
   pinyin?: string;
   basicMeaning?: string;
-  nameMeaning?: string;
   decomposition?: string;
   missing?: boolean;
 }
@@ -229,14 +228,12 @@ function parseDictEntry(v: unknown): PrompterDictEntry | null {
   if (!char || [...char].length !== 1) return null;
   const pinyin = x.pinyin === undefined ? undefined : text(x.pinyin, 40);
   const basicMeaning = x.basicMeaning === undefined ? undefined : text(x.basicMeaning, 220);
-  const nameMeaning = x.nameMeaning === undefined ? undefined : text(x.nameMeaning, 800);
   const decomposition = x.decomposition === undefined ? undefined : text(x.decomposition, 100);
-  if (pinyin === null || basicMeaning === null || nameMeaning === null || decomposition === null) return null;
+  if (pinyin === null || basicMeaning === null || decomposition === null) return null;
   return {
     char,
     ...(pinyin ? { pinyin } : {}),
     ...(basicMeaning ? { basicMeaning } : {}),
-    ...(nameMeaning ? { nameMeaning } : {}),
     ...(decomposition ? { decomposition } : {}),
     ...(x.missing === true ? { missing: true } : {}),
   };

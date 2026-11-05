@@ -1,5 +1,9 @@
-import { describe, expect, it } from "vitest";
-import { parseQmzCharHtml } from "@/dictionary/qmz";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+import { logMissingChars, resetMissingLog } from "@/dictionary/missing-log";
+import { getQmzChar, parseQmzCharHtml, resetQmzDictionaryCache, spokenBasicMeaning } from "@/dictionary/qmz";
 import { parsePrompterRound } from "@/live/prompter";
 
 const HTML = `
@@ -40,6 +44,47 @@ describe("起名字典解析", () => {
   });
 });
 
+describe("字典文件和查不到的字", () => {
+  const before = process.env.JINYU_DATA_DIR;
+  let dir = "";
+  const useTempDir = () => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), "jinyu-qmz-"));
+    process.env.JINYU_DATA_DIR = dir;
+    fs.mkdirSync(path.join(dir, "qmz-dict"), { recursive: true });
+    resetQmzDictionaryCache();
+    resetMissingLog();
+  };
+  const writeDict = (chars: string[], mtime: Date) => {
+    const file = path.join(dir, "qmz-dict", "chars.json");
+    const body = { generatedAt: "", source: "", chars: Object.fromEntries(chars.map((c) => [c, { char: c, sourceUrl: "", fetchedAt: "" }])) };
+    fs.writeFileSync(file, JSON.stringify(body), "utf8");
+    fs.utimesSync(file, mtime, mtime);
+  };
+  afterEach(() => {
+    if (before === undefined) delete process.env.JINYU_DATA_DIR;
+    else process.env.JINYU_DATA_DIR = before;
+    resetQmzDictionaryCache();
+    if (dir) fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("补抓后字典文件变了，不用重启就能查到新字", () => {
+    useTempDir();
+    writeDict(["华"], new Date("2026-11-05T01:00:00Z"));
+    expect(getQmzChar("梓")).toBeNull();
+    writeDict(["华", "梓"], new Date("2026-11-05T02:00:00Z"));
+    expect(getQmzChar("梓")?.char).toBe("梓");
+  });
+
+  it("查不到的字记一行，同一个字只记一次，只记字和时间", async () => {
+    useTempDir();
+    await logMissingChars(["梓", "涵"]);
+    await logMissingChars(["梓"]);
+    const lines = fs.readFileSync(path.join(dir, "qmz-dict", "missing.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l));
+    expect(lines.map((l) => l.char)).toEqual(["梓", "涵"]);
+    expect(Object.keys(lines[0]).sort()).toEqual(["at", "char"]);
+  });
+});
+
 describe("提词页字典初检", () => {
   it("字典条目能通过提词页格式校验", () => {
     const parsed = parsePrompterRound({
@@ -59,5 +104,24 @@ describe("提词页字典初检", () => {
     if (!parsed || parsed.state !== "score") throw new Error("提词页格式校验失败");
     expect(parsed.dictionary).toHaveLength(2);
     expect(parsed.dictionary?.[0]?.basicMeaning).toContain("荣华");
+    // 站点的起名寓意不上提词页（11-05 抽查有写错、编造、财运官运）
+    expect(parsed.dictionary?.[0]).not.toHaveProperty("nameMeaning");
+  });
+});
+
+describe("基本含义去掉五行", () => {
+  it.each([
+    ["是金五行很强的姓名用字", "锐本意为锋利，尖。用在人名中主要有感觉灵敏、犀利等含义，是金五行很强的姓名用字。", "锐本意为锋利，尖。用在人名中主要有感觉灵敏、犀利等含义。"],
+    ["五生克", "雷厉风行，补水生木。意为响亮、声大。", "意为响亮、声大。"],
+    ["剩半截话就整句去掉", "本意为系在衣带上的装饰品。另外，在名字中用做连字时则没有五行属性。", "本意为系在衣带上的装饰品。"],
+    ["繁体两个火、火旺", "意为繁荣茂盛。荣字繁体字为“榮”，头上有两个“火”字，结合字义，荣字整体来说火旺。", "意为繁荣茂盛。荣字繁体字为“榮”。"],
+  ])("%s", (_label, input, expected) => {
+    expect(spokenBasicMeaning(input)).toBe(expected);
+  });
+
+  it("没有五行的照原样，去完没剩东西返回空", () => {
+    expect(spokenBasicMeaning("本意为水泽众多。在人名中引申为涵养、包容等含义。")).toBe("本意为水泽众多。在人名中引申为涵养、包容等含义。");
+    expect(spokenBasicMeaning("是水五行的字。")).toBeUndefined();
+    expect(spokenBasicMeaning(undefined)).toBeUndefined();
   });
 });

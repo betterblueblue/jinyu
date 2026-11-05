@@ -136,6 +136,44 @@ export function homophoneScore(
   return { score: 15, reason: "没有查到负面谐音" };
 }
 
+/**
+ * 读音档以规则为准（2026-11-05 用户定）。
+ *
+ * 模型给读音档很随机：同一个洪锐 4 次给了 16 20 20 20，黄锐 20 20 16 16；
+ * 两个名字声调一模一样（hóng/huáng 都是二声接去声），打分榜上挨着就能差 4 分。
+ * 所以先按规则查出的读音毛病定基准档，模型只有在理由里说出名字里具体哪个字怎么不顺时，才能往下调一档。
+ *   没有读音毛病 20；同调、变调 16；和姓同音（连着念绕）12；两样都有再降一档。
+ * 连读成词（trap）算在谐音维度里，这里不重复扣。
+ */
+const PRONUNCIATION_RULE_TIER: Record<string, number> = { flatTone: 16, sandhi: 16, sameSound: 12 };
+
+export function pronunciationBase(facts: NameFacts): { tier: number; reason: string } {
+  const hits = facts.issues.filter((it) => it.rule in PRONUNCIATION_RULE_TIER);
+  if (!hits.length) return { tier: 20, reason: "连着姓念顺，规则没查到读音毛病" };
+  const worst = Math.min(...hits.map((it) => PRONUNCIATION_RULE_TIER[it.rule]!));
+  return { tier: clampTier("pronunciation", hits.length > 1 ? worst - 4 : worst), reason: hits[0]!.line };
+}
+
+/** 模型说「不顺」要说到具体的字和具体的毛病，「基本顺畅」「收尾略轻」这种不算 */
+const PRONUNCIATION_PROBLEM = /拗口|绕口|别扭|不顺|难念|念不清|听不清|含糊|吞音|打架|同声母|同韵母|双声|叠韵|没有?起伏|单调/;
+
+export function anchorPronunciation(facts: NameFacts, model: TierChoice): TierChoice {
+  const base = pronunciationBase(facts);
+  const reason = model.reason ?? "";
+  const specific =
+    PRONUNCIATION_PROBLEM.test(reason) && [...`${facts.surname}${facts.givenName}`].some((c) => reason.includes(c));
+  if (specific && model.tier < base.tier) {
+    return { tier: clampTier("pronunciation", base.tier - 4), reason };
+  }
+  return { tier: base.tier, reason: base.tier < 20 ? base.reason : reason || base.reason };
+}
+
+/**
+ * 打分口径的版本号：改了算分规则就加一，接口层缓存按它分开，不会把旧口径的分数重放出来。
+ * 2：读音档以规则为准（2026-11-05）。
+ */
+export const SCORING_REV = 2;
+
 export function dimensionScores(
   facts: NameFacts,
   tiers: { pronunciation: TierChoice; meaning: TierChoice; gender: TierChoice; style: TierChoice },

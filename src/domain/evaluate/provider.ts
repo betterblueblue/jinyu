@@ -34,6 +34,20 @@ export interface EvaluateProvider {
   ): Promise<RawEvaluation | null>;
 }
 
+/**
+ * 推理里多是 JSON 草稿：去掉字段名、引号、括号，只留能念的那句。
+ * 字段名前面常带逗号（`,whole:合起来是……`，2026-11-05 提词页上漏出来过），
+ * 也可能夹在句子中间，所以开头的标点和任意位置的 `字段名:` 都要去。
+ */
+export function cleanThought(text: string): string {
+  return text
+    .replace(/["“”'{}[\]]/g, "")
+    .replace(/(^|[\s,，、])[a-zA-Z_]+\s*[:：]\s*/g, "$1")
+    .replace(/^[\s\-*0-9.、,，:：]+/, "")
+    .replace(/\(\d+\s*字\)/g, "")
+    .trim();
+}
+
 export class LlmEvaluateProvider implements EvaluateProvider {
   readonly name: string;
 
@@ -70,14 +84,7 @@ export class LlmEvaluateProvider implements EvaluateProvider {
       const parts = thoughtBuf.split(/[。；\n]/);
       thoughtBuf = parts.pop() ?? "";
       for (const p of parts) {
-        // 推理里多是 JSON 草稿：去掉字段名、引号、括号，只留能念的那句
-        const s = p
-          .replace(/^[\s\-*0-9.、]+/, "")
-          .replace(/^[a-zA-Z_]+["']?\s*:\s*/, "")
-          .replace(/["“”]/g, "")
-          .replace(/[{}[\]]/g, "")
-          .replace(/\(\d+\s*字\)/g, "")
-          .trim();
+        const s = cleanThought(p);
         if (s.length < 6 || s.length > 40) continue;
         const hasTopic = /读音|字义|性别|气质|风格|识读|流行|谐音|年代|重名|同调|连姓/.test(s);
         const hasNameChar = [...facts.givenName].some((c) => s.includes(c));

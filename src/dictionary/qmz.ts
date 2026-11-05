@@ -147,15 +147,25 @@ export function qmzDictionaryPath(): string {
 }
 
 let cached: QmzDictionary | null = null;
-let loaded = false;
+/** 上次读时文件的修改时间；补抓后文件变了就重读，开着的直播台不用重启（2026-11-05） */
+let loadedMtime: number | null = null;
 
 export function loadQmzDictionary(): QmzDictionary | null {
-  if (loaded) return cached;
-  loaded = true;
+  let mtime: number;
   try {
-    cached = JSON.parse(fs.readFileSync(qmzDictionaryPath(), "utf8")) as QmzDictionary;
+    mtime = fs.statSync(qmzDictionaryPath()).mtimeMs;
   } catch {
     cached = null;
+    loadedMtime = null;
+    return null;
+  }
+  if (loadedMtime === mtime) return cached;
+  try {
+    cached = JSON.parse(fs.readFileSync(qmzDictionaryPath(), "utf8")) as QmzDictionary;
+    loadedMtime = mtime;
+  } catch {
+    // 抓取脚本正在写、读到半截：这次不换，下次再试
+    if (!cached) loadedMtime = null;
   }
   return cached;
 }
@@ -164,8 +174,36 @@ export function getQmzChar(ch: string): QmzChar | null {
   return loadQmzDictionary()?.chars[ch] ?? null;
 }
 
+/**
+ * 基本含义里能当众念的部分（2026-11-05）：去掉讲五行的分句。
+ * 直播不讲八字、五行（合规），站点有 10 来个字的基本含义混了「是金五行很强的姓名用字」这类话，
+ * 还有雷「补水生木」这种五行生克。只去这些分句，其余照旧；去完没剩东西就当没有基本含义。
+ */
+const FIVE_ELEMENTS = /五行|[金木水火土][生克中][含金木水火土]|[金木水火土]旺|两(个)?[“"]?火/;
+
+export function spokenBasicMeaning(text: string | undefined): string | undefined {
+  if (!text) return undefined;
+  const kept = text
+    .split(/(?<=[。；！？])/)
+    .flatMap((sentence) => {
+      if (!FIVE_ELEMENTS.test(sentence)) return [sentence];
+      // 只去讲五行的那个分句；剩下的说不成一句话（「另外。」「做为连词或副词使用时。」）就整句去掉
+      const end = /[。；！？]$/.exec(sentence)?.[0] ?? "";
+      const parts = sentence
+        .replace(/[。；！？]$/, "")
+        .split(/[，,]/)
+        // 「结合字义（来看）」「因木生火」只是给五行说法铺垫，去掉五行以后单独留着没意思
+        .filter((p) => !FIVE_ELEMENTS.test(p) && !/^(结合字义(来看)?|因[金木水火土]生[金木水火土])$/.test(p.trim()));
+      const enough = parts.length >= 2 || (parts.length === 1 && [...parts[0]!].length >= 8 && !/时$|看$|外$/.test(parts[0]!));
+      return enough ? [`${parts.join("，")}${end}`] : [];
+    })
+    .join("")
+    .trim();
+  return kept || undefined;
+}
+
 /** 仅测试用 */
 export function resetQmzDictionaryCache(): void {
   cached = null;
-  loaded = false;
+  loadedMtime = null;
 }

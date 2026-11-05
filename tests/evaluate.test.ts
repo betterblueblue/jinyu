@@ -9,8 +9,9 @@ import { resetCharTableCache } from "@/domain/analysis/chars";
 import { evaluateName } from "@/domain/evaluate/evaluate";
 import { buildFacts } from "@/domain/evaluate/facts";
 import { buildEvaluateMessages, completedOriginal, parseEvaluation, parseTierChoice } from "@/domain/evaluate/prompt";
-import { FakeEvaluateProvider } from "@/domain/evaluate/provider";
-import { BAND_CUTS, bandOf, capFor, clampTier } from "@/domain/evaluate/scoring";
+import { cleanThought, FakeEvaluateProvider } from "@/domain/evaluate/provider";
+import { anchorPronunciation, BAND_CUTS, bandOf, capFor, clampTier, pronunciationBase, SCORING_REV } from "@/domain/evaluate/scoring";
+import { checkFastCandidate } from "@/fast/gate";
 import type { EvaluateProvider } from "@/domain/evaluate/provider";
 import type { NameFacts, OriginalEvaluation, RawCandidate, RawEvaluation } from "@/domain/evaluate/types";
 import { verifyCandidate } from "@/domain/evaluate/verify";
@@ -120,18 +121,19 @@ describe("程序事实", () => {
   });
 });
 
+// 文娟（女）的原名评价。读音按规则定档（2026-11-05）：文娟没有读音毛病，读音只能是 20
 const ORIGINAL: OriginalEvaluation = {
   scores: {
-    dimensions: { pronunciation: 16, meaning: 16, gender: 12, style: 6, temperament: 18, literacy: 15, popularity: 4, homophone: 15 },
-    base: 84,
+    dimensions: { pronunciation: 20, meaning: 16, gender: 12, style: 6, temperament: 18, literacy: 15, popularity: 4, homophone: 15 },
+    base: 88,
     cap: null,
     capReason: null,
-    total: 84,
+    total: 88,
     band: "ok",
     bandLabel: "可以用",
   },
   tiers: {
-    pronunciation: { tier: 16, reason: "顺" },
+    pronunciation: { tier: 20, reason: "顺" },
     meaning: { tier: 16, reason: "正面" },
     gender: { tier: 12, reason: "女孩名" },
     style: { tier: 6, reason: "温和" },
@@ -225,6 +227,52 @@ describe("候选验收", () => {
     const out = verifyCandidate(rawCandidate(), factsOf("文娟", "female"), ORIGINAL);
     expect(out.candidate?.soundLine).not.toBe("读音不变");
     expect(out.candidate?.scores.dimensions.popularity).toBeGreaterThan(ORIGINAL.scores.dimensions.popularity);
+  });
+});
+
+describe("读音档以规则为准", () => {
+  const tier = (t: number, reason = "") => ({ tier: t, reason });
+
+  it("洪锐、黄锐声调一样、规则没查到读音毛病：模型给 16 还是 20，都按 20 算", () => {
+    for (const n of ["洪锐", "黄锐"]) {
+      const f = factsOf(n, "male");
+      expect(anchorPronunciation(f, tier(16, "阳平接去声，顺口")).tier).toBe(20);
+      expect(anchorPronunciation(f, tier(20, "收尾响亮")).tier).toBe(20);
+    }
+  });
+
+  it("三个字同调：模型给 20 也按 16 算，理由换成规则那句", () => {
+    const f = factsOf("张天星", "male");
+    const out = anchorPronunciation(f, tier(20, "顺"));
+    expect(out.tier).toBe(16);
+    expect(out.reason).toContain("一个调");
+  });
+
+  it("模型说出具体哪个字怎么不顺，才往下调一档；只说「基本顺畅」「略绕口」不算", () => {
+    const f = factsOf("洪锐", "male");
+    expect(anchorPronunciation(f, tier(12, "洪和锐连读拗口")).tier).toBe(16);
+    expect(anchorPronunciation(f, tier(8, "洪锐念着拗口")).tier).toBe(16); // 最多降一档
+    expect(anchorPronunciation(f, tier(12, "略绕口")).tier).toBe(20);
+    expect(anchorPronunciation(f, tier(16, "基本顺畅")).tier).toBe(20);
+  });
+
+  it("起名闸门：模型给的读音档不影响总分", () => {
+    const hi = checkFastCandidate("荷晴", "刘", "female", { pronunciation: 20, meaning: 16, gender: 12 });
+    const lo = checkFastCandidate("荷晴", "刘", "female", { pronunciation: 8, meaning: 16, gender: 12 });
+    expect(hi.score).toBe(lo.score);
+    expect(pronunciationBase(factsOf("刘荷晴", "female")).tier).toBe(16);
+  });
+
+  it("改了口径，缓存 key 跟着变", () => {
+    expect(cacheKey("文", "娟", "female")).toContain(`${SCORING_REV}|`);
+  });
+});
+
+describe("模型推理的短句", () => {
+  it("去掉 JSON 字段名，开头带逗号的也去", () => {
+    expect(cleanThought(',whole:合起来是洪亮又有锐气的样子')).toBe("合起来是洪亮又有锐气的样子");
+    expect(cleanThought('"comment": "读着响，意思也正"')).toBe("读着响，意思也正");
+    expect(cleanThought("就是锐字锋利感偏强")).toBe("就是锐字锋利感偏强");
   });
 });
 
@@ -402,7 +450,7 @@ describe("接提词页和流", () => {
       status: undefined,
       fixShown: false,
       dictionary: [
-        { char: "华", pinyin: "huá", basicMeaning: "本意为花、荣华。", nameMeaning: "光彩、繁荣。" },
+        { char: "华", pinyin: "huá", basicMeaning: "本意为花、荣华。" },
         { char: "强", pinyin: "qiáng", basicMeaning: "力量大。", missing: false },
       ],
     });

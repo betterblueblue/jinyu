@@ -4,7 +4,7 @@ import { sayable } from "@/domain/score/fix";
 import { nameSyllables } from "@/domain/pinyin-name";
 import { factsOf } from "./facts";
 import { parseTierChoice } from "./prompt";
-import { scoreBreakdown } from "./scoring";
+import { anchorPronunciation, scoreBreakdown } from "./scoring";
 import type { EvalCandidate, NameFacts, OriginalEvaluation, RawCandidate, RejectedCandidate, TierChoice } from "./types";
 
 /**
@@ -76,10 +76,12 @@ export function verifyCandidate(
   const to = next[index]!;
   if (toSimplified(to) === toSimplified(from)) return reject(["换上的字和原来的字一样（只是简繁写法不同）"]);
 
-  const tiers = tierPair(raw);
-  if (!tiers) return reject(["四个维度的档位或理由不完整"]);
+  const rawTiers = tierPair(raw);
+  if (!rawTiers) return reject(["四个维度的档位或理由不完整"]);
 
   const facts = factsOf(surname, given, originalFacts.gender);
+  // 读音档和原名一样以规则为准，「读音更好」也按规则比，不认模型自己说的（2026-11-05）
+  const tiers = { ...rawTiers, pronunciation: anchorPronunciation(facts, rawTiers.pronunciation) };
   /*
    * 读音没变的改法（李一诺 → 李仪诺、王伟 → 王玮）：撞名、年代感、谐音是念出来才有的毛病，
    * 换个同音字，喊名字时还是原来那个。流行、谐音两维是按字查表的，会以为毛病没了。
