@@ -29,7 +29,7 @@ pnpm install
 cp .env.example .env.local   # 填 LLM_API_KEY，改掉默认密码和 JINYU_SESSION_SECRET
 pnpm dev                     # next dev -p 9000；也可以 .\start-dev.ps1（先查依赖和端口）
 pnpm typecheck               # tsc --noEmit
-pnpm test                    # vitest：19 个文件、299 个用例，全走假模型
+pnpm test                    # vitest：20 个文件、301 个用例，全走假模型
 ```
 
 - **直播**：双击 `启动直播台.bat`，用 Edge 或 Chrome 的 `--app` 模式开纯净窗口，再调 `tools/fit-window.ps1` 把窗口内容区压成 9:16（1080p 屏上是 576×1024）。直播伴侣里用「窗口」捕获这个窗口，不要用显示器捕获。`启动提词页.bat` 在直播窗口右边开提词页；手机打开同一地址，登录后自动回到提词页。两个 bat 里写死了局域网 IP `192.168.31.211`，IP 变了要改。
@@ -95,6 +95,7 @@ src/
                           verify（候选验收）、evaluate（编排）、provider（模型端口和精简模式）
   domain/analysis/        打分和改字的输入校验、字表 chars.ts、语料核对 corpus.ts、拆姓名、性别倾向
   domain/（其余）          完整版：normalizer、orchestrator、gate、soft-ranker、assembler；bazi.ts 是完整版自己的排盘
+  dictionary/             起名字典（zd.qmz.in）本地适配：qmz.ts（只读 data/qmz-dict/chars.json，不访问外站）
   fortune/                八字页：normalize（含农历）、chart、strength、relations、prompt、provider、reading、consistency
   providers/              模型客户端。chat.ts 是共用的流式 Chat Completions；stepfun-provider 名字是旧的，现在是通用 OpenAI 兼容客户端
   render/                 摘要图：satori 画 SVG，resvg 转 PNG
@@ -102,6 +103,7 @@ src/
   config/                 字表：忌字、谐音、热门名、起手字、用户评过不要的名字（rejected-names.json）、出生地（places-cn.json）等
 scripts/
   library/                建库：build-review、publish、corpus、find-pairs、mine-pairs、locate
+  dict/                   起名字典抓取：fetch-qmz.ts（抓单字页到 data/qmz-dict，data/ 不进 git）
   corpus/                 下载语料、建字表
   fortune/build-places.mjs  从 Wikidata 重建出生地表
   probe-fast.ts           直播起名真模型探针
@@ -114,7 +116,7 @@ scripts/
   name-library/           10-30 那版自动建库，已不用
   其余 bench-*、probe-*、e2e-real-llm.mjs  早期比模型、测完整版用的
 tests/                    单元测试；e2e/ 只有完整版
-data/                     不进 git：reports/、index.json、corpus/、name-library/v2/{drafts,review,library.json}（v2 以外是旧版）、live-log/（直播日志）
+data/                     不进 git：reports/、index.json、corpus/、name-library/v2/{drafts,review,library.json}（v2 以外是旧版）、live-log/（直播日志）、qmz-dict/（起名字典抓取）
 ```
 
 ## 4. 关键流程
