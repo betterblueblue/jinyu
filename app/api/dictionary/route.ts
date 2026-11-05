@@ -37,9 +37,9 @@ export async function GET(req: Request) {
     return {
       char,
       ...(info.pinyin ? { pinyin: info.pinyin } : {}),
-      ...(clip(info.basicMeaning, 100) ? { basicMeaning: clip(info.basicMeaning, 100) } : {}),
-      ...(clip(info.nameMeaning, 160) ? { nameMeaning: clip(info.nameMeaning, 160) } : {}),
-      ...(clip(info.decomposition, 80) ? { decomposition: clip(info.decomposition, 80) } : {}),
+      ...(clip(info.basicMeaning, 220) ? { basicMeaning: clip(info.basicMeaning, 220) } : {}),
+      ...(clip(info.nameMeaning, 800) ? { nameMeaning: clip(info.nameMeaning, 800) } : {}),
+      ...(clip(info.decomposition, 100) ? { decomposition: clip(info.decomposition, 100) } : {}),
     };
   });
   return NextResponse.json(
