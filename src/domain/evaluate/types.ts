@@ -198,11 +198,16 @@ export interface EvalIssue {
 export interface EvalCandidate {
   fullName: string;
   givenName: string;
-  /** 换掉的字 */
+  /**
+   * 改法是哪一种（2026-11-05）：swap 换一个字；add 单名加一个字变双名（只给大姓配单名：换一个字还是单名、重名还在）。
+   * 没有这个字段的旧数据按 swap。
+   */
+  kind?: "swap" | "add";
+  /** 换掉的字；add 时是空字符串 */
   from: string;
-  /** 换上的字 */
+  /** 换上的字；add 时是加上的那个字 */
   to: string;
-  /** 在名里的位置，0 起 */
+  /** 换上 / 加上的字在新名里的位置，0 起 */
   index: number;
   pinyin: string;
   /** 读音变没变：「读音不变」或「hóng → hōng」 */

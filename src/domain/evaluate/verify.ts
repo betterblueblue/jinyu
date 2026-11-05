@@ -42,13 +42,15 @@ function tierPair(raw: RawCandidate): { pronunciation: TierChoice; meaning: Tier
   return pronunciation && meaning && gender && style ? { pronunciation, meaning, gender, style } : null;
 }
 
-function clean(raw: RawCandidate, surname: string, givenLength: number): string | null {
+/** 候选的名：可以接受的字数是 lengths 里的（换一个字字数不变；大姓单名还可以多一个字） */
+function clean(raw: RawCandidate, surname: string, lengths: readonly number[]): string | null {
   let given = typeof raw.givenName === "string" ? raw.givenName.replace(/\s+/g, "") : "";
-  if (given.startsWith(surname) && [...given].length === [...surname].length + givenLength) {
+  const n = [...given].length;
+  if (given.startsWith(surname) && !lengths.includes(n) && lengths.includes(n - [...surname].length)) {
     given = given.slice(surname.length);
   }
   const chars = [...given];
-  if (chars.length !== givenLength) return null;
+  if (!lengths.includes(chars.length)) return null;
   if (chars.some((c) => !/^[一-鿿]$/.test(c))) return null;
   return given;
 }
@@ -60,7 +62,13 @@ export function verifyCandidate(
 ): { candidate: EvalCandidate; rejected?: undefined } | { candidate?: undefined; rejected: RejectedCandidate } {
   const surname = originalFacts.surname;
   const givenLength = [...originalFacts.givenName].length;
-  const given = clean(raw, surname, givenLength);
+  /*
+   * 大姓配单名（王旭）：换一个字还是单名，「大姓配单名」那条问题还在，「非常优秀」门槛把它封顶 89，
+   * 换什么字都涨不了分，打分榜就成了「89 分还能更好」又「改一个字改不了」（2026-11-05 实机）。
+   * 用户定：单名加一个字变双名，原来那个字留着（王旭 → 王旭阳、王子旭）。
+   */
+  const canAdd = givenLength === 1 && originalFacts.popularityFacts.singleNameBigSurname;
+  const given = clean(raw, surname, canAdd ? [givenLength, givenLength + 1] : [givenLength]);
   const reject = (reasons: string[], total?: number): { rejected: RejectedCandidate } => ({
     rejected: { givenName: given ?? String(raw.givenName ?? "（无名）"), reasons, ...(total === undefined ? {} : { total }) },
   });
@@ -69,12 +77,27 @@ export function verifyCandidate(
   if (toSimplified(given) === toSimplified(surname) && [...given].length === 1) return reject(["候选写成了姓，不是名"]);
   const oldChars = [...originalFacts.givenName];
   const next = [...given];
-  const diff = next.map((c, i) => (c === oldChars[i] ? -1 : i)).filter((i) => i >= 0);
-  if (diff.length !== 1) return reject(["不是只换一个字"]);
-  const index = diff[0]!;
-  const from = oldChars[index]!;
-  const to = next[index]!;
-  if (toSimplified(to) === toSimplified(from)) return reject(["换上的字和原来的字一样（只是简繁写法不同）"]);
+  const kind: "swap" | "add" = next.length === oldChars.length ? "swap" : "add";
+  let index: number;
+  let from: string;
+  let to: string;
+  if (kind === "swap") {
+    const diff = next.map((c, i) => (c === oldChars[i] ? -1 : i)).filter((i) => i >= 0);
+    if (diff.length !== 1) return reject(["不是只换一个字"]);
+    index = diff[0]!;
+    from = oldChars[index]!;
+    to = next[index]!;
+    if (toSimplified(to) === toSimplified(from)) return reject(["换上的字和原来的字一样（只是简繁写法不同）"]);
+  } else {
+    // 加一个字：原来那个字要留着，在前在后都行
+    const kept = toSimplified(oldChars[0]!);
+    if (toSimplified(next[0]!) === kept) index = 1;
+    else if (toSimplified(next[1]!) === kept) index = 0;
+    else return reject(["加字时把原来的字换掉了，原来那个字要留着"]);
+    from = "";
+    to = next[index]!;
+    if (toSimplified(to) === kept) return reject(["加的是同一个字，叠字像小名"]);
+  }
 
   const rawTiers = tierPair(raw);
   if (!rawTiers) return reject(["四个维度的档位或理由不完整"]);
@@ -88,7 +111,8 @@ export function verifyCandidate(
    * 所以读音没变时这两维按原名算，只认字义、写法上的提升（军 → 钧 不再是军种词，这算）。
    * 不一律拦同音改法：看出来的毛病（字义、生僻、多音）换同音字正好（2026-11-05 用户：读音必须变不合理）。
    */
-  const sameSound = plainAt(surname, given, index) === plainAt(surname, originalFacts.givenName, index);
+  // 加一个字时名字多了一个音，不存在「读音没变」
+  const sameSound = kind === "swap" && plainAt(surname, given, index) === plainAt(surname, originalFacts.givenName, index);
   const scoredFacts: NameFacts = sameSound
     ? {
         ...facts,
@@ -170,17 +194,18 @@ export function verifyCandidate(
 
   if (reasons.length > 0) return reject(reasons, scores.total);
 
-  const oldMark = markAt(surname, originalFacts.givenName, index);
   const newMark = markAt(surname, given, index);
+  const oldMark = kind === "swap" ? markAt(surname, originalFacts.givenName, index) : "";
   return {
     candidate: {
       fullName: `${surname}${given}`,
       givenName: given,
+      kind,
       from,
       to,
       index,
       pinyin: facts.pinyin,
-      soundLine: oldMark === newMark ? "读音不变" : `${oldMark} → ${newMark}`,
+      soundLine: kind === "add" ? `加 ${newMark}` : oldMark === newMark ? "读音不变" : `${oldMark} → ${newMark}`,
       scores,
       tiers,
       solves,

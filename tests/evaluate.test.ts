@@ -236,6 +236,72 @@ describe("候选验收", () => {
     expect(out.candidate).toBeUndefined();
   });
 
+  describe("大姓配单名：加一个字变双名", () => {
+    const tiers = {
+      pronunciation: { tier: 20, reason: "顺" },
+      meaning: { tier: 20, reason: "旭是初升太阳" },
+      gender: { tier: 12, reason: "男孩名" },
+      style: { tier: 6, reason: "明亮" },
+    };
+    const facts = factsOf("王旭", "male");
+    const original = { ...ORIGINAL, tiers, scores: scoreBreakdown(facts, tiers, { styleBaseline: true }) };
+    const add = (givenName: string) =>
+      verifyCandidate(rawCandidate({ givenName, ...tiers, solves: facts.issues.map((i) => i.id), why: "加一个字不撞名" }), facts, original);
+
+    it("王旭原来封顶 89：换一个字（王晨）还是单名，涨不了分，拒", () => {
+      expect(original.scores.total).toBe(89);
+      expect(add("晨").candidate).toBeUndefined();
+    });
+
+    it("王旭 → 王旭阳、王子旭：原来的字留着，加一个字，收下，分数过 89", () => {
+      const back = add("旭阳");
+      expect(back.rejected?.reasons).toBeUndefined();
+      expect(back.candidate).toMatchObject({ kind: "add", from: "", to: "阳", index: 1, fullName: "王旭阳" });
+      expect(back.candidate!.scores.total).toBeGreaterThan(89);
+      const front = add("子旭");
+      expect(front.candidate).toMatchObject({ kind: "add", to: "子", index: 0 });
+    });
+
+    it("加字时把原来的字换掉了、或者加的是同一个字：拒", () => {
+      expect(add("晨阳").rejected?.reasons.join("；")).toContain("原来那个字要留着");
+      expect(add("旭旭").rejected?.reasons.join("；")).toContain("叠字");
+    });
+
+    it("不是大姓（林旭）照旧只能换一个字，写两个字的拒", () => {
+      const lin = factsOf("林旭", "male");
+      expect(lin.popularityFacts.singleNameBigSurname).toBe(false);
+      const out = verifyCandidate(rawCandidate({ givenName: "旭阳", ...tiers }), lin, { ...original, scores: scoreBreakdown(lin, tiers, { styleBaseline: true }) });
+      expect(out.rejected?.reasons.join("；")).toContain("长度变了");
+    });
+
+    it("大姓配单名没出改法：不再说「只改一个字解决不了」，说可以再试一次或重新起名", async () => {
+      const provider: EvaluateProvider = {
+        name: "no-opt",
+        evaluate: async (_f, onScores, onOriginal) => {
+          const raw: RawEvaluation = {
+            status: "one_char_insufficient",
+            scores: { pronunciation: 20, meaning: 20, gender: 12, style: 6, old: false },
+            original: { pronunciation: "顺", meaning: "正", gender: "可", style: "稳", strengths: ["正"], issues: [], reminders: [] },
+            options: [],
+            note: "",
+          };
+          onScores?.(parseScores(raw.scores)!);
+          onOriginal?.(raw.original!);
+          return raw;
+        },
+      };
+      const out = await evaluateName({ fullName: "王旭", gender: "male" }, provider);
+      expect(out.status).not.toBe("one_char_insufficient");
+      expect(out.note).toContain("加一个字");
+    });
+  });
+
+  it("提示词：大姓配单名时告诉模型加一个字，别的名字不说", () => {
+    const sys = (n: string) => buildEvaluateMessages(factsOf(n, "male"), true).find((m) => m.role === "user")!.content;
+    expect(sys("王旭")).toContain("大姓配单名");
+    expect(sys("林旭")).not.toContain("大姓配单名");
+  });
+
   it("杜子腾 → 杜子藤：读音没变，谐音没解决，不放宽", () => {
     const facts = factsOf("杜子腾", "male");
     const out = verifyCandidate(rawCandidate({ givenName: "子藤", solves: facts.issues.map((i) => i.id) }), facts, ORIGINAL);

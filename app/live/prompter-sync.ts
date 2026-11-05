@@ -280,7 +280,7 @@ export function prompterFromEvaluation(s: EvaluationForPrompter): PrompterRound 
     ? s.candidates.map((c) => ({
         full: c.fullName,
         pinyin: c.pinyin,
-        change: `${c.from} → ${c.to} · ${c.soundLine} · ${c.why}`,
+        change: c.kind === "add" ? `单名加一个「${c.to}」变双名 · ${c.soundLine} · ${c.why}` : `${c.from} → ${c.to} · ${c.soundLine} · ${c.why}`,
         score: c.scores.total,
         meaning: c.spoken,
         ...(c.solves.length ? { solves: c.solves.map((id) => issueById.get(id) ?? id) } : {}),
@@ -307,7 +307,8 @@ export function prompterFromEvaluation(s: EvaluationForPrompter): PrompterRound 
   else if (status === "no_better")
     say = o && o.scores.total >= 90 ? "这个名字查过几项都没问题，非常优秀，不用改。" : "这轮没有比原名更好的改法，可以再试一次。";
   else if (status === "all_rejected") say = "模型给的改法没通过核验，可以再试一次。";
-  else if (status === "one_char_insufficient") say = `只改一个字解决不了${s.note ? `：${s.note}` : ""}。`;
+  // note 本身常以句号结尾，去掉再接，免得「……更合适。。」
+  else if (status === "one_char_insufficient") say = `只改一个字解决不了${s.note ? `：${s.note.replace(/[。！？]+$/, "")}` : ""}。`;
   else if (status === "timeout") say = "评价没跑完，先念上面已经核过的部分。";
   else if (status === "error") say = "评价没完成，先念上面已经核过的部分。";
   const note =

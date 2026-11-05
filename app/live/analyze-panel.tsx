@@ -571,8 +571,8 @@ function Detail({
                       {c.fullName}
                     </span>
                     <span className="ap-fix-change">
-                      {c.from} → {c.to}
-                      {c.soundLine === "读音不变" ? "" : " · 读音变了"}
+                      {c.kind === "add" ? `加一个「${c.to}」` : `${c.from} → ${c.to}`}
+                      {c.kind === "add" || c.soundLine === "读音不变" ? "" : " · 读音变了"}
                     </span>
                     <span className="ap-fix-why">{c.why}</span>
                   </button>

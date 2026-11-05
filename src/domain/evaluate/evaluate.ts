@@ -429,26 +429,26 @@ export async function evaluateName(
     takeOption(rc);
   }
 
+  // 大姓配单名可以加一个字变双名（verify.ts），所以不再说「只改一个字解决不了」；
+  // 模型自己写了 one_char_insufficient 也不认，没改法时按被拒 / 没给来报，主播可以再试一次或重新起名
+  const bigSingle = facts.popularityFacts.singleNameBigSurname;
   const status: EvaluateResult["status"] =
     candidates.length > 0
       ? "options"
-      : // 大姓配单名，换一个字解决不了重名，不能说成「没有更好的改法」
-        facts.popularityFacts.singleNameBigSurname
-        ? "one_char_insufficient"
-        : // 只有过了「非常优秀」门槛才算不用改；原来是 85，和 90 的分档对不上，85–89 分的名字也说「已经很好」
-          original.scores.total >= BAND_CUTS.great
-          ? "no_better"
-        : raw.status === "one_char_insufficient"
+      : // 只有过了「非常优秀」门槛才算不用改；原来是 85，和 90 的分档对不上，85–89 分的名字也说「已经很好」
+        original.scores.total >= BAND_CUTS.great
+        ? "no_better"
+        : raw.status === "one_char_insufficient" && !bigSingle
           ? "one_char_insufficient"
-          : raw.status === "no_better"
+          : raw.status === "no_better" && !bigSingle
             ? "no_better"
             : rejected.length > 0
               ? "all_rejected"
               : "no_better";
 
   const note =
-    candidates.length === 0 && facts.popularityFacts.singleNameBigSurname
-      ? "大姓配单名，换一个字解决不了重名，按姓重新起名更合适。"
+    candidates.length === 0 && bigSingle
+      ? "大姓配单名，加一个字变双名的改法这轮没通过，可以再试一次，或者按姓重新起名。"
       : candidates.length === 0 && original.scores.total >= BAND_CUTS.great
         ? "原名已经很好了，这轮没有比它更值得换的。"
       : typeof raw.note === "string" && raw.note.trim()

@@ -200,8 +200,9 @@ export function anchorPronunciation(facts: NameFacts, model: TierChoice): TierCh
  * 2：读音档以规则为准（2026-11-05）。
  * 3：模型判「像上一辈」由程序压字义和流行，不再被规则的年代字去重掉（2026-11-05）。
  * 4：「非常优秀」要过门，80–89 叫「还能更好」（2026-11-05）。
+ * 5：大姓配单名的改法可以加一个字变双名（2026-11-05）；旧缓存里王旭这类是「改一个字解决不了」。
  */
-export const SCORING_REV = 4;
+export const SCORING_REV = 5;
 
 export function dimensionScores(
   facts: NameFacts,
