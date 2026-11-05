@@ -80,7 +80,8 @@ export function verifyCandidate(
   if (!tiers) return reject(["四个维度的档位或理由不完整"]);
 
   const facts = factsOf(surname, given, originalFacts.gender);
-  const scores = scoreBreakdown(facts, tiers);
+  // 2026-11-05 定（方案 A）：原名和候选都不把风格算进总分；风格只用于 betterDimension 和排序
+  const scores = scoreBreakdown(facts, tiers, { styleBaseline: true });
   const reasons: string[] = [];
 
   if (raw.verdict !== "better") reasons.push("模型自己的比较结论不是更值得用");

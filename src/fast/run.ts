@@ -288,7 +288,7 @@ export async function runFast(
   for (const c of raw) {
     const name = stripSurname(c.givenName.trim(), req.surname);
     if (seen.has(name)) continue;
-    const verdict = checkFastCandidate(name, req.surname, req.gender);
+    const verdict = checkFastCandidate(name, req.surname, req.gender, c.scores);
     if (!verdict.keep) {
       dropped.push({ name, reasons: verdict.reasons });
       continue;

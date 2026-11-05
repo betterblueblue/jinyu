@@ -66,6 +66,22 @@ describe("精简版补发", () => {
     expect(mock.calls[0]!.timeoutMs).toBe(15_000);
   });
 
+  it("解析候选的三个档位数字", async () => {
+    mock.script = [
+      () =>
+        Promise.resolve({
+          content: JSON.stringify({
+            candidates: [{ givenName: "清瑶", why: "清亮", scores: { pronunciation: 20, meaning: 16, gender: 12 } }],
+          }),
+          finishReason: "stop",
+          reasoningChars: 0,
+          firstTokenMs: 1,
+        }),
+    ];
+    const list = await make(200).draft(req, round);
+    expect(list[0]?.scores).toEqual({ pronunciation: 20, meaning: 16, gender: 12 });
+  });
+
   it("第一路及时回来就不补发", async () => {
     mock.script = [after(5, "清禾")];
     const p = make(200);

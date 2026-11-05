@@ -1,6 +1,6 @@
 import { extractJson, streamChat, type ChatClientOptions } from "@/providers/chat";
 import { buildFastSystem, buildFastUser, type FastPromptRound } from "./prompt";
-import type { FastRequest } from "./types";
+import type { FastRequest, FastTierScores } from "./types";
 
 /**
  * 精简版 provider：一次调用，取名字和 why 两个字段。
@@ -22,6 +22,8 @@ const LANE_TIMEOUT_MS = 15_000;
 export interface RawFast {
   givenName: string;
   why?: string;
+  /** 六维闸门用的三个档位数字；模型没给就回退旧规则 */
+  scores?: FastTierScores;
   source?: string;
   piece?: string;
   /** 模型想引的那一句原话，由 cite.ts 逐字核 */
@@ -216,20 +218,59 @@ function parseFast(content: string): RawFast[] {
   }
 }
 
-/** 被 max_tokens 截断时，把已经完整的对象捞回来 */
+/** 被 max_tokens 截断时，把已经完整的候选对象捞回来（scores 是嵌套对象，必须按括号深度扫） */
 function salvage(content: string): RawFast[] {
-  const out: RawFast[] = [];
-  const re = /\{[^{}]*\}/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(content)) !== null) {
-    try {
-      const obj = JSON.parse(m[0]) as Record<string, unknown>;
-      if (typeof obj.givenName === "string") out.push(obj as unknown as RawFast);
-    } catch {
-      /* 半截对象跳过 */
+  const out: unknown[] = [];
+  const key = content.search(/"candidates"\s*:\s*\[/);
+  if (key >= 0) {
+    let i = content.indexOf("[", key) + 1;
+    let depth = 0;
+    let start = -1;
+    let inString = false;
+    let escaped = false;
+    for (; i < content.length; i++) {
+      const c = content[i]!;
+      if (inString) {
+        if (escaped) escaped = false;
+        else if (c === "\\") escaped = true;
+        else if (c === '"') inString = false;
+        continue;
+      }
+      if (c === '"') inString = true;
+      else if (c === "{") {
+        if (depth === 0) start = i;
+        depth++;
+      } else if (c === "}") {
+        depth--;
+        if (depth < 0) break;
+        if (depth === 0 && start >= 0) {
+          try {
+            const obj = JSON.parse(content.slice(start, i + 1)) as Record<string, unknown>;
+            if (typeof obj.givenName === "string") out.push(obj);
+          } catch {
+            /* 这一条写坏了，跳过 */
+          }
+          start = -1;
+        }
+      } else if (c === "]" && depth === 0) {
+        break;
+      }
     }
   }
-  return clean(out);
+  // 老格式的扁平对象再兜一层
+  if (!out.length) {
+    const re = /\{[^{}]*\}/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(content)) !== null) {
+      try {
+        const obj = JSON.parse(m[0]) as Record<string, unknown>;
+        if (typeof obj.givenName === "string") out.push(obj);
+      } catch {
+        /* 半截对象跳过 */
+      }
+    }
+  }
+  return clean(out as RawFast[]);
 }
 
 function clean(list: RawFast[]): RawFast[] {
@@ -238,10 +279,29 @@ function clean(list: RawFast[]): RawFast[] {
     .map((c) => ({
       givenName: String(c.givenName).trim(),
       why: c.why ? String(c.why).trim() : undefined,
+      scores: cleanScores(c.scores),
       source: c.source ? String(c.source).trim() : undefined,
       piece: c.piece ? String(c.piece).trim() : undefined,
       line: c.line ? String(c.line).trim() : undefined,
     }));
+}
+
+/** 模型把档位写成数字或数字字符串都收；三个数缺一个就当没给，回退旧规则 */
+function cleanScores(raw: unknown): FastTierScores | undefined {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const o = raw as Record<string, unknown>;
+  const num = (v: unknown): number => (typeof v === "number" ? v : typeof v === "string" ? Number(v) : NaN);
+  const pronunciation = num(o.pronunciation);
+  const meaning = num(o.meaning);
+  const gender = num(o.gender);
+  if (![pronunciation, meaning, gender].every(Number.isFinite)) return undefined;
+  const style = num(o.style);
+  return {
+    pronunciation,
+    meaning,
+    gender,
+    ...(Number.isFinite(style) ? { style } : {}),
+  };
 }
 
 export function createFastProvider(prompt?: FastPromptBuilders): FastProvider {

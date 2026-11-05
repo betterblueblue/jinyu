@@ -1,25 +1,30 @@
 import l2Chars from "@/config/l2-chars.json";
 import type { AnalysisGender } from "@/domain/analysis/types";
+import { factsOf } from "@/domain/evaluate/facts";
+import { clampTier, scoreBreakdown, STYLE_BASE } from "@/domain/evaluate/scoring";
 import { nameSyllables } from "@/domain/pinyin-name";
 import { BAD_WORDS, SURNAME_TRAP } from "@/domain/score/lexicon";
 import { checkRecommendable } from "@/domain/score/recommend";
+import type { FastTierScores } from "./types";
 
 /**
- * 精简版闸门。规则和打分榜是同一套（src/domain/score/recommend.ts）：
- * 有谐音、忌字、撞名、和姓同音这类硬伤，或者打分不到 90 的名字，直播不出。
+ * 精简版闸门。
  *
- * 这里只多管打分不管的一件事：必须是两个汉字。
- * 热门字只标记（hotChar），一个热门字扣 8 分还在 90 以上，排序时往后放；两个热门字会被打分拦下。
+ * 2026-11-05 起：模型给了三个档位数字时，按六维分（与打分榜同一套 scoreBreakdown）判断；
+ * 没给就回退旧的 recommend.ts，保证老模型/旧测试不炸。
+ * 结构硬伤（不是两个汉字）仍然先拦；严重问题会通过六维分的风险上限变成低分。
  */
 
 const L2 = new Set(l2Chars as string[]);
 const HAN2 = /^[\u4e00-\u9fff]{2}$/;
+/** 直播推荐要求六维总分至少 90，和打分榜“非常优秀”同线；先跑 eval-fast 看通过率再调 */
+export const FAST_SIX_MIN = 90;
 
 export interface FastGateVerdict {
   keep: boolean;
   reasons: string[];
   hotChar: boolean;
-  /** 按打分规则配这个姓的分数；不是两个汉字时没有 */
+  /** 给这个姓算出的六维总分；不是两个汉字时没有 */
   score?: number;
 }
 
@@ -43,11 +48,32 @@ export function checkFastCandidate(
   givenName: string,
   surname: string,
   gender: AnalysisGender = "unknown",
+  modelScores?: FastTierScores,
 ): FastGateVerdict {
   const name = givenName.trim();
   const hotChar = [...name].some((c) => L2.has(c));
   if (!HAN2.test(name)) {
     return { keep: false, reasons: ["不是两个汉字"], hotChar };
+  }
+  if (modelScores) {
+    const facts = factsOf(surname.trim(), name, gender);
+    const tiers = {
+      pronunciation: { tier: clampTier("pronunciation", modelScores.pronunciation), reason: "" },
+      meaning: { tier: clampTier("meaning", modelScores.meaning), reason: "" },
+      gender: { tier: clampTier("gender", modelScores.gender), reason: "" },
+      // 2026-11-05 定：风格是偏好，不进总分；给 baseline 保证和打分榜同一把尺子
+      style: { tier: STYLE_BASE, reason: "" },
+    };
+    const score = scoreBreakdown(facts, tiers, { styleBaseline: true });
+    const reasons: string[] = [];
+    if (score.total < FAST_SIX_MIN) {
+      reasons.push(
+        score.capReason
+          ? `六维分被「${score.capReason}」压到 ${score.total} 分`
+          : `六维分不到 ${FAST_SIX_MIN}（${score.total} 分）`,
+      );
+    }
+    return { keep: reasons.length === 0, reasons, hotChar, score: score.total };
   }
   const check = checkRecommendable(surname.trim(), name, gender);
   return { keep: check.ok, reasons: check.reasons, hotChar, score: check.score };

@@ -41,6 +41,15 @@ export interface FastCitation {
   label?: string;
 }
 
+/** 模型给候选的档位数字，只用于六维闸门；缺省时回退旧规则 */
+export interface FastTierScores {
+  pronunciation: number;
+  meaning: number;
+  gender: number;
+  /** 风格档位暂不进总分（2026-11-05 按 A 口径），模型给了也先留着 */
+  style?: number;
+}
+
 export interface FastCandidate {
   givenName: string;
   fullName: string;

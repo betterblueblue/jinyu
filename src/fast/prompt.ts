@@ -31,7 +31,8 @@ import type { FastRequest } from "./types";
  *   - 「推理不超过 N 字」：DeepSeek 不理；只有「推理里只写候选名字」压得住
  */
 
-export const FAST_JSON_SHAPE = '{"candidates":[{"givenName":"","why":""}]}';
+export const FAST_JSON_SHAPE =
+  '{"candidates":[{"givenName":"","why":"","scores":{"pronunciation":16,"meaning":16,"gender":12}}]}';
 
 /** 姓氏读音，多音姓按姓的读法（曾 zēng、解 xiè、单 shàn） */
 export function surnamePinyin(surname: string): string {
@@ -53,6 +54,11 @@ export function buildFastSystem(): string {
     "- 古人字号（进德、守志）、景物拼贴（水天、江声）、动宾短语（开轩、枕石）、诗句原样搬来的，都不要。",
     "",
     "why：一句话，20 字以内，主播直接念给观众听。说两个字合起来是什么画面或愿望；不要写成「某字是……，某字是……」，不写「寓意深远」「气质不凡」这类空话。",
+    "",
+    "每个候选再给三个档位数字（只写数字，不写理由、不展开分析）：",
+    "- pronunciation 读音：20 自然顺畅 / 16 基本顺畅 / 12 略绕口 / 8 明显不顺；只看连着姓念的感觉。",
+    "- meaning 字义：20 意涵鲜明 / 16 正面清楚 / 12 组合联系弱 / 8 明显牵强 / 0 明显负面；整名是常见词、职业、军种或口号最多 12。",
+    "- gender 性别辨识：12 符合目标性别 / 8 中性 / 4 明显偏另一边；看整个名字。",
     "",
     `输出：${FAST_JSON_SHAPE}`,
   ].join("\n");

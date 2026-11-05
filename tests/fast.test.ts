@@ -77,8 +77,16 @@ describe("精简版闸门", () => {
     expect(checkFastCandidate("婉婷", "王", "male").keep).toBe(false);
   });
 
-  it("连姓谐音按「姓 + 名首字」拦，正常词不误伤", () => {
-    // 吴德明 → wu de… 念作「无德」
+  it("模型给了档位时按六维总分判断", () => {
+    const high = checkFastCandidate("清瑶", "林", "female", { pronunciation: 20, meaning: 20, gender: 12 });
+    expect(high.keep).toBe(true);
+    expect(high.score).toBeGreaterThanOrEqual(90);
+    const low = checkFastCandidate("清瑶", "林", "female", { pronunciation: 8, meaning: 8, gender: 4 });
+    expect(low.keep).toBe(false);
+    expect(low.reasons.join("；")).toContain("六维分");
+  });
+
+  it("连姓谐音按「姓 + 名首字」拦，正常词不误伤", () => {    // 吴德明 → wu de… 念作「无德」
     expect(checkFastCandidate("德明", "吴").keep).toBe(false);
     // 沈静姝 → shen jing… 念作「神经」
     expect(checkFastCandidate("静姝", "沈").keep).toBe(false);
@@ -247,6 +255,13 @@ describe("精简版提示词", () => {
     for (const leak of ["令仪", "莫不令仪", "未晞", "景行", "观澜", "知宜", "书宁", "望舒", "时雨"]) {
       expect(sys).not.toContain(leak);
     }
+  });
+
+  it("提示词要求每个候选给三个档位数字", () => {
+    const sys = buildFastSystem();
+    expect(sys).toContain("pronunciation");
+    expect(sys).toContain("meaning");
+    expect(sys).toContain("gender");
   });
 
   it("生日不进提示词：不给四柱，也不加「呼应时节」那一句（加了推理多一倍）", () => {
