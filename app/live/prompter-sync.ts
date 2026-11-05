@@ -258,12 +258,17 @@ export function prompterFromEvaluation(s: EvaluationForPrompter): PrompterRound 
   const status = s.status;
   const dimensions = o
     ? [
-        { label: "读音", score: o.scores.dimensions.pronunciation, max: 20 },
-        { label: "字义", score: o.scores.dimensions.meaning, max: 20 },
-        { label: "气质", score: o.scores.dimensions.temperament, max: 20 },
-        { label: "识读", score: o.scores.dimensions.literacy, max: 15 },
-        { label: "流行", score: o.scores.dimensions.popularity, max: 10 },
-        { label: "谐音", score: o.scores.dimensions.homophone, max: 15 },
+        { label: "读音", score: o.scores.dimensions.pronunciation, max: 20, reason: o.tiers.pronunciation.reason },
+        { label: "字义", score: o.scores.dimensions.meaning, max: 20, reason: o.tiers.meaning.reason },
+        {
+          label: "气质",
+          score: o.scores.dimensions.temperament,
+          max: 20,
+          reason: [o.tiers.gender.reason, o.tiers.style.reason].filter(Boolean).join("；"),
+        },
+        { label: "识读", score: o.scores.dimensions.literacy, max: 15, reason: s.facts.program.literacy.reason },
+        { label: "流行", score: o.scores.dimensions.popularity, max: 10, reason: s.facts.program.popularity.reason },
+        { label: "谐音", score: o.scores.dimensions.homophone, max: 15, reason: s.facts.program.homophone.reason },
       ]
     : [];
   // 解决项只留第一句，太长主播念不动；R1 这种编号对主播没意义

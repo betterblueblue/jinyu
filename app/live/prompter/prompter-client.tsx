@@ -131,8 +131,13 @@ function ScoreView({ round }: { round: PrompterScoreRound }) {
           data-testid="prompter-dimensions"
         >
           {round.dimensions.map((d) => (
-            <span key={d.label}>
-              {d.label} <b className="text-neutral-100">{d.score}</b>/{d.max}
+            <span key={d.label} className="flex flex-col">
+              <span>
+                {d.label} <b className="text-neutral-100">{d.score}</b>/{d.max}
+              </span>
+              {d.reason ? (
+                <em className="text-[clamp(14px,1.8vw,18px)] not-italic text-neutral-500">{d.reason}</em>
+              ) : null}
             </span>
           ))}
         </div>
@@ -178,7 +183,7 @@ function ScoreView({ round }: { round: PrompterScoreRound }) {
       ) : null}
       {round.merit ? (
         <section className="mt-6" data-testid="prompter-merit">
-          <p className="text-lg tracking-widest text-neutral-400">先说好在哪 · 模型写的，念之前扫一眼</p>
+          <p className="text-lg tracking-widest text-neutral-400">模型评价 · 好在哪、问题在哪，念之前扫一眼</p>
           {round.merit.lines.length ? (
             <div className="mt-2 space-y-2 text-[clamp(22px,3.3vw,36px)] leading-relaxed text-neutral-50">
               {round.merit.lines.map((l) => (
