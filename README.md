@@ -44,6 +44,15 @@ pnpm corpus:build   # Unihan 字表 + 23 部语料，约 31MB，首次要下载�
 
 只装字表不装语料也能跑，只是所有引文都会降级成「暂无可核出处」，不会编。
 
+提词页的「字典先查」用两份本地字典（都在 `data/`，不进 git）：
+
+```bash
+pnpm tsx scripts/dict/fetch-qmz.ts      # 起名字典（zd.qmz.in），已有的跳过；每场直播后跑一次，补上直播时查不到的字
+pnpm tsx scripts/dict/build-xinhua.ts   # 新华字典兜底，第一次下载约 27MB
+```
+
+两份都没装也能跑：字典没收的字照样显示拼音和笔画，字义等模型分析。
+
 默认账号见 `.env.example`（`jinyu` / `change-me`，可用 `.env.local` 覆盖）。  
 **本地默认走真 LLM**（本机网关）；仅单测 / Playwright 强制 Fake。无 key 时才会回退 Fake（历史列表会标注「示例」）。
 
