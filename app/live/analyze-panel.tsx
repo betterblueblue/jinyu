@@ -429,7 +429,7 @@ export function AnalyzePanel({ open, onClose, onRename }: Props) {
             <br />
             送<Gift name="墨镜" />可插队分析
             <br />
-            送<Gift name="比心兔兔" />起名
+            送<Gift name="比心兔兔" />起三个名字
           </li>
         )}
         {rows.map((r, i) => {
