@@ -8,6 +8,7 @@ import { verifyCandidate } from "./verify";
 import type {
   EvalCandidate,
   EvalIssue,
+  EvalIssueKind,
   EvaluateResult,
   NameFacts,
   OriginalEvaluation,
@@ -126,12 +127,34 @@ function isSpecific(text: string, givenName: string): boolean {
   return /读音|谐音|重名|撞名|年代|性别|辨识|生僻|念错|多音|同调|声调|连姓/.test(text);
 }
 
-function mergeIssues(facts: NameFacts, modelIssues: { text: string; importance: "major" | "minor" }[]): EvalIssue[] {
+/** 规则 id → 提词页上的问题分类 */
+const RULE_KIND: Record<string, EvalIssueKind> = {
+  homophone: "谐音",
+  trap: "谐音",
+  sameSound: "谐音",
+  forbidden: "字义",
+  swap: "字义",
+  infamous: "联想",
+  rare: "识读",
+  misread: "识读",
+  flatTone: "读音",
+  sandhi: "读音",
+  gender: "气质",
+  template: "流行",
+  hot: "流行",
+  singleName: "流行",
+  era: "流行",
+  eraName: "流行",
+  eraWord: "流行",
+};
+
+function mergeIssues(facts: NameFacts, modelIssues: { text: string; importance: "major" | "minor"; kind?: EvalIssueKind }[]): EvalIssue[] {
   const out: EvalIssue[] = facts.issues.map((it) => ({
     id: it.id,
     text: it.line,
     importance: it.severity === "plain" ? "minor" : "major",
     source: "rule",
+    ...(RULE_KIND[it.rule] ? { kind: RULE_KIND[it.rule] } : {}),
   }));
   const ruleSet = new Set(facts.issues.map((it) => it.rule));
   const ruleTexts = facts.issues.map((it) => normalizeIssue(it.line));
@@ -148,7 +171,7 @@ function mergeIssues(facts: NameFacts, modelIssues: { text: string; importance: 
     const normalized = normalizeIssue(text);
     if (ruleTexts.some((r) => longestCommonSubstring(normalized, r) >= 4)) continue;
     if (out.some((it) => dedupeKey(it.text).includes(k) || k.includes(dedupeKey(it.text)))) continue;
-    out.push({ id: `M${++n}`, text, importance: mi.importance, source: "model" });
+    out.push({ id: `M${++n}`, text, importance: mi.importance, source: "model", ...(mi.kind ? { kind: mi.kind } : {}) });
   }
   return out;
 }

@@ -81,8 +81,8 @@ export interface PrompterScoreRound {
   thinking?: string[];
   /** 主要优点，主播先念 */
   strengths?: string[];
-  /** 问题，带重要程度 */
-  issues?: { text: string; importance: "major" | "minor" }[];
+  /** 问题，带重要程度；kind 是问题维度（读音/字义/气质/识读/流行/谐音/联想） */
+  issues?: { text: string; importance: "major" | "minor"; kind?: string }[];
   /** 模型写的提醒：谐音、联想、撞名人；不扣分，但主播要先知道 */
   reminders?: string[];
   /** 上限说明：基础多少分、被什么压到多少 */
@@ -311,8 +311,9 @@ function parseScoreRound(x: Record<string, unknown>): PrompterScoreRound | null 
     for (const it of x.issues) {
       const r = it as Record<string, unknown> | null;
       const line = text(r?.text, 100);
-      if (!r || !line) return null;
-      issues.push({ text: line, importance: r.importance === "major" ? "major" : "minor" });
+      const kind = r?.kind === undefined ? undefined : text(r.kind, 8);
+      if (!r || !line || kind === null) return null;
+      issues.push({ text: line, importance: r.importance === "major" ? "major" : "minor", ...(kind ? { kind } : {}) });
     }
   }
   const reminders = shortList(x.reminders, 4, 100);

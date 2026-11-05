@@ -1,5 +1,13 @@
 import { extractJson, type ChatMessage } from "@/providers/chat";
-import type { NameFacts, OriginalEvaluation, RawCandidate, RawEvaluation, RawOriginal, TierChoice } from "./types";
+import type {
+  EvalIssueKind,
+  NameFacts,
+  OriginalEvaluation,
+  RawCandidate,
+  RawEvaluation,
+  RawOriginal,
+  TierChoice,
+} from "./types";
 import { clampTier, type TierDim } from "./scoring";
 
 /**
@@ -8,6 +16,8 @@ import { clampTier, type TierDim } from "./scoring";
  * 因为两阶段实测更慢：第二次调用单独跑要 15–17 秒，总时间翻倍。
  * 还是一次调用，但输出顺序固定：先 scores 四个数字（程序立刻算分），再理由和候选。
  */
+
+const ISSUE_KINDS: EvalIssueKind[] = ["读音", "字义", "气质", "识读", "流行", "谐音", "联想"];
 
 const EVAL_RULES = [
   "你是直播间里的起名顾问。观众报了一个名字，性别已知。只输出 JSON。",
@@ -20,6 +30,7 @@ const EVAL_RULES = [
   "- 年代感、撞名、热门字已经在事实里单独给了，style 只评整体气质，不要因为「老气」重复扣一次。",
   "- 读音只评按正确读法顺不顺，不评多音字会不会被念错；多音、生僻在识读维度里，程序已经处理。",
   "- 整名像上一辈的名字、菜市场名（到处都有人叫）、时代口号或职业词（志明、俊杰、建国、海军），在 issues 里单独写一条，并把 meaning 压到最多 12：这是这类名字最主要的毛病，不要因为字义正面就给高分。",
+  "- issues 最多 3 条，同一类只写一条，尤其年代感最多一条；读音、字义、气质、识读、流行、谐音、联想里哪个维度明显弱，就写一条具体的问题，不要只复述规则编号，也不要为了凑数写空话。",
   "",
   "档位只能取下面几个数，不要写别的：",
   "- pronunciation 读音（20 / 16 / 12 / 8）：20 自然顺畅；16 基本顺畅；12 略绕口；8 明显不顺。只说连着姓念的感觉，不评字义。",
@@ -44,7 +55,7 @@ const ONE_SYSTEM = [
   "- strengths：主要优点，一到三条，每条一句。",
   "- charMeaning：拆字，一句话，说每个字在名字里最常见的意思，像「娟是秀美，文是文雅」。",
   "- whole：合起来，一句话，以「合起来」开头，说这几个字拼成的画面或说法，再说一句爸妈的心意，40 字以内。",
-  "- issues：问题，每条 {\"text\":\"具体问题\",\"importance\":\"major 或 minor\"}。规则已经确认的问题在下面给了编号，照抄编号对应的问题，不要重复；你另外看出来的问题也写进来。没有就空数组。",
+  "- issues：最多 3 条，每条 {\"text\":\"具体问题\",\"importance\":\"major 或 minor\",\"kind\":\"读音/字义/气质/识读/流行/谐音/联想\"}。规则已确认的问题在下面给了编号，照抄编号对应的问题，同一类只写一条（尤其年代感最多一条）；你另外看出来的具体问题也写进来。没有就空数组。",
   "- reminders：只给主播看的提醒，只写谐音、联想、撞名人这类没把握的事；没把握就空数组，不要编。",
   "",
   "候选 options（原名有明显问题时给 2 个，最多 3 个，程序最后留 2 个）：",
@@ -68,7 +79,7 @@ const ONE_SYSTEM = [
   "spoken 和 why 里不出现分数和档位。",
   "",
   "格式示例（只看格式，别照抄内容）：",
-  '{"status":"options","scores":{"pronunciation":16,"meaning":16,"gender":12,"style":6},"original":{"pronunciation":"连姓念节奏平稳，收尾略轻","meaning":"两个字意思正面，合起来有画面","gender":"娟字女性倾向明确","style":"整体温和，少一点亮色","strengths":["字义干净，不张扬"],"charMeaning":"娟是秀美，文是文雅。","whole":"合起来是文文静静、眉目秀气的样子，爸妈盼孩子温和又有自己的主意。","comment":"文雅秀美，读着顺；但娟字偏上一辈，像爸妈那代的名字。","issues":[{"text":"娟字在女孩名里偏上一辈","importance":"major"}],"reminders":[]},"options":[{"givenName":"昀","pronunciation":{"tier":16,"reason":"读音更亮"},"meaning":{"tier":16,"reason":"昀是日光"},"gender":{"tier":12,"reason":"女性辨识度保住了"},"style":{"tier":8,"reason":"明亮大方"},"solves":["R1"],"keeps":["字义干净，不张扬"],"loss":"少了一点安静的气质","verdict":"better","why":"换掉老气的娟，名字更亮","spoken":"昀是日光，合起来是明朗开阔的样子，愿孩子心里有光、自在长大。"},{"givenName":"澜","pronunciation":{"tier":16,"reason":"水波开阔"},"meaning":{"tier":16,"reason":"澜是波澜"},"gender":{"tier":8,"reason":"澜偏中性"},"style":{"tier":8,"reason":"明快"},"solves":["R1"],"keeps":["字义干净"],"loss":"少了柔婉","verdict":"better","why":"更明快","spoken":"澜是水波、波澜，愿孩子心胸开阔、遇事从容。"}],"note":""}',
+  '{"status":"options","scores":{"pronunciation":16,"meaning":16,"gender":12,"style":6},"original":{"pronunciation":"连姓念节奏平稳，收尾略轻","meaning":"两个字意思正面，合起来有画面","gender":"娟字女性倾向明确","style":"整体温和，少一点亮色","strengths":["字义干净，不张扬"],"charMeaning":"娟是秀美，文是文雅。","whole":"合起来是文文静静、眉目秀气的样子，爸妈盼孩子温和又有自己的主意。","comment":"文雅秀美，读着顺；但娟字偏上一辈，像爸妈那代的名字。","issues":[{"text":"娟字在女孩名里偏上一辈","importance":"major","kind":"流行"}],"reminders":[]},"options":[{"givenName":"昀","pronunciation":{"tier":16,"reason":"读音更亮"},"meaning":{"tier":16,"reason":"昀是日光"},"gender":{"tier":12,"reason":"女性辨识度保住了"},"style":{"tier":8,"reason":"明亮大方"},"solves":["R1"],"keeps":["字义干净，不张扬"],"loss":"少了一点安静的气质","verdict":"better","why":"换掉老气的娟，名字更亮","spoken":"昀是日光，合起来是明朗开阔的样子，愿孩子心里有光、自在长大。"},{"givenName":"澜","pronunciation":{"tier":16,"reason":"水波开阔"},"meaning":{"tier":16,"reason":"澜是波澜"},"gender":{"tier":8,"reason":"澜偏中性"},"style":{"tier":8,"reason":"明快"},"solves":["R1"],"keeps":["字义干净"],"loss":"少了柔婉","verdict":"better","why":"更明快","spoken":"澜是水波、波澜，愿孩子心胸开阔、遇事从容。"}],"note":""}',
 ].join("\n");
 
 const ONE_COMPACT = [
@@ -95,7 +106,7 @@ const ORIGINAL_SYSTEM = [
   "- strengths：主要优点，一到三条，每条一句。",
   "- charMeaning：拆字，一句话，说每个字在名字里最常见的意思，像「娟是秀美，文是文雅」。",
   "- whole：合起来，一句话，以「合起来」开头，说这几个字拼成的画面或说法，再说一句爸妈的心意，40 字以内。",
-  "- issues：问题，每条 {\"text\":\"具体问题\",\"importance\":\"major 或 minor\"}。规则已经确认的问题在下面给了编号，照抄编号对应的问题，不要重复；你另外看出来的问题也写进来。没有就空数组。",
+  "- issues：最多 3 条，每条 {\"text\":\"具体问题\",\"importance\":\"major 或 minor\",\"kind\":\"读音/字义/气质/识读/流行/谐音/联想\"}。规则已确认的问题在下面给了编号，照抄编号对应的问题，同一类只写一条（尤其年代感最多一条）；你另外看出来的具体问题也写进来。没有就空数组。",
   "- reminders：只给主播看的提醒，只写谐音、联想、撞名人这类没把握的事；没把握就空数组，不要编。",
   "",
   "status 三选一：",
@@ -105,7 +116,7 @@ const ORIGINAL_SYSTEM = [
   "note：只写一句具体原因。",
   "",
   "格式示例（只看格式，别照抄内容）：",
-  '{"status":"options","scores":{"pronunciation":16,"meaning":16,"gender":12,"style":6},"original":{"pronunciation":"连姓念节奏平稳，收尾略轻","meaning":"两个字意思正面，合起来有画面","gender":"娟字女性倾向明确","style":"整体温和，少一点亮色","strengths":["字义干净，不张扬"],"charMeaning":"娟是秀美，文是文雅。","whole":"合起来是文文静静、眉目秀气的样子，爸妈盼孩子温和又有自己的主意。","comment":"文雅秀美，读着顺；但娟字偏上一辈，像爸妈那代的名字。","issues":[{"text":"娟字在女孩名里偏上一辈","importance":"major"}],"reminders":[]},"options":[],"note":""}',
+  '{"status":"options","scores":{"pronunciation":16,"meaning":16,"gender":12,"style":6},"original":{"pronunciation":"连姓念节奏平稳，收尾略轻","meaning":"两个字意思正面，合起来有画面","gender":"娟字女性倾向明确","style":"整体温和，少一点亮色","strengths":["字义干净，不张扬"],"charMeaning":"娟是秀美，文是文雅。","whole":"合起来是文文静静、眉目秀气的样子，爸妈盼孩子温和又有自己的主意。","comment":"文雅秀美，读着顺；但娟字偏上一辈，像爸妈那代的名字。","issues":[{"text":"娟字在女孩名里偏上一辈","importance":"major","kind":"流行"}],"reminders":[]},"options":[],"note":""}',
 ].join("\n");
 
 const OPTIONS_SYSTEM = [
@@ -415,7 +426,7 @@ export function parseOriginal(
 ): {
   tiers: { pronunciation: TierChoice; meaning: TierChoice; gender: TierChoice; style: TierChoice } | null;
   strengths: string[];
-  issueTexts: { text: string; importance: "major" | "minor" }[];
+  issueTexts: { text: string; importance: "major" | "minor"; kind?: EvalIssueKind }[];
   reminders: string[];
   charMeaning: string;
   whole: string;
@@ -435,9 +446,17 @@ export function parseOriginal(
           const o = x as Record<string, unknown>;
           const text = typeof o.text === "string" ? o.text.replace(/\s+/g, "").trim().slice(0, 80) : "";
           if (!text) return null;
-          return { text, importance: o.importance === "major" ? ("major" as const) : ("minor" as const) };
+          const kind =
+            typeof o.kind === "string" && ISSUE_KINDS.includes(o.kind as EvalIssueKind)
+              ? (o.kind as EvalIssueKind)
+              : undefined;
+          return {
+            text,
+            importance: o.importance === "major" ? ("major" as const) : ("minor" as const),
+            ...(kind ? { kind } : {}),
+          };
         })
-        .filter((x): x is { text: string; importance: "major" | "minor" } => Boolean(x))
+        .filter((x): x is { text: string; importance: "major" | "minor"; kind?: EvalIssueKind } => Boolean(x))
         .slice(0, 6)
     : [];
   return {

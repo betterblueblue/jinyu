@@ -189,6 +189,11 @@ function ScoreView({ round }: { round: PrompterScoreRound }) {
                     : "text-[clamp(20px,2.8vw,30px)] leading-relaxed text-neutral-300"
                 }
               >
+                {it.kind ? (
+                  <span className="mr-2 rounded border border-amber-400/50 px-2 py-0.5 text-[clamp(14px,1.8vw,18px)] text-amber-300">
+                    {it.kind}
+                  </span>
+                ) : null}
                 {it.text}
               </li>
             ))}

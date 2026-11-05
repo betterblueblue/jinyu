@@ -289,7 +289,7 @@ export function prompterFromEvaluation(s: EvaluationForPrompter): PrompterRound 
       }))
     : [];
   const issues = o
-    ? o.issues.map((it) => ({ text: it.text, importance: it.importance }))
+    ? o.issues.map((it) => ({ text: it.text, importance: it.importance, ...(it.kind ? { kind: it.kind } : {}) }))
     : // 模型还没返回时，先把规则确认的问题给主播念（facts 几百毫秒就到）
       s.facts.issues.map((it) => ({ text: it.line, importance: it.severity === "plain" ? ("minor" as const) : ("major" as const) }));
   const capNote =

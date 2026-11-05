@@ -183,11 +183,15 @@ export interface OriginalEvaluation {
   comment?: string;
 }
 
+export type EvalIssueKind = "读音" | "字义" | "气质" | "识读" | "流行" | "谐音" | "联想";
+
 export interface EvalIssue {
   id: string;
   text: string;
   importance: "major" | "minor";
   source: "rule" | "model";
+  /** 问题归属的维度，提词页按它分组/标注 */
+  kind?: EvalIssueKind;
 }
 
 /** 核过、算过分的候选 */
