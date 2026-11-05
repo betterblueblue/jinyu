@@ -29,7 +29,7 @@ pnpm install
 cp .env.example .env.local   # 填 LLM_API_KEY，改掉默认密码和 JINYU_SESSION_SECRET
 pnpm dev                     # next dev -p 9000；也可以 .\start-dev.ps1（先查依赖和端口）
 pnpm typecheck               # tsc --noEmit
-pnpm test                    # vitest：20 个文件、301 个用例，全走假模型
+pnpm test                    # vitest：20 个文件、303 个用例，全走假模型
 ```
 
 - **直播**：双击 `启动直播台.bat`，用 Edge 或 Chrome 的 `--app` 模式开纯净窗口，再调 `tools/fit-window.ps1` 把窗口内容区压成 9:16（1080p 屏上是 576×1024）。直播伴侣里用「窗口」捕获这个窗口，不要用显示器捕获。`启动提词页.bat` 在直播窗口右边开提词页；手机打开同一地址，登录后自动回到提词页。两个 bat 里写死了局域网 IP `192.168.31.211`，IP 变了要改。
@@ -140,7 +140,8 @@ data/                     不进 git：reports/、index.json、corpus/、name-li
 
 ### 名字打分、改字
 
-按 A 打开打分榜，输全名（2–4 个汉字，性别可不填）→ `/api/analyze/evaluate?stream=1`：
+按 A 打开打分榜，输全名（2–4 个汉字，性别可不填）→ 面板同时请求 `GET /api/dictionary?name=...`（本地字典，几毫秒）和 `POST /api/analyze/evaluate?stream=1`。字典先回，提词页先显示每个字的基本含义、起名寓意和拆字，主播可以先照着念；模型分析随后到：
+
 规则先出事实（拆名、拼音、命中的规则），几毫秒推 `facts`；一次模型调用先写四个档位数字，
 程序立刻算分推第一帧 `analysis`（只有分数和维度），理由、优点、问题随后补第二帧 `analysis`，
 候选核过再推 `option`，最后 `result`。

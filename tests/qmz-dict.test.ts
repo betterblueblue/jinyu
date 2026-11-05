@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseQmzCharHtml } from "@/dictionary/qmz";
+import { parsePrompterRound } from "@/live/prompter";
 
 const HTML = `
 <article class="main-container">
@@ -36,5 +37,27 @@ describe("起名字典解析", () => {
 
   it("页面不对时返回 null", () => {
     expect(parseQmzCharHtml("华", "<html></html>", "x", "now")).toBeNull();
+  });
+});
+
+describe("提词页字典初检", () => {
+  it("字典条目能通过提词页格式校验", () => {
+    const parsed = parsePrompterRound({
+      state: "score",
+      no: 1,
+      full: "刘华强",
+      pinyin: "liú huá qiáng",
+      score: 0,
+      bandLabel: "评价中",
+      dictionary: [
+        { char: "华", pinyin: "huá", basicMeaning: "本意为花、荣华。", nameMeaning: "光彩、繁荣。" },
+        { char: "强", pinyin: "qiáng", basicMeaning: "力量大。", decomposition: "弓 + 虽", missing: false },
+      ],
+      deductions: [],
+      folk: [],
+    });
+    if (!parsed || parsed.state !== "score") throw new Error("提词页格式校验失败");
+    expect(parsed.dictionary).toHaveLength(2);
+    expect(parsed.dictionary?.[0]?.basicMeaning).toContain("荣华");
   });
 });

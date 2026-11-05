@@ -2,7 +2,7 @@ import type { Deduction, FixOption, GenderRisk, NameScore, NextStep, ScoreRuleId
 import type { EvalCandidate, EvalStatus, NameFacts, OriginalEvaluation } from "@/domain/evaluate/types";
 import type { FastCandidate, FastSuccess } from "@/fast/types";
 import { checkLine, talkLines } from "@/library/talk";
-import type { PrompterName, PrompterRound } from "@/live/prompter";
+import type { PrompterDictEntry, PrompterName, PrompterRound } from "@/live/prompter";
 import { citeFrom, type Gender } from "./show-data";
 
 /* ---------- 主播提词页（/live/prompter） ---------- */
@@ -241,6 +241,8 @@ export interface EvaluationForPrompter {
   fixShown: boolean;
   /** 模型推理里正在看的判断，一句一条 */
   thoughts?: string[];
+  /** 本地字典初检：比模型先到，主播先照着念 */
+  dictionary?: PrompterDictEntry[];
 }
 
 const STATUS_WORD: Record<EvalStatus, string> = {
@@ -319,6 +321,7 @@ export function prompterFromEvaluation(s: EvaluationForPrompter): PrompterRound 
     pinyin: s.facts.pinyin,
     score: o?.scores.total ?? 0,
     bandLabel: o?.scores.bandLabel ?? (status ? STATUS_WORD[status] : "评价中"),
+    ...(s.dictionary?.length ? { dictionary: s.dictionary.slice(0, 4) } : {}),
     ...(checks ? { checks } : {}),
     ...(dimensions.length ? { dimensions } : {}),
     ...(merit ? { merit } : {}),

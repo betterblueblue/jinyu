@@ -31,6 +31,10 @@ function loadSeedChars(): string[] {
   return [...new Set([...raw.female, ...raw.male])];
 }
 
+function loadNameChars(): string[] {
+  return JSON.parse(readFileSync(resolve("src/config/name-chars.json"), "utf8")) as string[];
+}
+
 async function loadSitemapChars(): Promise<string[]> {
   const res = await fetch(`${BASE}/sitemap.txt`, {
     headers: { Cookie: COOKIE, "User-Agent": USER_AGENT },
@@ -137,7 +141,7 @@ function makeReport(chars: QmzChar[], targets: string[], failed: { char: string;
 async function main() {
   const fetchedAt = new Date().toISOString();
   const all = process.argv.includes("--all");
-  const targets = all ? await loadSitemapChars() : loadSeedChars();
+  const targets = all ? await loadSitemapChars() : [...new Set([...loadSeedChars(), ...loadNameChars()])];
   const limited = LIMIT > 0 ? targets.slice(0, LIMIT) : targets;
   const dir = resolve(process.env.JINYU_DATA_DIR ?? "data", "qmz-dict");
   mkdirSync(dir, { recursive: true });

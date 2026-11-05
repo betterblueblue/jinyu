@@ -52,6 +52,15 @@ export interface PrompterFix {
  * 打分榜（直播台按 A）选中的那位观众：分数、扣分理由、民间说法，点了「改一个字」再加改法。
  * 改法是模型一条一条写的：写好、核过一条就推一次，主播先念扣分理由和 say 那句，不用干等。
  */
+export interface PrompterDictEntry {
+  char: string;
+  pinyin?: string;
+  basicMeaning?: string;
+  nameMeaning?: string;
+  decomposition?: string;
+  missing?: boolean;
+}
+
 export interface PrompterScoreRound {
   state: "score";
   /** 打分榜上第几位 */
@@ -60,6 +69,8 @@ export interface PrompterScoreRound {
   pinyin: string;
   score: number;
   bandLabel: string;
+  /** 字典初检：模型分析还没回来时，主播可以先照着念 */
+  dictionary?: PrompterDictEntry[];
   /** 算式：100 − 12 = 88（观众屏幕上不放，主播讲） */
   math?: string;
   /** 按规则查了哪几项、哪几项有毛病 */
@@ -211,6 +222,26 @@ function parseFix(v: unknown): PrompterFix | null {
   };
 }
 
+function parseDictEntry(v: unknown): PrompterDictEntry | null {
+  const x = v as Record<string, unknown> | null;
+  if (!x || typeof x !== "object") return null;
+  const char = text(x.char, 2);
+  if (!char || [...char].length !== 1) return null;
+  const pinyin = x.pinyin === undefined ? undefined : text(x.pinyin, 40);
+  const basicMeaning = x.basicMeaning === undefined ? undefined : text(x.basicMeaning, 180);
+  const nameMeaning = x.nameMeaning === undefined ? undefined : text(x.nameMeaning, 180);
+  const decomposition = x.decomposition === undefined ? undefined : text(x.decomposition, 80);
+  if (pinyin === null || basicMeaning === null || nameMeaning === null || decomposition === null) return null;
+  return {
+    char,
+    ...(pinyin ? { pinyin } : {}),
+    ...(basicMeaning ? { basicMeaning } : {}),
+    ...(nameMeaning ? { nameMeaning } : {}),
+    ...(decomposition ? { decomposition } : {}),
+    ...(x.missing === true ? { missing: true } : {}),
+  };
+}
+
 function parseScoreRound(x: Record<string, unknown>): PrompterScoreRound | null {
   const no = x.no;
   const full = text(x.full, 8);
@@ -218,6 +249,16 @@ function parseScoreRound(x: Record<string, unknown>): PrompterScoreRound | null 
   const bandLabel = text(x.bandLabel, 8);
   if (typeof no !== "number" || !Number.isInteger(no) || no < 1 || no > 100_000) return null;
   if (!full || pinyin === null || !bandLabel || !isScore(x.score)) return null;
+  let dictionary: PrompterScoreRound["dictionary"];
+  if (x.dictionary !== undefined) {
+    if (!Array.isArray(x.dictionary) || x.dictionary.length > 4) return null;
+    dictionary = [];
+    for (const item of x.dictionary) {
+      const entry = parseDictEntry(item);
+      if (!entry) return null;
+      dictionary.push(entry);
+    }
+  }
   if (!Array.isArray(x.deductions) || x.deductions.length > DEDUCTIONS_MAX) return null;
   const deductions: PrompterScoreRound["deductions"] = [];
   for (const d of x.deductions) {
@@ -304,6 +345,7 @@ function parseScoreRound(x: Record<string, unknown>): PrompterScoreRound | null 
     ...(math ? { math } : {}),
     ...(checks ? { checks } : {}),
     ...(dimensions?.length ? { dimensions } : {}),
+    ...(dictionary?.length ? { dictionary } : {}),
     ...(thinking?.length ? { thinking } : {}),
     ...(strengths?.length ? { strengths } : {}),
     ...(issues?.length ? { issues } : {}),

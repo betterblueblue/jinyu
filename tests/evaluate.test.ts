@@ -273,8 +273,25 @@ describe("接提词页和流", () => {
     expect(result?.status).toBe(out.status);
   });
 
-  it("模型写的提醒会进提词页", async () => {
-    const raw: RawEvaluation = {
+  it("字典初检会进提词页", () => {
+    const round = prompterFromEvaluation({
+      no: 1,
+      facts: factsOf("刘华强", "male"),
+      original: null,
+      candidates: [],
+      status: undefined,
+      fixShown: false,
+      dictionary: [
+        { char: "华", pinyin: "huá", basicMeaning: "本意为花、荣华。", nameMeaning: "光彩、繁荣。" },
+        { char: "强", pinyin: "qiáng", basicMeaning: "力量大。", missing: false },
+      ],
+    });
+    if (round.state !== "score") throw new Error("应该是打分轮");
+    expect(round.dictionary).toHaveLength(2);
+    expect(round.dictionary?.[0]?.basicMeaning).toContain("荣华");
+  });
+
+  it("模型写的提醒会进提词页", async () => {    const raw: RawEvaluation = {
       status: "no_better",
       scores: { pronunciation: 16, meaning: 16, gender: 12, style: 6 },
       original: {

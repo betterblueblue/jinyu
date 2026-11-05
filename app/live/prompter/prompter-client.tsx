@@ -112,6 +112,30 @@ function ScoreView({ round }: { round: PrompterScoreRound }) {
           {round.capNote}
         </p>
       ) : null}
+      {round.dictionary?.length ? (
+        <section className="mt-5 rounded border border-sky-700/60 bg-sky-950/30 px-4 py-3" data-testid="prompter-dictionary">
+          <p className="text-lg tracking-widest text-sky-300">字典先查 · 主播可以先照着念</p>
+          <ul className="mt-2 space-y-3 text-[clamp(18px,2.4vw,26px)] leading-relaxed text-neutral-200">
+            {round.dictionary.map((d) => (
+              <li key={d.char}>
+                <p className="font-semibold text-white">
+                  {d.char}
+                  {d.pinyin ? <span className="ml-2 text-neutral-400">{d.pinyin}</span> : null}
+                </p>
+                {d.missing ? (
+                  <p className="text-neutral-500">字典里没查到</p>
+                ) : (
+                  <>
+                    {d.basicMeaning ? <p>基本含义：{d.basicMeaning}</p> : null}
+                    {d.nameMeaning ? <p>起名寓意：{d.nameMeaning}</p> : null}
+                    {d.decomposition ? <p className="text-neutral-400">拆字：{d.decomposition}</p> : null}
+                  </>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
       {round.thinking?.length ? (
         <section
           className="mt-4 rounded border border-neutral-700 bg-neutral-900/70 px-4 py-3"

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { splitFullName } from "@/domain/analysis/split-name";
 import type { EvalCandidate, EvalStatus, NameFacts, OriginalEvaluation } from "@/domain/evaluate/types";
+import type { PrompterDictEntry } from "@/live/prompter";
 import { readEvaluateStream } from "./evaluate-stream";
 import { logLive } from "./live-log-client";
 import { prompterFromEvaluation, pushPrompter } from "./prompter-sync";
@@ -34,6 +35,8 @@ interface Row {
   input: { fullName: string; gender: Gender; splitSurname?: string };
   /** 规则确认的材料，几毫秒就到 */
   facts?: NameFacts;
+  /** 本地字典初检，先给主播念 */
+  dictionary?: PrompterDictEntry[];
   /** 核过、算过分的原名评价 */
   original?: OriginalEvaluation;
   /** 核过的改法；后台先到，主播点了才亮 */
@@ -115,8 +118,7 @@ export function AnalyzePanel({ open, onClose, onRename }: Props) {
   }, []);
 
   const runEvaluate = useCallback(
-    async (id: number, input: Row["input"], retry = false) => {
-      if (retry) {
+    async (id: number, input: Row["input"], retry = false) => {      if (retry) {
         patch(id, (r) => ({
           ...r,
           error: undefined,
@@ -185,6 +187,24 @@ export function AnalyzePanel({ open, onClose, onRename }: Props) {
     [patch],
   );
 
+  const loadDictionary = useCallback(
+    async (id: number, fullName: string, surname?: string) => {
+      try {
+        const params = new URLSearchParams({ name: fullName });
+        if (surname) params.set("surname", surname);
+        const res = await fetch(`/api/dictionary?${params.toString()}`);
+        if (!res.ok) return;
+        const body = (await res.json()) as { ok?: boolean; entries?: PrompterDictEntry[] };
+        if (body.ok && body.entries) {
+          patch(id, (r) => ({ ...r, dictionary: body.entries }));
+        }
+      } catch {
+        /* 字典查不到不影响打分 */
+      }
+    },
+    [patch],
+  );
+
   const submit = useCallback(async () => {
     if (composing) return;
     const fullName = name.replace(/\s/g, "");
@@ -198,8 +218,9 @@ export function AnalyzePanel({ open, onClose, onRename }: Props) {
     setGender("unknown");
     setSurnameOverride(null);
     inputRef.current?.focus();
+    void loadDictionary(id, fullName, input.splitSurname);
     await runEvaluate(id, input);
-  }, [name, gender, splitPreview, runEvaluate, composing]);
+  }, [name, gender, splitPreview, runEvaluate, composing, loadDictionary]);
 
   /** 主播点「改一个字」：后台已经生成好了就亮出来；没有就再请求一次 */
   const onFixClick = useCallback(
@@ -273,6 +294,7 @@ export function AnalyzePanel({ open, onClose, onRename }: Props) {
         note: selected.note,
         fixShown: selected.fixShown,
         thoughts: selected.thoughts,
+        dictionary: selected.dictionary,
       }),
     );
   }, [open, selected, selectedNo]);
